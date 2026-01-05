@@ -1,6 +1,11 @@
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
 from sympy.printing.octave import octave_code
+import os
+
+# ==============================================================================
+# 1. CLASSES DE BACK-END (MESMA LÓGICA DO EXECUTÁVEL)
+# ==============================================================================
 
 # --- CLASSE BASE (AR / SECO) ---
 class RobotMathEngine:
@@ -43,7 +48,7 @@ class RobotMathEngine:
 
         for i, (j_type, link_vec) in enumerate(zip(self.joint_config, self.link_vectors_mask)):
             q = dynamicsymbols(f'q{i+1}')
-            dq = dynamicsymbols(f'dq{i+1}')
+            dq = dynamicsymbols(f'q{i+1}', 1)
             self.q.append(q)
             self.dq.append(dq)
             m = sp.symbols(f'm{i+1}')
@@ -55,10 +60,10 @@ class RobotMathEngine:
             axis_vec_local = self._get_axis_vector(axis_char)
 
             if type_char == 'R':
+                axis_vec_global = R_acc * axis_vec_local
+                omega_new = omega_acc + axis_vec_global * dq
                 R_j = self._rot_matrix_local(axis_char, q)
                 P_j = sp.Matrix([0,0,0])
-                axis_vec_global = R_acc * axis_vec_local 
-                omega_new = omega_acc + axis_vec_global * dq
             elif type_char == 'D':
                 omega_new = omega_acc
                 R_j = sp.eye(3)
@@ -99,7 +104,6 @@ class RobotMathEngine:
             J_w = self.angular_velocities[i].jacobian(self.dq)
 
             Ixx, Iyy, Izz = sp.symbols(f'Ixx{i+1} Iyy{i+1} Izz{i+1}')
-            self.params_list.extend([Ixx, Iyy, Izz])
             I_local = sp.Matrix([[Ixx, 0, 0], [0, Iyy, 0], [0, 0, Izz]])
             I_global = R_global * I_local * R_global.T
 
@@ -114,6 +118,20 @@ class RobotMathEngine:
     def step_3_coriolis_combined(self):
         n = len(self.q)
         self.C_total = sp.zeros(n, 1)
+        dM_dq = [self.M.diff(qk) for qk in self.q]
+        for i in range(n):
+            termo_linha = 0
+            for j in range(n):
+                for k in range(j, n):
+                    dM_ij_dk = dM_dq[k][i, j]
+                    dM_ik_dj = dM_dq[j][i, k]
+                    dM_jk_di = dM_dq[i][j, k]
+                    c_ijk = sp.Rational(1,2) * (dM_ij_dk + dM_ik_dj - dM_jk_di)
+                    if c_ijk != 0:
+                        termo = c_ijk * self.dq[j] * self.dq[k]
+                        if k != j: termo *= 2
+                        termo_linha += termo
+            self.C_total[i] = sp.collect(termo_linha, self.dq)
 
     def step_4_prepare_export(self):
         mapa_subs = {}
@@ -127,6 +145,42 @@ class RobotMathEngine:
             "M": self.M, "G": self.G_vec, "C": self.C_total, "J": self.Jacobian,
             "FK_Pos": self.frames[-1], "FK_Vel": V_cartesian, "Subs": mapa_subs, "Mode": "Air"
         }
+
+    def step_5_export_cse(self):
+        print("\n" + "="*40)
+        print(" OTIMIZANDO E EXPORTANDO (CSE) ")
+        print("="*40)
+
+        mapa_subs = {}
+        for i in range(len(self.q)):
+            sym_q = sp.Symbol(f'q{i+1}')
+            sym_dq = sp.Symbol(f'dq{i+1}')
+            mapa_subs[self.q[i]] = sym_q
+            mapa_subs[self.dq[i]] = sym_dq
+
+        # Agrupa expressões
+        expressoes = [
+            self.M.subs(mapa_subs),
+            self.G_vec.subs(mapa_subs),
+            self.C_total.subs(mapa_subs),
+            self.Jacobian.subs(mapa_subs)
+        ]
+
+        print("   Compactando equações (Isso reduz o tamanho do código)...")
+        replacements, reduced = sp.cse(expressoes)
+
+        print("% --- Variáveis Auxiliares ---")
+        for sym, expr in replacements:
+            print(f"{sym} = {octave_code(expr)};")
+
+        M_opt, G_opt, C_opt, J_opt = reduced
+
+        print("\n% --- Matrizes Finais ---")
+        print("M = " + octave_code(M_opt) + ";")
+        print("G = " + octave_code(G_opt) + ";")
+        print("V_total = " + octave_code(C_opt) + "; % Coriolis + Centripeta Juntos")
+        print("J = " + octave_code(J_opt) + ";")
+
 
 # --- CLASSE AVANÇADA (ÁGUA / UVMS) ---
 class RobotMathHydro(RobotMathEngine):
@@ -159,18 +213,22 @@ class RobotMathHydro(RobotMathEngine):
             J_v = pos_cm.jacobian(self.q)
             J_w = self.angular_velocities[i].jacobian(self.dq)
 
+            # Inércia RB
             Ixx, Iyy, Izz = sp.symbols(f'Ixx{i+1} Iyy{i+1} Izz{i+1}')
             I_local_RB = sp.Matrix([[Ixx, 0, 0], [0, Iyy, 0], [0, 0, Izz]])
             I_global_RB = R_global * I_local_RB * R_global.T
 
+            # Massa Adicionada
             ma_u, ma_v, ma_w = sp.symbols(f'ma_u{i+1} ma_v{i+1} ma_w{i+1}')
             ma_p, ma_q, ma_r = sp.symbols(f'ma_p{i+1} ma_q{i+1} ma_r{i+1}')
             MA_lin_global = R_global * sp.Matrix([[ma_u, 0, 0], [0, ma_v, 0], [0, 0, ma_w]]) * R_global.T
             MA_rot_global = R_global * sp.Matrix([[ma_p, 0, 0], [0, ma_q, 0], [0, 0, ma_r]]) * R_global.T
 
+            # M Total = RB + Added
             self.M += J_v.T * (m * sp.eye(3) + MA_lin_global) * J_v
             self.M += J_w.T * (I_global_RB + MA_rot_global) * J_w
 
+            # Potencial = Peso - Empuxo
             peso_aparente = (m - self.rho * vol) * self.g
             V_tot += peso_aparente * pos_cm[2]
 
