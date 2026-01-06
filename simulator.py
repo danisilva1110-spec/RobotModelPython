@@ -237,6 +237,7 @@ class RobotSimulator:
                     q = q_d
                     dq = dq_d
                     e_pid = np.zeros(self.num_dof)
+                    tau = np.zeros(self.num_dof)
                     continue
                 else:
                     t_main = current_time - pre_time
