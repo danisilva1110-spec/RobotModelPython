@@ -190,7 +190,9 @@ class RobotSimulator:
         # ... (Início igual ao original) ...
         dt_physics = 0.001
         dt_visual  = 0.05
-        steps_visual = int(t_total / dt_visual)
+        pre_time = max(0.5, min(2.0, 0.2 * t_total))
+        total_time = t_total + pre_time
+        steps_visual = int(total_time / dt_visual)
         substeps = int(dt_visual / dt_physics)
         
         Pi = np.array(Pi_list, dtype=float)
@@ -199,13 +201,18 @@ class RobotSimulator:
         # Inicialização (Com postura preferida se definida)
         q = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
         dq = np.zeros(self.num_dof)
+
+        # Calcula posição atual do efetuador final para criar a reta até Pi
+        f_end = self.funcs_fk_all_links[-1]
+        args_0 = self._build_args(q, dq)
+        start_pos = np.array(f_end(*args_0)).flatten()
         
         # Ganhos PID
         KP = Kp_val * np.eye(self.num_dof)
         KD = 2 * np.sqrt(Kp_val) * np.eye(self.num_dof)
         
         # Arrays de resultado
-        res_time = np.linspace(0, t_total, steps_visual)
+        res_time = np.linspace(0, total_time, steps_visual)
         res_q = np.zeros((steps_visual, self.num_dof))
         res_tau = np.zeros((steps_visual, self.num_dof))
         anim_data = []
@@ -217,10 +224,17 @@ class RobotSimulator:
                 current_time += dt_physics
                 
                 # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
-                P_ref, V_ref, A_ref = self.trajectory_planning(
-                    current_time, t_total, Pi, Pf, 
-                    mode=traj_mode, params=traj_params
-                )
+                if current_time <= pre_time:
+                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                        current_time, pre_time, start_pos, Pi,
+                        mode="Line", params=None
+                    )
+                else:
+                    t_main = current_time - pre_time
+                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                        t_main, t_total, Pi, Pf,
+                        mode=traj_mode, params=traj_params
+                    )
                 
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
