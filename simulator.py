@@ -137,7 +137,7 @@ class RobotSimulator:
 
         return Pf, np.zeros(3), np.zeros(3)
 
-    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt):
+    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt, use_nullspace=True, kp_ik=5.0):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
         Agora o robô 'sabe' a velocidade da curva, não só a posição.
@@ -158,7 +158,7 @@ class RobotSimulator:
         J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
         
         # --- A CORREÇÃO MÁGICA AQUI ---
-        Kp_ik = 5.0
+        Kp_ik = kp_ik
         
         # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
         # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
@@ -168,17 +168,19 @@ class RobotSimulator:
         dq_task = J_dls_pinv @ v_command
         
         # Controle de Espaço Nulo (Mantém igual)
-        I = np.eye(self.num_dof)
-        
-        # Usa o q_home da classe se existir, senão zero
-        q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
-        q_err_null = self._wrap_to_pi(q_target_null - q_curr)
-        
-        Kp_null = 1.0 
-        null_projection = (I - J_dls_pinv @ J_pos)
-        dq_null = null_projection @ (Kp_null * q_err_null)
-        
-        dq_total = dq_task + dq_null
+        dq_total = dq_task
+        if use_nullspace:
+            I = np.eye(self.num_dof)
+
+            # Usa o q_home da classe se existir, senão zero
+            q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+            q_err_null = self._wrap_to_pi(q_target_null - q_curr)
+
+            Kp_null = 1.0
+            null_projection = (I - J_dls_pinv @ J_pos)
+            dq_null = null_projection @ (Kp_null * q_err_null)
+
+            dq_total = dq_task + dq_null
         dq_total = np.clip(dq_total, -3.0, 3.0) 
         
         q_next = q_curr + dq_total * dt
@@ -190,7 +192,9 @@ class RobotSimulator:
         # ... (Início igual ao original) ...
         dt_physics = 0.001
         dt_visual  = 0.05
-        steps_visual = int(t_total / dt_visual)
+        pre_time = max(0.5, min(2.0, 0.2 * t_total))
+        total_time = t_total + pre_time
+        steps_visual = int(total_time / dt_visual)
         substeps = int(dt_visual / dt_physics)
         
         Pi = np.array(Pi_list, dtype=float)
@@ -199,13 +203,18 @@ class RobotSimulator:
         # Inicialização (Com postura preferida se definida)
         q = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
         dq = np.zeros(self.num_dof)
+
+        # Calcula posição atual do efetuador final para criar a reta até Pi
+        f_end = self.funcs_fk_all_links[-1]
+        args_0 = self._build_args(q, dq)
+        start_pos = np.array(f_end(*args_0)).flatten()
         
         # Ganhos PID
         KP = Kp_val * np.eye(self.num_dof)
         KD = 2 * np.sqrt(Kp_val) * np.eye(self.num_dof)
         
         # Arrays de resultado
-        res_time = np.linspace(0, t_total, steps_visual)
+        res_time = np.linspace(0, total_time, steps_visual)
         res_q = np.zeros((steps_visual, self.num_dof))
         res_tau = np.zeros((steps_visual, self.num_dof))
         anim_data = []
@@ -217,10 +226,25 @@ class RobotSimulator:
                 current_time += dt_physics
                 
                 # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
-                P_ref, V_ref, A_ref = self.trajectory_planning(
-                    current_time, t_total, Pi, Pf, 
-                    mode=traj_mode, params=traj_params
-                )
+                if current_time <= pre_time:
+                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                        current_time, pre_time, start_pos, Pi,
+                        mode="Line", params=None
+                    )
+                    q_d, dq_d, ddq_d = self.solve_ik_numerical(
+                        P_ref, V_ref, q, dt_physics, use_nullspace=False, kp_ik=10.0
+                    )
+                    q = q_d
+                    dq = dq_d
+                    e_pid = np.zeros(self.num_dof)
+                    tau = np.zeros(self.num_dof)
+                    continue
+                else:
+                    t_main = current_time - pre_time
+                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                        t_main, t_total, Pi, Pf,
+                        mode=traj_mode, params=traj_params
+                    )
                 
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
