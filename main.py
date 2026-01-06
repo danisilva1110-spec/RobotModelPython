@@ -206,6 +206,34 @@ class App(ctk.CTk):
         self.entry_kp.insert(0, "50.0")
         self.entry_kp.pack(fill="x", pady=(0, 20))
 
+        # === NOVA SEÇÃO: PLANEJAMENTO ===
+        ctk.CTkLabel(self.sim_left, text="--- Trajetória ---", font=("Arial", 12, "bold")).pack(pady=5)
+        
+        # Dropdown Reta/Círculo
+        self.traj_type_var = ctk.StringVar(value="Reta")
+        self.traj_dd = ctk.CTkOptionMenu(self.sim_left, values=["Reta", "Círculo"], 
+                                         variable=self.traj_type_var, command=self.update_traj_inputs)
+        self.traj_dd.pack(fill="x", pady=5)
+
+        # Frame para Inputs Específicos do Círculo (Oculto inicialmente)
+        self.circle_frame = ctk.CTkFrame(self.sim_left)
+        
+        ctk.CTkLabel(self.circle_frame, text="Raio (m):").pack(anchor="w")
+        self.entry_radius = ctk.CTkEntry(self.circle_frame)
+        self.entry_radius.insert(0, "0.3")
+        self.entry_radius.pack(fill="x")
+        
+        ctk.CTkLabel(self.circle_frame, text="Normal (x,y,z):").pack(anchor="w")
+        self.entry_normal = ctk.CTkEntry(self.circle_frame)
+        self.entry_normal.insert(0, "1, 0, 0") # Plano YZ
+        self.entry_normal.pack(fill="x")
+
+        ctk.CTkLabel(self.circle_frame, text="Sentido (+/-):").pack(anchor="w")
+        self.switch_dir_var = ctk.StringVar(value="Anti-Horário (+1)")
+        self.switch_dir = ctk.CTkSwitch(self.circle_frame, text="Anti-Horário", variable=self.switch_dir_var, 
+                                        onvalue="Anti-Horário (+1)", offvalue="Horário (-1)")
+        self.switch_dir.pack(pady=5)
+
         ctk.CTkLabel(self.sim_left, text="--- Constantes Físicas ---", font=("Arial", 12, "bold")).pack(pady=5)
         self.params_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
         self.params_container.pack(fill="both", expand=True)
@@ -224,6 +252,13 @@ class App(ctk.CTk):
         # Botão para ver Animação 3D (aparece após simular)
         self.btn_anim3d = ctk.CTkButton(self.sim_right, text="VER ANIMAÇÃO 3D 🎥", command=self.play_animation, state="disabled")
         self.btn_anim3d.pack(pady=10)
+
+    # Método auxiliar para mostrar/ocultar inputs do Círculo
+    def update_traj_inputs(self, choice):
+        if choice == "Círculo":
+            self.circle_frame.pack(fill="x", pady=5, after=self.traj_dd)
+        else:
+            self.circle_frame.pack_forget()
 
     def generate_sim_inputs(self):
         for widget in self.params_container.winfo_children():
@@ -257,31 +292,101 @@ class App(ctk.CTk):
         if not enable: self.tabview.set("Modelagem")
 
     def run_simulation_logic(self):
-        if not self.active_sim: return
+        """ 
+        Gerencia a execução da simulação, lendo inputs da interface 
+        para configurar física, postura e trajetória dinâmica.
+        """
+        if not self.active_sim: 
+            self.log("⚠️ Gere o modelo primeiro na aba Modelagem!")
+            return
         
         try:
+            # ---------------------------------------------------------
+            # 1. Parâmetros Físicos (Massas, Inércias, etc.)
+            # ---------------------------------------------------------
             user_params = {}
             for name, entry in self.dynamic_entries.items():
-                user_params[name] = float(entry.get())
+                try:
+                    val = float(entry.get())
+                    user_params[name] = val
+                except ValueError:
+                    self.log(f"⚠️ Valor inválido para '{name}'. Assumindo 0.0.")
+                    user_params[name] = 0.0
+            
             user_params['g'] = 9.81
             self.active_sim.set_parameters(user_params)
             
+            # ---------------------------------------------------------
+            # 2. Configura Postura Preferida (Null Space Control)
+            # ---------------------------------------------------------
+            # Define 'Home' como zero (ou modifique aqui se quiser 'Elbow Up' fixo)
+            self.active_sim.q_home = np.zeros(self.active_sim.num_dof)
+            
+            # ---------------------------------------------------------
+            # 3. Inputs Básicos de Simulação
+            # ---------------------------------------------------------
             start_pos = [float(x) for x in self.entry_start.get().split(",")]
-            end_pos = [float(x) for x in self.entry_end.get().split(",")]
-            t_total = float(self.entry_time.get())
-            kp = float(self.entry_kp.get())
-        except:
-            self.log("❌ Erro nos parâmetros.")
+            end_pos   = [float(x) for x in self.entry_end.get().split(",")]
+            t_total   = float(self.entry_time.get())
+            kp        = float(self.entry_kp.get())
+            
+            # ---------------------------------------------------------
+            # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
+            # ---------------------------------------------------------
+            # Lê o valor selecionado no Dropdown (Reta ou Círculo)
+            mode_str = self.traj_type_var.get()
+            
+            traj_mode = "Line" # Padrão
+            traj_params = {}
+
+            if mode_str == "Círculo":
+                traj_mode = "Circle"
+                # Lê os campos específicos que aparecem quando "Círculo" é selecionado
+                try:
+                    r_val = float(self.entry_radius.get())
+                    n_vec = [float(x) for x in self.entry_normal.get().split(",")]
+                    
+                    # Verifica o Switch de sentido
+                    # Se o texto conter "Anti", é +1, senão é -1
+                    dir_val = 1 if "Anti" in self.switch_dir_var.get() else -1
+                    
+                    traj_params = {
+                        'radius': r_val,
+                        'normal': n_vec,
+                        'direction': dir_val
+                    }
+                except ValueError:
+                    self.log("❌ Erro nos parâmetros do Círculo. Verifique números e vírgulas.")
+                    return
+
+        except ValueError as ve:
+            self.log(f"❌ Erro de formatação nos vetores: {ve}")
+            return
+        except Exception as e:
+            self.log(f"❌ Erro crítico na preparação: {e}")
             return
 
-        self.log("Simulando... (Aguarde)")
-        # Roda na mesma thread para simplificar (ou pode usar thread separada)
-        t, err, tau, anim_data = self.active_sim.run(t_total, start_pos, end_pos, kp)
+        self.log(f"Iniciando Simulação (Modo: {mode_str})...")
         
-        self.last_anim_data = anim_data
-        self.plot_results(t, err, tau)
-        self.log("Simulação finalizada.")
-        self.btn_anim3d.configure(state="normal") # Habilita botão 3D
+        # ---------------------------------------------------------
+        # 5. Execução
+        # ---------------------------------------------------------
+        try:
+            # Passa os parâmetros lidos para o simulador
+            t, err, tau, anim_data = self.active_sim.run(
+                t_total, start_pos, end_pos, kp, 
+                traj_mode=traj_mode, traj_params=traj_params
+            )
+            
+            self.last_anim_data = anim_data
+            self.plot_results(t, err, tau)
+            self.log("✅ Simulação finalizada.")
+            self.btn_anim3d.configure(state="normal")
+            
+        except Exception as e:
+            self.log(f"❌ Falha na integração numérica: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
     def plot_results(self, t, err, tau):
         for widget in self.plot_frame.winfo_children(): widget.destroy()
