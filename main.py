@@ -190,6 +190,14 @@ class App(ctk.CTk):
         self.entry_start = ctk.CTkEntry(self.sim_left)
         self.entry_start.insert(0, "0.5, 0.0, 0.0")
         self.entry_start.pack(fill="x", pady=(0, 5))
+        
+        self.init_at_start_var = ctk.BooleanVar(value=True)
+        self.init_at_start_check = ctk.CTkCheckBox(
+            self.sim_left,
+            text="Iniciar já na posição inicial",
+            variable=self.init_at_start_var
+        )
+        self.init_at_start_check.pack(anchor="w", pady=(0, 10))
 
         ctk.CTkLabel(self.sim_left, text="Posição Final (x, y, z):").pack(anchor="w")
         self.entry_end = ctk.CTkEntry(self.sim_left)
@@ -435,7 +443,8 @@ class App(ctk.CTk):
             t, err, tau, anim_data = self.active_sim.run(
                 t_total, start_pos, end_pos, kp, 
                 traj_mode=traj_mode, traj_params=traj_params,
-                dt_physics=dt_physics, dt_visual=dt_visual
+                dt_physics=dt_physics, dt_visual=dt_visual,
+                init_at_start=self.init_at_start_var.get()
             )
             
             self.last_anim_data = anim_data
