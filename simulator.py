@@ -137,7 +137,7 @@ class RobotSimulator:
 
         return Pf, np.zeros(3), np.zeros(3)
 
-    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt):
+    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt, Kp_ik=5.0):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
         Agora o robô 'sabe' a velocidade da curva, não só a posição.
@@ -156,9 +156,6 @@ class RobotSimulator:
         # Damped Least Squares
         lambda_dls = 0.1 
         J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
-        
-        # --- A CORREÇÃO MÁGICA AQUI ---
-        Kp_ik = 5.0
         
         # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
         # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
@@ -212,12 +209,22 @@ class RobotSimulator:
         dq = np.zeros(self.num_dof)
 
         if init_at_start:
-            init_steps = 30
-            dt_init = min(dt_physics, 0.01)
+            init_steps = 120
+            dt_init = min(dt_physics, 0.002)
             f_end = self.funcs_fk_all_links[-1]
             q_init = np.copy(q)
-            for _ in range(init_steps):
-                q_init, _, _ = self.solve_ik_numerical(Pi, np.zeros(3), q_init, dt_init)
+            init_error = np.inf
+            init_iters = 0
+            while init_iters < init_steps:
+                q_init, _, _ = self.solve_ik_numerical(
+                    Pi, np.zeros(3), q_init, dt_init, Kp_ik=1.5
+                )
+                args_init = self._build_args(q_init, np.zeros(self.num_dof))
+                init_pos = np.array(f_end(*args_init)).flatten()
+                init_error = np.linalg.norm(Pi - init_pos)
+                init_iters += 1
+                if init_error < 1e-3:
+                    break
             args_init = self._build_args(q_init, np.zeros(self.num_dof))
             init_pos = np.array(f_end(*args_init)).flatten()
             init_error = np.linalg.norm(Pi - init_pos)
@@ -225,7 +232,11 @@ class RobotSimulator:
                 q = q_init
                 dq = np.zeros(self.num_dof)
             else:
-                print("⚠️ IK inicial não convergiu. Usando postura home como inicial.")
+                print(
+                    "⚠️ IK inicial não convergiu. "
+                    f"Erro final {init_error:.3e} após {init_iters} iterações. "
+                    "Usando postura home como inicial."
+                )
                 q = np.copy(q_home)
                 dq = np.zeros(self.num_dof)
         
