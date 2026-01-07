@@ -321,6 +321,7 @@ class App(ctk.CTk):
             # ---------------------------------------------------------
             # Define 'Home' como zero (ou modifique aqui se quiser 'Elbow Up' fixo)
             self.active_sim.q_home = np.zeros(self.active_sim.num_dof)
+            self.active_sim.q_home = self.active_sim._wrap_to_pi(self.active_sim.q_home)
             
             # ---------------------------------------------------------
             # 3. Inputs Básicos de Simulação

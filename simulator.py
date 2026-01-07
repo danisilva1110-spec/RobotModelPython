@@ -201,7 +201,11 @@ class RobotSimulator:
         Pf = np.array(Pf_list, dtype=float)
         
         # Inicialização (Com postura preferida se definida)
-        q = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+        if hasattr(self, 'q_home'):
+            self.q_home = self._wrap_to_pi(self.q_home)
+            q = np.copy(self.q_home)
+        else:
+            q = np.zeros(self.num_dof)
         dq = np.zeros(self.num_dof)
 
         # Calcula posição atual do efetuador final para criar a reta até Pi
