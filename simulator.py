@@ -220,6 +220,8 @@ class RobotSimulator:
         dt_physics=0.002,
         dt_visual=0.05,
         ik_stride=1,
+        full_fk=True,
+        anim_stride=1,
     ):
         # ... (Início igual ao original) ...
         pre_time = max(0.5, min(2.0, 0.2 * t_total))
@@ -227,6 +229,7 @@ class RobotSimulator:
         steps_visual = int(total_time / dt_visual)
         substeps = max(1, int(dt_visual / dt_physics))
         ik_stride = max(1, int(ik_stride))
+        anim_stride = max(1, int(anim_stride))
         
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
@@ -257,6 +260,7 @@ class RobotSimulator:
         res_e = np.zeros((steps_visual, self.num_dof))
         res_tau = np.zeros((steps_visual, self.num_dof))
         anim_data = []
+        last_links_pose = None
 
         current_time = 0.0
         substep_counter = 0
@@ -316,11 +320,18 @@ class RobotSimulator:
             res_tau[i, :] = tau
             
             # FK para animação
-            links_pose = [[0,0,0]]
-            args_vis = self._build_args(q, dq)
-            for f_fk in self.funcs_fk_all_links:
-                pos = np.array(f_fk(*args_vis)).flatten()
-                links_pose.append(list(pos))
-            anim_data.append(links_pose)
+            if (i % anim_stride) == 0 or last_links_pose is None:
+                args_vis = self._build_args(q, dq)
+                if full_fk:
+                    links_pose = [[0, 0, 0]]
+                    for f_fk in self.funcs_fk_all_links:
+                        pos = np.array(f_fk(*args_vis)).flatten()
+                        links_pose.append(list(pos))
+                else:
+                    f_end = self.funcs_fk_all_links[-1]
+                    pos = np.array(f_end(*args_vis)).flatten()
+                    links_pose = [list(pos)]
+                last_links_pose = links_pose
+            anim_data.append(last_links_pose)
             
         return res_time, res_q, res_tau, anim_data, res_e
