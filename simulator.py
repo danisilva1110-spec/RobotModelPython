@@ -138,7 +138,7 @@ class RobotSimulator:
 
         return Pf, np.zeros(3), np.zeros(3)
 
-    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt, Kp_ik=5.0):
+    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt, Kp_ik=5.0, lambda_dls=0.1):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
         Agora o robô 'sabe' a velocidade da curva, não só a posição.
@@ -155,7 +155,6 @@ class RobotSimulator:
         J_pos = J_num[:3, :] 
         
         # Damped Least Squares
-        lambda_dls = 0.1 
         J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
         
         # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
@@ -210,8 +209,8 @@ class RobotSimulator:
         dq = np.zeros(self.num_dof)
 
         if init_at_start:
-            init_steps = 120
-            dt_init = min(dt_physics, 0.002)
+            init_steps = 200
+            dt_init = min(0.01, max(dt_physics, 0.002))
             f_end = self.funcs_fk_all_links[-1]
             if q_init is None:
                 q_init = np.copy(self.last_converged_q) if self.last_converged_q is not None else np.copy(q_home)
@@ -219,9 +218,17 @@ class RobotSimulator:
                 q_init = np.array(q_init, dtype=float).copy()
             init_error = np.inf
             init_iters = 0
+            kp_init = 2.0
+            lambda_init = 0.2
+            prev_error = np.inf
             while init_iters < init_steps:
                 q_init, _, _ = self.solve_ik_numerical(
-                    Pi, np.zeros(3), q_init, dt_init, Kp_ik=1.5
+                    Pi,
+                    np.zeros(3),
+                    q_init,
+                    dt_init,
+                    Kp_ik=kp_init,
+                    lambda_dls=lambda_init,
                 )
                 args_init = self._build_args(q_init, np.zeros(self.num_dof))
                 init_pos = np.array(f_end(*args_init)).flatten()
@@ -229,9 +236,12 @@ class RobotSimulator:
                 init_iters += 1
                 if init_error < 1e-3:
                     break
-            args_init = self._build_args(q_init, np.zeros(self.num_dof))
-            init_pos = np.array(f_end(*args_init)).flatten()
-            init_error = np.linalg.norm(Pi - init_pos)
+                if init_error > prev_error * 1.01:
+                    lambda_init = min(1.0, lambda_init * 1.2)
+                    kp_init = max(0.5, kp_init * 0.9)
+                else:
+                    kp_init = min(4.0, kp_init * 1.05)
+                prev_error = init_error
             if init_error < 1e-3:
                 q = q_init
                 dq = np.zeros(self.num_dof)
