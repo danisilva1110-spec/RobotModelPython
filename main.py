@@ -222,6 +222,11 @@ class App(ctk.CTk):
         self.entry_dt_visual.insert(0, "0.05")
         self.entry_dt_visual.pack(fill="x", pady=(0, 20))
 
+        ctk.CTkLabel(self.sim_left, text="IK stride (subpassos):").pack(anchor="w")
+        self.entry_ik_stride = ctk.CTkEntry(self.sim_left)
+        self.entry_ik_stride.insert(0, "1")
+        self.entry_ik_stride.pack(fill="x", pady=(0, 20))
+
         ctk.CTkLabel(self.sim_left, text="Postura Standard (q1,q2,...):").pack(anchor="w")
         self.entry_q_home = ctk.CTkEntry(self.sim_left)
         self.entry_q_home.insert(0, "0")
@@ -344,6 +349,12 @@ class App(ctk.CTk):
             return default
         return float(value)
 
+    def _parse_optional_int(self, value, default):
+        value = value.strip()
+        if not value:
+            return default
+        return int(float(value))
+
     def run_simulation_logic(self):
         """ 
         Gerencia a execução da simulação, lendo inputs da interface 
@@ -383,6 +394,7 @@ class App(ctk.CTk):
             kp        = float(self.entry_kp.get())
             dt_physics = self._parse_optional_float(self.entry_dt_physics.get(), 0.002)
             dt_visual = self._parse_optional_float(self.entry_dt_visual.get(), 0.05)
+            ik_stride = self._parse_optional_int(self.entry_ik_stride.get(), 1)
             
             # ---------------------------------------------------------
             # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
@@ -433,6 +445,7 @@ class App(ctk.CTk):
                 traj_params=traj_params,
                 dt_physics=dt_physics,
                 dt_visual=dt_visual,
+                ik_stride=ik_stride,
             )
             
             self.last_anim_data = anim_data
