@@ -262,6 +262,7 @@ class RobotSimulator:
         Pi_list,
         Pf_list,
         Kp_val,
+        Ki_val,
         traj_mode="Line",
         traj_params=None,
         dt_physics=0.002,
@@ -301,6 +302,7 @@ class RobotSimulator:
         # Ganhos PID
         KP = Kp_val * np.eye(self.num_dof)
         KD = 2 * np.sqrt(Kp_val) * np.eye(self.num_dof)
+        KI = Ki_val * np.eye(self.num_dof)
         
         # Arrays de resultado
         res_time = np.linspace(0, total_time, steps_visual)
@@ -314,7 +316,10 @@ class RobotSimulator:
         current_time = 0.0
         substep_counter = 0
         e_real = np.zeros(self.num_dof)
+        e_int = np.zeros(self.num_dof)
         step_inc = np.zeros(self.num_dof)
+        dq_limit = 2.0
+        tau_limit = 100.0
         
         for i in range(steps_visual):
             for _ in range(substeps):
@@ -338,6 +343,7 @@ class RobotSimulator:
                     q = q_d
                     dq = dq_cmd
                     e_real = np.zeros(self.num_dof)
+                    e_int = np.zeros(self.num_dof)
                     step_inc = dq_d
                     e_pid = np.zeros(self.num_dof)
                     tau = np.zeros(self.num_dof)
@@ -365,12 +371,29 @@ class RobotSimulator:
                 
                 e_pid = self._wrap_to_pi(q_d - q)
                 e_dot = dq_cmd - dq
-                u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
-                tau = M @ u + C + G
-                
+                e_int_candidate = e_int + e_pid * dt_physics
+                u = ddq_d + (KD @ e_dot) + (KP @ e_pid) + (KI @ e_int_candidate)
+                tau_unsat = M @ u + C + G
+                tau = np.clip(tau_unsat, -tau_limit, tau_limit)
+
                 ddq = np.linalg.solve(M, tau - C - G)
-                q += dq * dt_physics
-                dq += ddq * dt_physics
+                dq_next = dq + ddq * dt_physics
+                dq_next_sat = np.clip(dq_next, -dq_limit, dq_limit)
+
+                tau_saturated = np.any(np.abs(tau_unsat) > tau_limit)
+                dq_saturated = np.any(np.abs(dq_next) > dq_limit)
+                if tau_saturated or dq_saturated:
+                    u = ddq_d + (KD @ e_dot) + (KP @ e_pid) + (KI @ e_int)
+                    tau_unsat = M @ u + C + G
+                    tau = np.clip(tau_unsat, -tau_limit, tau_limit)
+                    ddq = np.linalg.solve(M, tau - C - G)
+                    dq_next = dq + ddq * dt_physics
+                    dq_next_sat = np.clip(dq_next, -dq_limit, dq_limit)
+                else:
+                    e_int = e_int_candidate
+
+                q += dq_next_sat * dt_physics
+                dq = dq_next_sat
                 q = self._wrap_to_pi(q) # Wrap essencial
 
             res_q[i, :] = q

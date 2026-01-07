@@ -204,7 +204,12 @@ class App(ctk.CTk):
         ctk.CTkLabel(self.sim_left, text="Ganho Kp:").pack(anchor="w")
         self.entry_kp = ctk.CTkEntry(self.sim_left)
         self.entry_kp.insert(0, "50.0")
-        self.entry_kp.pack(fill="x", pady=(0, 20))
+        self.entry_kp.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.sim_left, text="Ganho Ki:").pack(anchor="w")
+        self.entry_ki = ctk.CTkEntry(self.sim_left)
+        self.entry_ki.insert(0, "1.0")
+        self.entry_ki.pack(fill="x", pady=(0, 20))
 
         ctk.CTkLabel(self.sim_left, text="dt_physics (s):").pack(anchor="w")
         self.entry_dt_physics = ctk.CTkEntry(self.sim_left)
@@ -409,6 +414,7 @@ class App(ctk.CTk):
             end_pos   = [float(x) for x in self.entry_end.get().split(",")]
             t_total   = float(self.entry_time.get())
             kp        = float(self.entry_kp.get())
+            ki        = float(self.entry_ki.get())
             dt_physics = self._parse_optional_float(self.entry_dt_physics.get(), 0.002)
             dt_visual = self._parse_optional_float(self.entry_dt_visual.get(), 0.05)
             ik_stride = self._parse_optional_int(self.entry_ik_stride.get(), 1)
@@ -459,7 +465,7 @@ class App(ctk.CTk):
         try:
             # Passa os parâmetros lidos para o simulador
             t, q, tau, anim_data, err, _step_inc = self.active_sim.run(
-                t_total, start_pos, end_pos, kp, 
+                t_total, start_pos, end_pos, kp, ki,
                 traj_mode=traj_mode,
                 traj_params=traj_params,
                 dt_physics=dt_physics,
