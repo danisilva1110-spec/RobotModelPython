@@ -200,6 +200,16 @@ class App(ctk.CTk):
         self.entry_time = ctk.CTkEntry(self.sim_left)
         self.entry_time.insert(0, "5.0")
         self.entry_time.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.sim_left, text="Passo de Física dt (s):").pack(anchor="w")
+        self.entry_dt_physics = ctk.CTkEntry(self.sim_left)
+        self.entry_dt_physics.insert(0, "0.001")
+        self.entry_dt_physics.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.sim_left, text="Passo Visual dt (s):").pack(anchor="w")
+        self.entry_dt_visual = ctk.CTkEntry(self.sim_left)
+        self.entry_dt_visual.insert(0, "0.05")
+        self.entry_dt_visual.pack(fill="x", pady=(0, 5))
         
         ctk.CTkLabel(self.sim_left, text="Ganho Kp:").pack(anchor="w")
         self.entry_kp = ctk.CTkEntry(self.sim_left)
@@ -328,7 +338,13 @@ class App(ctk.CTk):
             start_pos = [float(x) for x in self.entry_start.get().split(",")]
             end_pos   = [float(x) for x in self.entry_end.get().split(",")]
             t_total   = float(self.entry_time.get())
+            dt_physics = float(self.entry_dt_physics.get())
+            dt_visual = float(self.entry_dt_visual.get())
             kp        = float(self.entry_kp.get())
+
+            if dt_physics <= 0 or dt_visual <= 0:
+                self.log("❌ dt_physics e dt_visual devem ser maiores que zero.")
+                return
             
             # ---------------------------------------------------------
             # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
@@ -375,10 +391,12 @@ class App(ctk.CTk):
             # Passa os parâmetros lidos para o simulador
             t, err, tau, anim_data = self.active_sim.run(
                 t_total, start_pos, end_pos, kp, 
-                traj_mode=traj_mode, traj_params=traj_params
+                traj_mode=traj_mode, traj_params=traj_params,
+                dt_physics=dt_physics, dt_visual=dt_visual
             )
             
             self.last_anim_data = anim_data
+            self.last_dt_visual = getattr(self.active_sim, "last_dt_visual", dt_visual)
             self.plot_results(t, err, tau)
             self.log("✅ Simulação finalizada.")
             self.btn_anim3d.configure(state="normal")
@@ -443,7 +461,8 @@ class App(ctk.CTk):
             trace_z.append(zs[-1])
             trace.set_data(trace_x, trace_y)
             trace.set_3d_properties(trace_z)
-            ax.set_title(f"T = {frame_idx*0.05:.2f}s")
+            dt_visual = getattr(self, "last_dt_visual", 0.05)
+            ax.set_title(f"T = {frame_idx*dt_visual:.2f}s")
             return line, trace
 
         ani = animation.FuncAnimation(fig, update, frames=range(0, steps, 1), interval=50, blit=False)
