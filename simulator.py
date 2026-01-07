@@ -187,7 +187,7 @@ class RobotSimulator:
         return q_next, dq_total, np.zeros_like(dq_total)
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
-            dt_physics=None, dt_visual=None):
+            dt_physics=None, dt_visual=None, init_at_start=True):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -207,8 +207,27 @@ class RobotSimulator:
         Pf = np.array(Pf_list, dtype=float)
         
         # Inicialização (Com postura preferida se definida)
-        q = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+        q_home = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+        q = np.copy(q_home)
         dq = np.zeros(self.num_dof)
+
+        if init_at_start:
+            init_steps = 30
+            dt_init = min(dt_physics, 0.01)
+            f_end = self.funcs_fk_all_links[-1]
+            q_init = np.copy(q)
+            for _ in range(init_steps):
+                q_init, _, _ = self.solve_ik_numerical(Pi, np.zeros(3), q_init, dt_init)
+            args_init = self._build_args(q_init, np.zeros(self.num_dof))
+            init_pos = np.array(f_end(*args_init)).flatten()
+            init_error = np.linalg.norm(Pi - init_pos)
+            if init_error < 1e-3:
+                q = q_init
+                dq = np.zeros(self.num_dof)
+            else:
+                print("⚠️ IK inicial não convergiu. Usando postura home como inicial.")
+                q = np.copy(q_home)
+                dq = np.zeros(self.num_dof)
         
         # Ganhos PID
         KP = Kp_val * np.eye(self.num_dof)
