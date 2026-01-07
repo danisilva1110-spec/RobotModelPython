@@ -219,12 +219,14 @@ class RobotSimulator:
         traj_params=None,
         dt_physics=0.002,
         dt_visual=0.05,
+        ik_stride=1,
     ):
         # ... (Início igual ao original) ...
         pre_time = max(0.5, min(2.0, 0.2 * t_total))
         total_time = t_total + pre_time
         steps_visual = int(total_time / dt_visual)
         substeps = max(1, int(dt_visual / dt_physics))
+        ik_stride = max(1, int(ik_stride))
         
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
@@ -236,6 +238,9 @@ class RobotSimulator:
         else:
             q = np.zeros(self.num_dof)
         dq = np.zeros(self.num_dof)
+        q_d = np.copy(q)
+        dq_d = np.zeros(self.num_dof)
+        ddq_d = np.zeros(self.num_dof)
 
         # Calcula posição atual do efetuador final para criar a reta até Pi
         f_end = self.funcs_fk_all_links[-1]
@@ -253,20 +258,24 @@ class RobotSimulator:
         anim_data = []
 
         current_time = 0.0
+        substep_counter = 0
         
         for i in range(steps_visual):
             for _ in range(substeps):
                 current_time += dt_physics
+                should_update_ik = (substep_counter % ik_stride) == 0
+                substep_counter += 1
                 
                 # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
                 if current_time <= pre_time:
-                    P_ref, V_ref, A_ref = self.trajectory_planning(
-                        current_time, pre_time, start_pos, Pi,
-                        mode="Line", params=None
-                    )
-                    q_d, dq_d, ddq_d = self.solve_ik_numerical(
-                        P_ref, V_ref, q, dt_physics, use_nullspace=False, kp_ik=4.0
-                    )
+                    if should_update_ik:
+                        P_ref, V_ref, A_ref = self.trajectory_planning(
+                            current_time, pre_time, start_pos, Pi,
+                            mode="Line", params=None
+                        )
+                        q_d, dq_d, ddq_d = self.solve_ik_numerical(
+                            P_ref, V_ref, q, dt_physics, use_nullspace=False, kp_ik=4.0
+                        )
                     dq_limit_pre = 0.5
                     dq_d = np.clip(dq_d, -dq_limit_pre, dq_limit_pre)
                     q = q_d
@@ -276,14 +285,16 @@ class RobotSimulator:
                     continue
                 else:
                     t_main = current_time - pre_time
-                    P_ref, V_ref, A_ref = self.trajectory_planning(
-                        t_main, t_total, Pi, Pf,
-                        mode=traj_mode, params=traj_params
-                    )
+                    if should_update_ik:
+                        P_ref, V_ref, A_ref = self.trajectory_planning(
+                            t_main, t_total, Pi, Pf,
+                            mode=traj_mode, params=traj_params
+                        )
                 
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
-                q_d, dq_d, ddq_d = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
+                if should_update_ik:
+                    q_d, dq_d, ddq_d = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
                 C = np.array(self.func_C(*args)).flatten().astype(np.float64)
