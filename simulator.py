@@ -8,6 +8,7 @@ class RobotSimulator:
         self.num_dof = len(self.bot.q)
         self.params_values = {} 
         self.q_home = np.zeros(self.num_dof)
+        self.last_converged_q = None
 
         print(f"[{mode}] Compilando equações (Isso pode demorar um pouco)...")
         
@@ -184,7 +185,7 @@ class RobotSimulator:
         return q_next, dq_total, np.zeros_like(dq_total)
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
-            dt_physics=None, dt_visual=None, init_at_start=True):
+            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -212,7 +213,10 @@ class RobotSimulator:
             init_steps = 120
             dt_init = min(dt_physics, 0.002)
             f_end = self.funcs_fk_all_links[-1]
-            q_init = np.copy(q)
+            if q_init is None:
+                q_init = np.copy(self.last_converged_q) if self.last_converged_q is not None else np.copy(q_home)
+            else:
+                q_init = np.array(q_init, dtype=float).copy()
             init_error = np.inf
             init_iters = 0
             while init_iters < init_steps:
@@ -231,6 +235,7 @@ class RobotSimulator:
             if init_error < 1e-3:
                 q = q_init
                 dq = np.zeros(self.num_dof)
+                self.last_converged_q = np.copy(q_init)
             else:
                 print(
                     "⚠️ IK inicial não convergiu. "

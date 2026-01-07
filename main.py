@@ -199,6 +199,19 @@ class App(ctk.CTk):
         )
         self.init_at_start_check.pack(anchor="w", pady=(0, 10))
 
+        ctk.CTkLabel(self.sim_left, text="q_init (rad, opcional):").pack(anchor="w")
+        self.entry_q_init = ctk.CTkEntry(self.sim_left)
+        self.entry_q_init.insert(0, "")
+        self.entry_q_init.pack(fill="x", pady=(0, 5))
+
+        self.use_last_q_var = ctk.BooleanVar(value=True)
+        self.use_last_q_check = ctk.CTkCheckBox(
+            self.sim_left,
+            text="Usar último q convergente",
+            variable=self.use_last_q_var
+        )
+        self.use_last_q_check.pack(anchor="w", pady=(0, 10))
+
         ctk.CTkLabel(self.sim_left, text="Posição Final (x, y, z):").pack(anchor="w")
         self.entry_end = ctk.CTkEntry(self.sim_left)
         self.entry_end.insert(0, "0.5, 0.5, 0.2")
@@ -396,6 +409,18 @@ class App(ctk.CTk):
             if dt_physics <= 0 or dt_visual <= 0:
                 self.log("❌ dt_physics e dt_visual devem ser maiores que zero.")
                 return
+
+            q_init = None
+            q_init_text = self.entry_q_init.get().strip()
+            if q_init_text:
+                q_init = [float(x) for x in q_init_text.split(",")]
+                if len(q_init) != self.active_sim.num_dof:
+                    self.log(
+                        f"❌ q_init precisa ter {self.active_sim.num_dof} valores."
+                    )
+                    return
+            elif not self.use_last_q_var.get():
+                q_init = np.zeros(self.active_sim.num_dof)
             
             # ---------------------------------------------------------
             # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
@@ -444,7 +469,8 @@ class App(ctk.CTk):
                 t_total, start_pos, end_pos, kp, 
                 traj_mode=traj_mode, traj_params=traj_params,
                 dt_physics=dt_physics, dt_visual=dt_visual,
-                init_at_start=self.init_at_start_var.get()
+                init_at_start=self.init_at_start_var.get(),
+                q_init=q_init
             )
             
             self.last_anim_data = anim_data
