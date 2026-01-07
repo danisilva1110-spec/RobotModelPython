@@ -44,6 +44,10 @@ class RobotSimulator:
     def set_parameters(self, user_values_dict):
         self.params_values = user_values_dict
 
+    def set_q_home(self, q_home):
+        q_home = np.array(q_home, dtype=float)
+        self.q_home = self._wrap_to_pi(q_home)
+
     def _build_args(self, q, dq):
         p_vals = [self.params_values[str(p)] for p in self.bot.params_list]
         args = list(q) + list(dq) + p_vals
