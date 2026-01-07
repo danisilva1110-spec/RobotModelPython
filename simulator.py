@@ -227,6 +227,26 @@ class RobotSimulator:
         # Retornamos dq_total para usar na dinâmica
         return q_next, dq_total, np.zeros_like(dq_total)
 
+    def solve_ik_target(self, target_pos, q_seed, max_iters=50, tol=1e-4, step_gain=1.0):
+        """IK iterativo apenas para atingir o alvo cartesiano (diagnóstico de erro real)."""
+        q_target = np.array(q_seed, dtype=float)
+        f_end = self.funcs_fk_all_links[-1]
+        error = np.zeros(3)
+        for _ in range(max_iters):
+            args_0 = self._build_args(q_target, np.zeros(self.num_dof))
+            curr_pos = np.array(f_end(*args_0)).flatten()
+            error = target_pos - curr_pos
+            if np.linalg.norm(error) <= tol:
+                break
+            J_num = np.array(self.func_J(*args_0))
+            J_pos = J_num[:3, :]
+            lambda_dls = 0.1
+            A = J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
+            J_dls_pinv = J_pos.T @ np.linalg.solve(A, np.eye(3))
+            dq = J_dls_pinv @ (error * step_gain)
+            q_target = self._wrap_to_pi(q_target + dq)
+        return q_target, error
+
     def run(
         self,
         t_total,
@@ -277,12 +297,15 @@ class RobotSimulator:
         res_time = np.linspace(0, total_time, steps_visual)
         res_q = np.zeros((steps_visual, self.num_dof))
         res_e = np.zeros((steps_visual, self.num_dof))
+        res_step = np.zeros((steps_visual, self.num_dof))
         res_tau = np.zeros((steps_visual, self.num_dof))
         anim_data = []
         last_links_pose = None
 
         current_time = 0.0
         substep_counter = 0
+        e_real = np.zeros(self.num_dof)
+        step_inc = np.zeros(self.num_dof)
         
         for i in range(steps_visual):
             for _ in range(substeps):
@@ -304,6 +327,8 @@ class RobotSimulator:
                     dq_d = np.clip(dq_d, -dq_limit_pre, dq_limit_pre)
                     q = q_d
                     dq = dq_d
+                    e_real = np.zeros(self.num_dof)
+                    step_inc = dq_d * dt_physics
                     e_pid = np.zeros(self.num_dof)
                     tau = np.zeros(self.num_dof)
                     continue
@@ -318,7 +343,10 @@ class RobotSimulator:
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
                 if should_update_ik:
+                    q_target, _ = self.solve_ik_target(P_ref, q)
                     q_d, dq_d, ddq_d = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
+                    e_real = self._wrap_to_pi(q_target - q)
+                step_inc = dq_d * dt_physics
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
                 C = np.array(self.func_C(*args)).flatten().astype(np.float64)
@@ -335,7 +363,8 @@ class RobotSimulator:
                 q = self._wrap_to_pi(q) # Wrap essencial
 
             res_q[i, :] = q
-            res_e[i, :] = e_pid
+            res_e[i, :] = e_real
+            res_step[i, :] = step_inc
             res_tau[i, :] = tau
             
             # FK para animação
@@ -353,4 +382,4 @@ class RobotSimulator:
                 last_links_pose = links_pose
             anim_data.append(last_links_pose)
             
-        return res_time, res_q, res_tau, anim_data, res_e
+        return res_time, res_q, res_tau, anim_data, res_e, res_step
