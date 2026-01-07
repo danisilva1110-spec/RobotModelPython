@@ -186,12 +186,22 @@ class RobotSimulator:
         # Retornamos dq_total para usar na dinâmica
         return q_next, dq_total, np.zeros_like(dq_total)
 
-    def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None):
+    def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
+            dt_physics=None, dt_visual=None):
         # ... (Início igual ao original) ...
-        dt_physics = 0.001
-        dt_visual  = 0.05
-        steps_visual = int(t_total / dt_visual)
-        substeps = int(dt_visual / dt_physics)
+        dt_physics = 0.001 if dt_physics is None else dt_physics
+        dt_visual = 0.05 if dt_visual is None else dt_visual
+
+        if dt_physics <= 0 or dt_visual <= 0:
+            raise ValueError("dt_physics e dt_visual devem ser maiores que zero.")
+
+        if dt_physics > 0.01 or dt_visual > 0.1:
+            print("⚠️ Passos de integração grandes podem causar instabilidade numérica.")
+
+        substeps = max(1, int(np.ceil(dt_visual / dt_physics)))
+        dt_visual_effective = dt_physics * substeps
+        steps_visual = max(1, int(np.ceil(t_total / dt_visual_effective)))
+        self.last_dt_visual = dt_visual_effective
         
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
