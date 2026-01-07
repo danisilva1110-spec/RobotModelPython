@@ -254,6 +254,7 @@ class RobotSimulator:
         # Arrays de resultado
         res_time = np.linspace(0, total_time, steps_visual)
         res_q = np.zeros((steps_visual, self.num_dof))
+        res_e = np.zeros((steps_visual, self.num_dof))
         res_tau = np.zeros((steps_visual, self.num_dof))
         anim_data = []
 
@@ -310,8 +311,9 @@ class RobotSimulator:
                 dq += ddq * dt_physics
                 q = self._wrap_to_pi(q) # Wrap essencial
 
-            res_q[i,:] = e_pid
-            res_tau[i,:] = tau
+            res_q[i, :] = q
+            res_e[i, :] = e_pid
+            res_tau[i, :] = tau
             
             # FK para animação
             links_pose = [[0,0,0]]
@@ -321,4 +323,4 @@ class RobotSimulator:
                 links_pose.append(list(pos))
             anim_data.append(links_pose)
             
-        return res_time, res_q, res_tau, anim_data
+        return res_time, res_q, res_tau, anim_data, res_e
