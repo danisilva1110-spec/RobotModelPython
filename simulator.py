@@ -159,7 +159,8 @@ class RobotSimulator:
         
         # Damped Least Squares
         lambda_dls = 0.1 
-        J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
+        A = J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
+        J_dls_pinv = J_pos.T @ np.linalg.solve(A, np.eye(3))
         
         # --- A CORREÇÃO MÁGICA AQUI ---
         Kp_ik = kp_ik
