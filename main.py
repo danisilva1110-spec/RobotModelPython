@@ -227,6 +227,10 @@ class App(ctk.CTk):
         self.entry_ik_stride.insert(0, "1")
         self.entry_ik_stride.pack(fill="x", pady=(0, 20))
 
+        self.light_anim_var = ctk.BooleanVar(value=False)
+        self.chk_light_anim = ctk.CTkCheckBox(self.sim_left, text="Animação leve", variable=self.light_anim_var)
+        self.chk_light_anim.pack(anchor="w", pady=(0, 20))
+
         ctk.CTkLabel(self.sim_left, text="Postura Standard (q1,q2,...):").pack(anchor="w")
         self.entry_q_home = ctk.CTkEntry(self.sim_left)
         self.entry_q_home.insert(0, "0")
@@ -408,6 +412,8 @@ class App(ctk.CTk):
             dt_physics = self._parse_optional_float(self.entry_dt_physics.get(), 0.002)
             dt_visual = self._parse_optional_float(self.entry_dt_visual.get(), 0.05)
             ik_stride = self._parse_optional_int(self.entry_ik_stride.get(), 1)
+            full_fk = not self.light_anim_var.get()
+            anim_stride = 2 if self.light_anim_var.get() else 1
             
             # ---------------------------------------------------------
             # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
@@ -459,6 +465,8 @@ class App(ctk.CTk):
                 dt_physics=dt_physics,
                 dt_visual=dt_visual,
                 ik_stride=ik_stride,
+                full_fk=full_fk,
+                anim_stride=anim_stride,
             )
             
             self.last_anim_data = anim_data
