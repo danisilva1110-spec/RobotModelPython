@@ -369,13 +369,26 @@ class App(ctk.CTk):
             # 1. Parâmetros Físicos (Massas, Inércias, etc.)
             # ---------------------------------------------------------
             user_params = {}
+            missing_params = []
+            invalid_params = []
             for name, entry in self.dynamic_entries.items():
+                raw_value = entry.get().strip()
+                if not raw_value:
+                    missing_params.append(name)
+                    continue
                 try:
-                    val = float(entry.get())
-                    user_params[name] = val
+                    user_params[name] = float(raw_value)
                 except ValueError:
-                    self.log(f"⚠️ Valor inválido para '{name}'. Assumindo 0.0.")
-                    user_params[name] = 0.0
+                    invalid_params.append(name)
+
+            if missing_params or invalid_params:
+                if missing_params:
+                    missing_str = ", ".join(missing_params)
+                    self.log(f"❌ Preencha os parâmetros obrigatórios: {missing_str}.")
+                if invalid_params:
+                    invalid_str = ", ".join(invalid_params)
+                    self.log(f"❌ Valores inválidos para: {invalid_str}.")
+                return
             
             user_params['g'] = 9.81
             self.active_sim.set_parameters(user_params)
