@@ -166,6 +166,19 @@ class RobotSimulator:
         v_command = target_vel + (error * Kp_ik)
         
         dq_task = J_dls_pinv @ v_command
+
+        # Regularização para penalizar variações grandes nas juntas
+        dq_norm = np.linalg.norm(dq_task)
+        reg_gain = 0.15
+        if dq_norm > 0.0:
+            dq_task = dq_task / (1.0 + reg_gain * dq_norm)
+
+        # Custo de mínimo deslocamento (evita voltas longas)
+        q_ref = q_curr + dq_task * dt
+        q_err = self._wrap_to_pi(q_ref - q_curr)
+        min_disp_gain = 0.5
+        dq_min_disp = q_err / max(dt, 1e-6)
+        dq_task = dq_task + min_disp_gain * (dq_min_disp - dq_task)
         
         # Controle de Espaço Nulo (Mantém igual)
         dq_total = dq_task
@@ -181,9 +194,12 @@ class RobotSimulator:
             dq_null = null_projection @ (Kp_null * q_err_null)
 
             dq_total = dq_task + dq_null
-        dq_total = np.clip(dq_total, -3.0, 3.0) 
+        dq_limit = 2.0
+        dq_total = np.clip(dq_total, -dq_limit, dq_limit)
         
         q_next = q_curr + dq_total * dt
+        q_next = self._wrap_to_pi(q_next)
+        dq_total = self._wrap_to_pi(q_next - q_curr) / max(dt, 1e-6)
         
         # Retornamos dq_total para usar na dinâmica
         return q_next, dq_total, np.zeros_like(dq_total)
