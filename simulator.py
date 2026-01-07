@@ -42,7 +42,25 @@ class RobotSimulator:
         print("Compilação concluída!")
 
     def set_parameters(self, user_values_dict):
-        self.params_values = user_values_dict
+        normalized = {str(key): value for key, value in user_values_dict.items()}
+        self._validate_parameters(normalized)
+        self.params_values = normalized
+
+    def _required_param_keys(self):
+        required = [str(p) for p in self.bot.params_list]
+        if hasattr(self.bot, 'rho'):
+            required.append('rho')
+        return required
+
+    def _validate_parameters(self, params_values):
+        required = self._required_param_keys()
+        missing = [key for key in required if key not in params_values]
+        if missing:
+            missing_str = ", ".join(missing)
+            raise ValueError(
+                f"Parâmetros ausentes: {missing_str}. "
+                "Preencha todos os parâmetros antes de iniciar a simulação."
+            )
 
     def set_q_home(self, q_home):
         q_home = np.array(q_home, dtype=float)
@@ -221,6 +239,7 @@ class RobotSimulator:
         dt_visual=0.05,
         ik_stride=1,
     ):
+        self._validate_parameters(self.params_values)
         # ... (Início igual ao original) ...
         pre_time = max(0.5, min(2.0, 0.2 * t_total))
         total_time = t_total + pre_time
