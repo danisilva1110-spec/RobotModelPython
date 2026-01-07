@@ -248,6 +248,15 @@ class App(ctk.CTk):
         self.params_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
         self.params_container.pack(fill="both", expand=True)
         self.dynamic_entries = {}
+        self.dynamic_defaults = {}
+
+        self.btn_restore_defaults = ctk.CTkButton(
+            self.sim_left,
+            text="Restaurar padrões",
+            fg_color="#6c757d",
+            command=self.restore_sim_defaults
+        )
+        self.btn_restore_defaults.pack(pady=(10, 5), fill="x")
 
         self.btn_run_sim = ctk.CTkButton(self.sim_left, text="RODAR SIMULAÇÃO ▶", fg_color="red", command=self.run_simulation_logic)
         self.btn_run_sim.pack(pady=20, side="bottom", fill="x")
@@ -274,29 +283,63 @@ class App(ctk.CTk):
         for widget in self.params_container.winfo_children():
             widget.destroy()
         self.dynamic_entries = {}
+        self.dynamic_defaults = {}
 
         if not self.active_sim: return
         ignore_list = set(self.active_bot.q + self.active_bot.dq)
-        
+
+        prefix_configs = [
+            {"prefix": "m", "title": "Massas", "unit": "kg", "default": "2.0", "placeholder": "Ex.: 2.0 (kg)"},
+            {"prefix": "L", "title": "Comprimentos", "unit": "m", "default": "0.5", "placeholder": "Ex.: 0.5 (m)"},
+            {"prefix": "I", "title": "Inércias", "unit": "kg·m²", "default": "0.01", "placeholder": "Ex.: 0.01 (kg·m²)"},
+            {"prefix": "rho", "title": "Densidades", "unit": "kg/m³", "default": "1000", "placeholder": "Ex.: 1000 (kg/m³)"},
+            {"prefix": "vol", "title": "Volumes", "unit": "m³", "default": "0.005", "placeholder": "Ex.: 0.005 (m³)"},
+        ]
+
+        def get_config(sym_name):
+            for cfg in prefix_configs:
+                if sym_name.startswith(cfg["prefix"]):
+                    return cfg
+            return {"prefix": "", "title": "Outros", "unit": "", "default": "0.1", "placeholder": "Ex.: 0.1"}
+
+        sections = {}
         for sym in self.active_sim.sym_vars:
             if sym in ignore_list: continue
-            if str(sym) in ['t', 'g']: continue 
+            if str(sym) in ['t', 'g']: continue
 
-            row = ctk.CTkFrame(self.params_container)
+            sym_name = str(sym)
+            cfg = get_config(sym_name)
+            if cfg["title"] not in sections:
+                section_frame = ctk.CTkFrame(self.params_container, fg_color="transparent")
+                section_frame.pack(fill="x", pady=(0, 8))
+                ctk.CTkLabel(
+                    section_frame,
+                    text=cfg["title"],
+                    font=("Arial", 12, "bold")
+                ).pack(anchor="w", pady=(0, 4))
+                entries_frame = ctk.CTkFrame(section_frame, fg_color="transparent")
+                entries_frame.pack(fill="x")
+                sections[cfg["title"]] = entries_frame
+
+            entry_container = sections[cfg["title"]]
+            row = ctk.CTkFrame(entry_container)
             row.pack(fill="x", pady=2)
-            lbl = ctk.CTkLabel(row, text=str(sym), width=80, anchor="w")
+            label_text = f"{sym_name} ({cfg['unit']})" if cfg["unit"] else sym_name
+            lbl = ctk.CTkLabel(row, text=label_text, width=120, anchor="w")
             lbl.pack(side="left")
-            entry = ctk.CTkEntry(row)
+            entry = ctk.CTkEntry(row, placeholder_text=cfg["placeholder"])
             entry.pack(side="right", expand=True, fill="x")
-            
-            val = "0.1"
-            if "rho" in str(sym): val = "1000"
-            if "m" in str(sym): val = "2.0"
-            if "L" in str(sym): val = "0.5"
-            if "vol" in str(sym): val = "0.005"
-            
-            entry.insert(0, val)
-            self.dynamic_entries[str(sym)] = entry
+            entry.insert(0, cfg["default"])
+
+            self.dynamic_entries[sym_name] = entry
+            self.dynamic_defaults[sym_name] = cfg["default"]
+
+    def restore_sim_defaults(self):
+        for name, entry in self.dynamic_entries.items():
+            default_value = self.dynamic_defaults.get(name, "")
+            entry.delete(0, "end")
+            if default_value:
+                entry.insert(0, default_value)
 
     def toggle_sim_tab(self, enable):
         if not enable: self.tabview.set("Modelagem")
