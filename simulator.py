@@ -165,67 +165,76 @@ class RobotSimulator:
         Agora o robô 'sabe' a velocidade da curva, não só a posição.
         """
         f_end = self.funcs_fk_all_links[-1]
-        args_0 = self._build_args(q_curr, np.zeros(self.num_dof))
-        curr_pos = np.array(f_end(*args_0)).flatten()
-        
-        # Erro de Posição (Proporcional)
-        error = target_pos - curr_pos
-        
-        # Jacobiano
-        J_num = np.array(self.func_J(*args_0))
-        J_pos = J_num[:3, :] 
-        
-        # Damped Least Squares
-        lambda_dls = 0.1 
-        A = J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
-        J_dls_pinv = J_pos.T @ np.linalg.solve(A, np.eye(3))
-        
-        # --- A CORREÇÃO MÁGICA AQUI ---
-        Kp_ik = kp_ik
-        
-        # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
-        # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
-        # Isso é o Feedforward: O robô já se move na velocidade da curva mesmo se o erro for zero.
-        v_command = target_vel + (error * Kp_ik)
-        
-        dq_task = J_dls_pinv @ v_command
+        q_iter = np.array(q_curr, dtype=float)
+        max_iters = 10
+        tol = 1e-4
+        dq_total = np.zeros(self.num_dof)
+        for _ in range(max_iters):
+            args_0 = self._build_args(q_iter, np.zeros(self.num_dof))
+            curr_pos = np.array(f_end(*args_0)).flatten()
 
-        # Regularização para penalizar variações grandes nas juntas
-        dq_norm = np.linalg.norm(dq_task)
-        reg_gain = 0.15
-        if dq_norm > 0.0:
-            dq_task = dq_task / (1.0 + reg_gain * dq_norm)
+            # Erro de Posição (Proporcional)
+            error = target_pos - curr_pos
+            if np.linalg.norm(error) <= tol:
+                break
 
-        # Custo de mínimo deslocamento (evita voltas longas)
-        q_ref = q_curr + dq_task * dt
-        q_err = self._wrap_to_pi(q_ref - q_curr)
-        min_disp_gain = 0.5
-        dq_min_disp = q_err / max(dt, 1e-6)
-        dq_task = dq_task + min_disp_gain * (dq_min_disp - dq_task)
-        
-        # Controle de Espaço Nulo (Mantém igual)
-        dq_total = dq_task
-        if use_nullspace:
-            I = np.eye(self.num_dof)
+            # Jacobiano
+            J_num = np.array(self.func_J(*args_0))
+            J_pos = J_num[:3, :]
 
-            # Usa o q_home da classe se existir, senão zero
-            q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
-            q_err_null = self._wrap_to_pi(q_target_null - q_curr)
+            # Damped Least Squares
+            lambda_dls = 0.1
+            A = J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
+            J_dls_pinv = J_pos.T @ np.linalg.solve(A, np.eye(3))
 
-            Kp_null = 1.0
-            null_projection = (I - J_dls_pinv @ J_pos)
-            dq_null = null_projection @ (Kp_null * q_err_null)
+            # --- A CORREÇÃO MÁGICA AQUI ---
+            Kp_ik = kp_ik
 
-            dq_total = dq_task + dq_null
-        dq_limit = 2.0
-        dq_total = np.clip(dq_total, -dq_limit, dq_limit)
-        
-        q_next = q_curr + dq_total * dt
-        q_next = self._wrap_to_pi(q_next)
-        dq_total = self._wrap_to_pi(q_next - q_curr) / max(dt, 1e-6)
-        
-        # Retornamos dq_total para usar na dinâmica
-        return q_next, dq_total, np.zeros_like(dq_total)
+            # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
+            # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
+            # Isso é o Feedforward: O robô já se move na velocidade da curva mesmo se o erro for zero.
+            v_command = target_vel + (error * Kp_ik)
+
+            dq_task = J_dls_pinv @ v_command
+
+            # Regularização para penalizar variações grandes nas juntas
+            dq_norm = np.linalg.norm(dq_task)
+            reg_gain = 0.15
+            if dq_norm > 0.0:
+                dq_task = dq_task / (1.0 + reg_gain * dq_norm)
+
+            # Custo de mínimo deslocamento (evita voltas longas)
+            q_ref = q_iter + dq_task * dt
+            q_err = self._wrap_to_pi(q_ref - q_iter)
+            min_disp_gain = 0.5
+            dq_min_disp = q_err / max(dt, 1e-6)
+            dq_task = dq_task + min_disp_gain * (dq_min_disp - dq_task)
+
+            # Controle de Espaço Nulo (Mantém igual)
+            dq_total = dq_task
+            if use_nullspace:
+                I = np.eye(self.num_dof)
+
+                # Usa o q_home da classe se existir, senão zero
+                q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+                q_err_null = self._wrap_to_pi(q_target_null - q_iter)
+
+                Kp_null = 1.0
+                null_projection = (I - J_dls_pinv @ J_pos)
+                dq_null = null_projection @ (Kp_null * q_err_null)
+
+                dq_total = dq_task + dq_null
+            dq_limit = 2.0
+            dq_total = np.clip(dq_total, -dq_limit, dq_limit)
+
+            q_iter = q_iter + dq_total * dt
+            q_iter = self._wrap_to_pi(q_iter)
+
+        q_d = self._wrap_to_pi(q_iter)
+        dq_d = self._wrap_to_pi(q_d - q_curr)
+
+        # Retornamos dq_d como diferença de posição para usar na dinâmica
+        return q_d, dq_d, np.zeros_like(dq_d)
 
     def solve_ik_target(self, target_pos, q_seed, max_iters=50, tol=1e-4, step_gain=1.0):
         """IK iterativo apenas para atingir o alvo cartesiano (diagnóstico de erro real)."""
@@ -325,10 +334,11 @@ class RobotSimulator:
                         )
                     dq_limit_pre = 0.5
                     dq_d = np.clip(dq_d, -dq_limit_pre, dq_limit_pre)
+                    dq_cmd = dq_d / max(dt_physics, 1e-6)
                     q = q_d
-                    dq = dq_d
+                    dq = dq_cmd
                     e_real = np.zeros(self.num_dof)
-                    step_inc = dq_d * dt_physics
+                    step_inc = dq_d
                     e_pid = np.zeros(self.num_dof)
                     tau = np.zeros(self.num_dof)
                     continue
@@ -346,14 +356,15 @@ class RobotSimulator:
                     q_target, _ = self.solve_ik_target(P_ref, q)
                     q_d, dq_d, ddq_d = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
                     e_real = self._wrap_to_pi(q_target - q)
-                step_inc = dq_d * dt_physics
+                dq_cmd = dq_d / max(dt_physics, 1e-6)
+                step_inc = dq_d
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
                 C = np.array(self.func_C(*args)).flatten().astype(np.float64)
                 G = np.array(self.func_G(*args)).flatten().astype(np.float64)
                 
                 e_pid = self._wrap_to_pi(q_d - q)
-                e_dot = dq_d - dq
+                e_dot = dq_cmd - dq
                 u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
                 tau = M @ u + C + G
                 
