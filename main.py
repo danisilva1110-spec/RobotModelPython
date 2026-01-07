@@ -439,7 +439,7 @@ class App(ctk.CTk):
         # ---------------------------------------------------------
         try:
             # Passa os parâmetros lidos para o simulador
-            t, err, tau, anim_data = self.active_sim.run(
+            t, q, tau, anim_data, err = self.active_sim.run(
                 t_total, start_pos, end_pos, kp, 
                 traj_mode=traj_mode,
                 traj_params=traj_params,
