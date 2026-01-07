@@ -206,6 +206,22 @@ class App(ctk.CTk):
         self.entry_kp.insert(0, "50.0")
         self.entry_kp.pack(fill="x", pady=(0, 20))
 
+        ctk.CTkLabel(self.sim_left, text="Postura Standard q_home (q1,q2,...):").pack(anchor="w")
+        self.entry_q_home = ctk.CTkEntry(self.sim_left)
+        self.entry_q_home.insert(0, "0")
+        self.entry_q_home.pack(fill="x", pady=(0, 5))
+        self.q_home_zero_var = ctk.BooleanVar(value=True)
+        self.q_home_switch = ctk.CTkSwitch(
+            self.sim_left,
+            text="Usar zeros",
+            variable=self.q_home_zero_var,
+            onvalue=True,
+            offvalue=False,
+            command=self.update_q_home_state
+        )
+        self.q_home_switch.pack(anchor="w", pady=(0, 20))
+        self.update_q_home_state()
+
         # === NOVA SEÇÃO: PLANEJAMENTO ===
         ctk.CTkLabel(self.sim_left, text="--- Trajetória ---", font=("Arial", 12, "bold")).pack(pady=5)
         
@@ -266,6 +282,7 @@ class App(ctk.CTk):
         self.dynamic_entries = {}
 
         if not self.active_sim: return
+        self.set_q_home_entry_defaults()
         ignore_list = set(self.active_bot.q + self.active_bot.dq)
         
         for sym in self.active_sim.sym_vars:
@@ -290,6 +307,38 @@ class App(ctk.CTk):
 
     def toggle_sim_tab(self, enable):
         if not enable: self.tabview.set("Modelagem")
+
+    def set_q_home_entry_defaults(self):
+        if self.active_sim:
+            zeros_text = ", ".join(["0"] * self.active_sim.num_dof)
+        else:
+            zeros_text = "0"
+        self.entry_q_home.delete(0, "end")
+        self.entry_q_home.insert(0, zeros_text)
+
+    def update_q_home_state(self):
+        if self.q_home_zero_var.get():
+            self.set_q_home_entry_defaults()
+            self.entry_q_home.configure(state="disabled")
+        else:
+            self.entry_q_home.configure(state="normal")
+
+    def parse_q_home_input(self):
+        raw = self.entry_q_home.get()
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        if not parts:
+            raise ValueError("q_home vazio")
+        if len(parts) != self.active_sim.num_dof:
+            raise ValueError(
+                f"q_home deve ter {self.active_sim.num_dof} valores, recebeu {len(parts)}."
+            )
+        values = []
+        for idx, part in enumerate(parts, start=1):
+            try:
+                values.append(float(part))
+            except ValueError as exc:
+                raise ValueError(f"q{idx} inválido: '{part}'") from exc
+        return np.array(values)
 
     def run_simulation_logic(self):
         """ 
@@ -319,8 +368,10 @@ class App(ctk.CTk):
             # ---------------------------------------------------------
             # 2. Configura Postura Preferida (Null Space Control)
             # ---------------------------------------------------------
-            # Define 'Home' como zero (ou modifique aqui se quiser 'Elbow Up' fixo)
-            self.active_sim.q_home = np.zeros(self.active_sim.num_dof)
+            if self.q_home_zero_var.get():
+                self.active_sim.q_home = np.zeros(self.active_sim.num_dof)
+            else:
+                self.active_sim.q_home = self.parse_q_home_input()
             self.active_sim.q_home = self.active_sim._wrap_to_pi(self.active_sim.q_home)
             
             # ---------------------------------------------------------
