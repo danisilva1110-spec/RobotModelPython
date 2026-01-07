@@ -206,6 +206,22 @@ class App(ctk.CTk):
         self.entry_kp.insert(0, "50.0")
         self.entry_kp.pack(fill="x", pady=(0, 20))
 
+        ctk.CTkLabel(self.sim_left, text="dt_physics (s):").pack(anchor="w")
+        self.entry_dt_physics = ctk.CTkEntry(self.sim_left)
+        self.entry_dt_physics.insert(0, "0.002")
+        self.entry_dt_physics.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(
+            self.sim_left,
+            text="dt_physics menor = mais precisão e mais tempo de simulação.",
+            font=("Arial", 10),
+        ).pack(anchor="w", pady=(0, 10))
+
+        ctk.CTkLabel(self.sim_left, text="dt_visual (s):").pack(anchor="w")
+        self.entry_dt_visual = ctk.CTkEntry(self.sim_left)
+        self.entry_dt_visual.insert(0, "0.05")
+        self.entry_dt_visual.pack(fill="x", pady=(0, 20))
+
         ctk.CTkLabel(self.sim_left, text="Postura Standard (q1,q2,...):").pack(anchor="w")
         self.entry_q_home = ctk.CTkEntry(self.sim_left)
         self.entry_q_home.insert(0, "0")
@@ -322,6 +338,12 @@ class App(ctk.CTk):
                 raise ValueError(f"q{idx} inválido: '{part}'") from exc
         return np.array(values)
 
+    def _parse_optional_float(self, value, default):
+        value = value.strip()
+        if not value:
+            return default
+        return float(value)
+
     def run_simulation_logic(self):
         """ 
         Gerencia a execução da simulação, lendo inputs da interface 
@@ -359,6 +381,8 @@ class App(ctk.CTk):
             end_pos   = [float(x) for x in self.entry_end.get().split(",")]
             t_total   = float(self.entry_time.get())
             kp        = float(self.entry_kp.get())
+            dt_physics = self._parse_optional_float(self.entry_dt_physics.get(), 0.002)
+            dt_visual = self._parse_optional_float(self.entry_dt_visual.get(), 0.05)
             
             # ---------------------------------------------------------
             # 4. Seleção Dinâmica de Trajetória (INTERFACE -> LÓGICA)
@@ -405,7 +429,10 @@ class App(ctk.CTk):
             # Passa os parâmetros lidos para o simulador
             t, err, tau, anim_data = self.active_sim.run(
                 t_total, start_pos, end_pos, kp, 
-                traj_mode=traj_mode, traj_params=traj_params
+                traj_mode=traj_mode,
+                traj_params=traj_params,
+                dt_physics=dt_physics,
+                dt_visual=dt_visual,
             )
             
             self.last_anim_data = anim_data

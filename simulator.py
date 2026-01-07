@@ -208,14 +208,22 @@ class RobotSimulator:
         # Retornamos dq_total para usar na dinâmica
         return q_next, dq_total, np.zeros_like(dq_total)
 
-    def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None):
+    def run(
+        self,
+        t_total,
+        Pi_list,
+        Pf_list,
+        Kp_val,
+        traj_mode="Line",
+        traj_params=None,
+        dt_physics=0.002,
+        dt_visual=0.05,
+    ):
         # ... (Início igual ao original) ...
-        dt_physics = 0.001
-        dt_visual  = 0.05
         pre_time = max(0.5, min(2.0, 0.2 * t_total))
         total_time = t_total + pre_time
         steps_visual = int(total_time / dt_visual)
-        substeps = int(dt_visual / dt_physics)
+        substeps = max(1, int(dt_visual / dt_physics))
         
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
