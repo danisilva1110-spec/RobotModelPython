@@ -256,8 +256,10 @@ class RobotSimulator:
                         mode="Line", params=None
                     )
                     q_d, dq_d, ddq_d = self.solve_ik_numerical(
-                        P_ref, V_ref, q, dt_physics, use_nullspace=False, kp_ik=10.0
+                        P_ref, V_ref, q, dt_physics, use_nullspace=False, kp_ik=4.0
                     )
+                    dq_limit_pre = 0.5
+                    dq_d = np.clip(dq_d, -dq_limit_pre, dq_limit_pre)
                     q = q_d
                     dq = dq_d
                     e_pid = np.zeros(self.num_dof)
