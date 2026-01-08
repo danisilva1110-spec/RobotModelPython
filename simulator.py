@@ -148,6 +148,8 @@ class RobotSimulator:
         dt,
         Kp_ik=5.0,
         lambda_dls=0.1,
+        dq_limit=3.0,
+        use_feedforward_vel=True,
     ):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
@@ -170,14 +172,17 @@ class RobotSimulator:
         # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
         # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
         # Isso é o Feedforward: O robô já se move na velocidade da curva mesmo se o erro for zero.
-        v_command = target_vel + (error * Kp_ik)
+        vel_ff = target_vel if use_feedforward_vel else np.zeros_like(target_vel)
+        acc_ff = target_acc if use_feedforward_vel else np.zeros_like(target_acc)
+        v_command = vel_ff + (error * Kp_ik)
         
         dq_task = J_dls_pinv @ v_command
 
         v_curr = J_pos @ dq_curr
-        v_error = target_vel - v_curr
+        v_error = vel_ff - v_curr
         Kd_ik = 2.0 * np.sqrt(Kp_ik)
-        a_command = target_acc + (Kd_ik * v_error) + (Kp_ik * error)
+        # Evita redundância com o ganho de posição da dinâmica (Kp_val).
+        a_command = acc_ff + (Kd_ik * v_error)
         ddq_task = J_dls_pinv @ a_command
         
         # Controle de Espaço Nulo (Mantém igual)
@@ -192,7 +197,8 @@ class RobotSimulator:
         dq_null = null_projection @ (Kp_null * q_err_null)
         
         dq_total = dq_task + dq_null
-        dq_total = np.clip(dq_total, -3.0, 3.0) 
+        if dq_limit > 0:
+            dq_total = dq_limit * np.tanh(dq_total / dq_limit)
         
         q_next = q_curr + dq_total * dt
         
@@ -267,7 +273,8 @@ class RobotSimulator:
         return q_curr, False, last_error, max_iters
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
-            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0):
+            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
+            dq_limit=3.0, use_feedforward_vel=True):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -322,6 +329,8 @@ class RobotSimulator:
         # Ganhos PD (em aceleração)
         if Kp_val <= 0:
             raise ValueError("Kp deve ser maior que zero.")
+        if dq_limit < 0:
+            raise ValueError("dq_limit deve ser maior ou igual a zero.")
         KP = Kp_val * np.eye(self.num_dof)
         zeta = getattr(self, "zeta", 1.0)
         KD = 2 * zeta * np.sqrt(Kp_val) * np.eye(self.num_dof)
@@ -353,6 +362,8 @@ class RobotSimulator:
                     q,
                     dq,
                     dt_physics,
+                    dq_limit=dq_limit,
+                    use_feedforward_vel=use_feedforward_vel,
                 )
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
