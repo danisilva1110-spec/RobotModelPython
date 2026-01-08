@@ -184,7 +184,7 @@ class RobotSimulator:
         return q_next, dq_total, np.zeros_like(dq_total)
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
-            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None):
+            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -255,9 +255,15 @@ class RobotSimulator:
                 q = np.copy(q_home)
                 dq = np.zeros(self.num_dof)
         
-        # Ganhos PID
+        if zeta <= 0:
+            raise ValueError("zeta deve ser maior que zero.")
+        self.zeta = zeta
+        # Ganhos PD (em aceleração)
+        if Kp_val <= 0:
+            raise ValueError("Kp deve ser maior que zero.")
         KP = Kp_val * np.eye(self.num_dof)
-        KD = 2 * np.sqrt(Kp_val) * np.eye(self.num_dof)
+        zeta = getattr(self, "zeta", 1.0)
+        KD = 2 * zeta * np.sqrt(Kp_val) * np.eye(self.num_dof)
         
         # Arrays de resultado
         res_time = np.linspace(0, t_total, steps_visual)
@@ -267,6 +273,10 @@ class RobotSimulator:
 
         current_time = 0.0
         
+        dq_d_prev = np.copy(dq)
+        ddq_d_prev = np.zeros(self.num_dof)
+        ddq_alpha = 0.6
+
         for i in range(steps_visual):
             for _ in range(substeps):
                 current_time += dt_physics
@@ -279,7 +289,11 @@ class RobotSimulator:
                 
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
-                q_d, dq_d, ddq_d = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
+                q_d, dq_d, _ = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
+                ddq_d_raw = (dq_d - dq_d_prev) / dt_physics
+                ddq_d = (1 - ddq_alpha) * ddq_d_raw + ddq_alpha * ddq_d_prev
+                dq_d_prev = dq_d
+                ddq_d_prev = ddq_d
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
                 C = np.array(self.func_C(*args)).flatten().astype(np.float64)
