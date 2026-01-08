@@ -240,7 +240,20 @@ class App(ctk.CTk):
         ctk.CTkLabel(self.sim_left, text="Fator de amortecimento ζ:").pack(anchor="w")
         self.entry_zeta = ctk.CTkEntry(self.sim_left)
         self.entry_zeta.insert(0, "1.0")
-        self.entry_zeta.pack(fill="x", pady=(0, 20))
+        self.entry_zeta.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.sim_left, text="Limite suave dq (rad/s):").pack(anchor="w")
+        self.entry_dq_limit = ctk.CTkEntry(self.sim_left)
+        self.entry_dq_limit.insert(0, "3.0")
+        self.entry_dq_limit.pack(fill="x", pady=(0, 5))
+
+        self.use_feedforward_vel_var = ctk.BooleanVar(value=True)
+        self.use_feedforward_vel_check = ctk.CTkCheckBox(
+            self.sim_left,
+            text="Usar feedforward de velocidade",
+            variable=self.use_feedforward_vel_var
+        )
+        self.use_feedforward_vel_check.pack(anchor="w", pady=(0, 20))
 
         # === NOVA SEÇÃO: PLANEJAMENTO ===
         ctk.CTkLabel(self.sim_left, text="--- Trajetória ---", font=("Arial", 12, "bold")).pack(pady=5)
@@ -411,6 +424,8 @@ class App(ctk.CTk):
             dt_visual = float(self.entry_dt_visual.get())
             kp        = float(self.entry_kp.get())
             zeta      = float(self.entry_zeta.get())
+            dq_limit  = float(self.entry_dq_limit.get())
+            use_feedforward_vel = self.use_feedforward_vel_var.get()
 
             if dt_physics <= 0 or dt_visual <= 0:
                 self.log("❌ dt_physics e dt_visual devem ser maiores que zero.")
@@ -477,6 +492,8 @@ class App(ctk.CTk):
                 dt_physics=dt_physics, dt_visual=dt_visual,
                 init_at_start=self.init_at_start_var.get(),
                 zeta=zeta,
+                dq_limit=dq_limit,
+                use_feedforward_vel=use_feedforward_vel,
                 q_init=q_init
             )
             
