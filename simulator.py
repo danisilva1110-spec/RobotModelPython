@@ -291,6 +291,10 @@ class RobotSimulator:
 
         current_time = 0.0
         
+        dq_d_prev = np.copy(dq)
+        ddq_d_prev = np.zeros(self.num_dof)
+        ddq_alpha = 0.6
+
         for i in range(steps_visual):
             for _ in range(substeps):
                 current_time += dt_physics
