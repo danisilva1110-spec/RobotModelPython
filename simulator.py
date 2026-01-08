@@ -199,6 +199,73 @@ class RobotSimulator:
         # Retornamos dq_total e ddq_total para usar na dinâmica
         return q_next, dq_total, ddq_task
 
+    def solve_ik_initial(
+        self,
+        target_pos,
+        q_init,
+        max_iters=200,
+        tol=1e-3,
+        lambda_init=0.2,
+        min_step=1e-4,
+    ):
+        """
+        IK inicial mais robusta (Levenberg-Marquardt + line search).
+        Retorna (q_final, convergiu, erro_final, iteracoes).
+        """
+        f_end = self.funcs_fk_all_links[-1]
+        q_curr = np.array(q_init, dtype=float).copy()
+        lambda_dls = lambda_init
+        last_error = np.inf
+        stall_count = 0
+
+        for i in range(max_iters):
+            args = self._build_args(q_curr, np.zeros(self.num_dof))
+            curr_pos = np.array(f_end(*args)).flatten()
+            error = target_pos - curr_pos
+            error_norm = np.linalg.norm(error)
+
+            if error_norm < tol:
+                return q_curr, True, error_norm, i + 1
+
+            J_num = np.array(self.func_J(*args))
+            J_pos = J_num[:3, :]
+            J_dls_pinv = J_pos.T @ np.linalg.inv(
+                J_pos @ J_pos.T + (lambda_dls**2) * np.eye(3)
+            )
+            dq = J_dls_pinv @ error
+
+            # Line search: reduz passo até melhorar o erro
+            alpha = 1.0
+            improved = False
+            while alpha >= min_step:
+                q_next = self._wrap_to_pi(q_curr + alpha * dq)
+                args_next = self._build_args(q_next, np.zeros(self.num_dof))
+                next_pos = np.array(f_end(*args_next)).flatten()
+                next_error = target_pos - next_pos
+                next_error_norm = np.linalg.norm(next_error)
+                if next_error_norm < error_norm:
+                    q_curr = q_next
+                    error_norm = next_error_norm
+                    improved = True
+                    break
+                alpha *= 0.5
+
+            if not improved:
+                lambda_dls = min(10.0, lambda_dls * 1.5)
+            else:
+                lambda_dls = max(1e-4, lambda_dls * 0.9)
+
+            if abs(last_error - error_norm) < tol * 0.1:
+                stall_count += 1
+            else:
+                stall_count = 0
+            last_error = error_norm
+
+            if stall_count >= 10:
+                break
+
+        return q_curr, False, last_error, max_iters
+
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0):
         # ... (Início igual ao original) ...
@@ -225,42 +292,18 @@ class RobotSimulator:
         dq = np.zeros(self.num_dof)
 
         if init_at_start:
-            init_steps = 200
-            dt_init = min(0.01, max(dt_physics, 0.002))
-            f_end = self.funcs_fk_all_links[-1]
             if q_init is None:
                 q_init = np.copy(self.last_converged_q) if self.last_converged_q is not None else np.copy(q_home)
             else:
                 q_init = np.array(q_init, dtype=float).copy()
-            init_error = np.inf
-            init_iters = 0
-            kp_init = 2.0
-            lambda_init = 0.2
-            prev_error = np.inf
-            while init_iters < init_steps:
-                q_init, _, _ = self.solve_ik_numerical(
-                    Pi,
-                    np.zeros(3),
-                    np.zeros(3),
-                    q_init,
-                    np.zeros(self.num_dof),
-                    dt_init,
-                    Kp_ik=kp_init,
-                    lambda_dls=lambda_init,
-                )
-                args_init = self._build_args(q_init, np.zeros(self.num_dof))
-                init_pos = np.array(f_end(*args_init)).flatten()
-                init_error = np.linalg.norm(Pi - init_pos)
-                init_iters += 1
-                if init_error < 1e-3:
-                    break
-                if init_error > prev_error * 1.01:
-                    lambda_init = min(1.0, lambda_init * 1.2)
-                    kp_init = max(0.5, kp_init * 0.9)
-                else:
-                    kp_init = min(4.0, kp_init * 1.05)
-                prev_error = init_error
-            if init_error < 1e-3:
+            q_init, converged, init_error, init_iters = self.solve_ik_initial(
+                target_pos=Pi,
+                q_init=q_init,
+                max_iters=300,
+                tol=1e-3,
+                lambda_init=0.2,
+            )
+            if converged:
                 q = q_init
                 dq = np.zeros(self.num_dof)
                 self.last_converged_q = np.copy(q_init)
