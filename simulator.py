@@ -148,6 +148,8 @@ class RobotSimulator:
         dt,
         Kp_ik=5.0,
         lambda_dls=0.1,
+        ik_pos_iters=3,
+        ik_pos_step=0.5,
     ):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
@@ -192,12 +194,26 @@ class RobotSimulator:
         dq_null = null_projection @ (Kp_null * q_err_null)
         
         dq_total = dq_task + dq_null
-        dq_total = np.clip(dq_total, -3.0, 3.0) 
-        
-        q_next = q_curr + dq_total * dt
-        
-        # Retornamos dq_total e ddq_total para usar na dinâmica
-        return q_next, dq_total, ddq_task
+        dq_total = np.clip(dq_total, -3.0, 3.0)
+
+        # IK de posição (algumas iterações DLS) diretamente no P_ref atual
+        q_d = np.array(q_curr, dtype=float).copy()
+        for _ in range(max(1, ik_pos_iters)):
+            args_d = self._build_args(q_d, np.zeros(self.num_dof))
+            curr_pos_d = np.array(f_end(*args_d)).flatten()
+            pos_error = target_pos - curr_pos_d
+            if np.linalg.norm(pos_error) < 1e-4:
+                break
+            J_num_d = np.array(self.func_J(*args_d))
+            J_pos_d = J_num_d[:3, :]
+            J_dls_pinv_d = J_pos_d.T @ np.linalg.inv(
+                J_pos_d @ J_pos_d.T + lambda_dls**2 * np.eye(3)
+            )
+            dq_pos = J_dls_pinv_d @ pos_error
+            q_d = self._wrap_to_pi(q_d + ik_pos_step * dq_pos)
+
+        # Retornamos q_d, dq_total e ddq_task para usar na dinâmica
+        return q_d, dq_total, ddq_task
 
     def solve_ik_initial(
         self,
@@ -344,8 +360,7 @@ class RobotSimulator:
                     mode=traj_mode, params=traj_params
                 )
                 
-                # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
-                # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
+                # IK Numérica (q_d via DLS no P_ref atual, sem integrar q_curr + dq*dt)
                 q_d, dq_d, ddq_d = self.solve_ik_numerical(
                     P_ref,
                     V_ref,
