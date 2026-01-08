@@ -1,3 +1,5 @@
+import multiprocessing
+import os
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
 from sympy.printing.octave import octave_code
@@ -137,22 +139,30 @@ class RobotMathEngine:
     def step_3_coriolis_combined(self):
         self.log("3. Calculando Coriolis...")
         n = len(self.q)
-        self.C_total = sp.zeros(n, 1)
         dM_dq = [self.M.diff(qk) for qk in self.q]
 
-        for i in range(n):
-            termo_linha = 0
-            for j in range(n):
-                for k in range(j, n): 
-                    dM_ij_dk = dM_dq[k][i, j]
-                    dM_ik_dj = dM_dq[j][i, k]
-                    dM_jk_di = dM_dq[i][j, k]
-                    c_ijk = sp.Rational(1,2) * (dM_ij_dk + dM_ik_dj - dM_jk_di)
-                    if c_ijk != 0:
-                        termo = c_ijk * self.dq[j] * self.dq[k]
-                        if k != j: termo *= 2
-                        termo_linha += termo
-            self.C_total[i] = sp.collect(termo_linha, self.dq)
+        cpu_count = os.cpu_count()
+        if cpu_count is None:
+            cpu_count = 1
+        if cpu_count <= 1:
+            self.log(f"   -> Usando {cpu_count} núcleo(s) (cpu_count<=1).")
+        elif n < 4:
+            self.log(f"   -> Usando 1 núcleo (n={n} pequeno).")
+            cpu_count = 1
+        else:
+            cpu_count = min(cpu_count, n)
+            self.log(f"   -> Usando {cpu_count} núcleo(s) em paralelo.")
+
+        if cpu_count <= 1:
+            rows = [_coriolis_row(i, dM_dq, self.dq, self.q) for i in range(n)]
+        else:
+            with multiprocessing.Pool(processes=cpu_count) as pool:
+                rows = pool.starmap(
+                    _coriolis_row,
+                    [(i, dM_dq, self.dq, self.q) for i in range(n)],
+                )
+
+        self.C_total = sp.Matrix(rows)
 
     def step_4_prepare_export(self):
         self.log("4. Otimizando equações...")
@@ -168,6 +178,23 @@ class RobotMathEngine:
             "M": self.M, "G": self.G_vec, "C": self.C_total, "J": self.Jacobian,
             "FK_Pos": self.frames[-1], "FK_Vel": V_cartesian, "Subs": mapa_subs, "Mode": "Air"
         }
+
+
+def _coriolis_row(i, dM_dq, dq, q):
+    n = len(dq)
+    termo_linha = 0
+    for j in range(n):
+        for k in range(j, n):
+            dM_ij_dk = dM_dq[k][i, j]
+            dM_ik_dj = dM_dq[j][i, k]
+            dM_jk_di = dM_dq[i][j, k]
+            c_ijk = sp.Rational(1, 2) * (dM_ij_dk + dM_ik_dj - dM_jk_di)
+            if c_ijk != 0:
+                termo = c_ijk * dq[j] * dq[k]
+                if k != j:
+                    termo *= 2
+                termo_linha += termo
+    return sp.collect(termo_linha, dq)
 
 # ==============================================================================
 # 2. ENGINE MATEMÁTICA - HYDRO (ÁGUA / UVMS)
