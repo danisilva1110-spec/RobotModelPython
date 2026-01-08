@@ -138,7 +138,17 @@ class RobotSimulator:
 
         return Pf, np.zeros(3), np.zeros(3)
 
-    def solve_ik_numerical(self, target_pos, target_vel, q_curr, dt, Kp_ik=5.0, lambda_dls=0.1):
+    def solve_ik_numerical(
+        self,
+        target_pos,
+        target_vel,
+        target_acc,
+        q_curr,
+        dq_curr,
+        dt,
+        Kp_ik=5.0,
+        lambda_dls=0.1,
+    ):
         """ 
         Cinemática Inversa Numérica com Feedforward de Velocidade.
         Agora o robô 'sabe' a velocidade da curva, não só a posição.
@@ -163,6 +173,12 @@ class RobotSimulator:
         v_command = target_vel + (error * Kp_ik)
         
         dq_task = J_dls_pinv @ v_command
+
+        v_curr = J_pos @ dq_curr
+        v_error = target_vel - v_curr
+        Kd_ik = 2.0 * np.sqrt(Kp_ik)
+        a_command = target_acc + (Kd_ik * v_error) + (Kp_ik * error)
+        ddq_task = J_dls_pinv @ a_command
         
         # Controle de Espaço Nulo (Mantém igual)
         I = np.eye(self.num_dof)
@@ -180,8 +196,8 @@ class RobotSimulator:
         
         q_next = q_curr + dq_total * dt
         
-        # Retornamos dq_total para usar na dinâmica
-        return q_next, dq_total, np.zeros_like(dq_total)
+        # Retornamos dq_total e ddq_total para usar na dinâmica
+        return q_next, dq_total, ddq_task
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0):
@@ -225,7 +241,9 @@ class RobotSimulator:
                 q_init, _, _ = self.solve_ik_numerical(
                     Pi,
                     np.zeros(3),
+                    np.zeros(3),
                     q_init,
+                    np.zeros(self.num_dof),
                     dt_init,
                     Kp_ik=kp_init,
                     lambda_dls=lambda_init,
@@ -289,11 +307,14 @@ class RobotSimulator:
                 
                 # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                 # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
-                q_d, dq_d, _ = self.solve_ik_numerical(P_ref, V_ref, q, dt_physics)
-                ddq_d_raw = (dq_d - dq_d_prev) / dt_physics
-                ddq_d = (1 - ddq_alpha) * ddq_d_raw + ddq_alpha * ddq_d_prev
-                dq_d_prev = dq_d
-                ddq_d_prev = ddq_d
+                q_d, dq_d, ddq_d = self.solve_ik_numerical(
+                    P_ref,
+                    V_ref,
+                    A_ref,
+                    q,
+                    dq,
+                    dt_physics,
+                )
                 args = self._build_args(q, dq)
                 M = np.array(self.func_M(*args)).astype(np.float64)
                 C = np.array(self.func_C(*args)).flatten().astype(np.float64)
