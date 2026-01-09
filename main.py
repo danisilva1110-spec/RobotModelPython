@@ -150,9 +150,9 @@ class App(ctk.CTk):
             self.log(f"--- Iniciando Modelagem ({modo}) ---")
             
             if modo == "Água (UVMS)":
-                self.active_bot = RobotMathHydro(j_types, l_vecs)
+                self.active_bot = RobotMathHydro(j_types, l_vecs, logger_callback=self.log)
             else:
-                self.active_bot = RobotMathEngine(j_types, l_vecs)
+                self.active_bot = RobotMathEngine(j_types, l_vecs, logger_callback=self.log)
 
             results = self.active_bot.run_full_process()
             
