@@ -1,5 +1,25 @@
+import os
+from concurrent.futures import ProcessPoolExecutor
+
 import numpy as np
 import sympy as sp
+
+_WORKER_FUNCS = {}
+
+
+def _init_worker(sym_vars, expr_M, expr_C, expr_G):
+    global _WORKER_FUNCS
+    _WORKER_FUNCS = {
+        "M": sp.lambdify(sym_vars, expr_M, modules="numpy"),
+        "C": sp.lambdify(sym_vars, expr_C, modules="numpy"),
+        "G": sp.lambdify(sym_vars, expr_G, modules="numpy"),
+    }
+
+
+def _eval_worker(task):
+    func_name, args = task
+    return _WORKER_FUNCS[func_name](*args)
+
 
 class RobotSimulator:
     def __init__(self, robot_math_instance, mode="Air"):
@@ -28,6 +48,9 @@ class RobotSimulator:
             self.sym_vars.append(self.bot.rho)
         
         # 3. Compila Funções Dinâmicas (M, C, G)
+        self.expr_M = self.bot.M
+        self.expr_C = self.bot.C_total
+        self.expr_G = self.bot.G_vec
         self.func_M = sp.lambdify(self.sym_vars, self.bot.M, modules='numpy')
         self.func_C = sp.lambdify(self.sym_vars, self.bot.C_total, modules='numpy')
         self.func_G = sp.lambdify(self.sym_vars, self.bot.G_vec, modules='numpy')
@@ -287,7 +310,7 @@ class RobotSimulator:
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
-            dq_limit=3.0, use_feedforward_vel=True):
+            dq_limit=3.0, use_feedforward_vel=True, use_parallel=True, max_workers=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -355,53 +378,78 @@ class RobotSimulator:
         anim_data = []
 
         current_time = 0.0
-        
-        for i in range(steps_visual):
-            for _ in range(substeps):
-                current_time += dt_physics
-                
-                # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
-                P_ref, V_ref, A_ref = self.trajectory_planning(
-                    current_time, t_total, Pi, Pf, 
-                    mode=traj_mode, params=traj_params
-                )
-                
-                # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
-                # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
-                q_d, dq_d, ddq_d = self.solve_ik_numerical(
-                    P_ref,
-                    V_ref,
-                    A_ref,
-                    q,
-                    dq,
-                    dt_physics,
-                    dq_limit=dq_limit,
-                    use_feedforward_vel=use_feedforward_vel,
-                )
-                args = self._build_args(q, dq)
-                M = np.array(self.func_M(*args)).astype(np.float64)
-                C = np.array(self.func_C(*args)).flatten().astype(np.float64)
-                G = np.array(self.func_G(*args)).flatten().astype(np.float64)
-                
-                e_pid = self._wrap_to_pi(q_d - q)
-                e_dot = dq_d - dq
-                u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
-                tau = M @ u + C + G
-                
-                ddq = np.linalg.solve(M, tau - C - G)
-                q += dq * dt_physics
-                dq += ddq * dt_physics
-                q = self._wrap_to_pi(q) # Wrap essencial
 
-            res_q[i,:] = e_pid
-            res_tau[i,:] = tau
-            
-            # FK para animação
-            links_pose = [[0,0,0]]
-            args_vis = self._build_args(q, dq)
-            for f_fk in self.funcs_fk_all_links:
-                pos = np.array(f_fk(*args_vis)).flatten()
-                links_pose.append(list(pos))
-            anim_data.append(links_pose)
-            
+        def _run_steps(executor):
+            nonlocal current_time, q, dq
+            for i in range(steps_visual):
+                for _ in range(substeps):
+                    current_time += dt_physics
+
+                    # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
+                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                        current_time, t_total, Pi, Pf,
+                        mode=traj_mode, params=traj_params
+                    )
+
+                    # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
+                    # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
+                    q_d, dq_d, ddq_d = self.solve_ik_numerical(
+                        P_ref,
+                        V_ref,
+                        A_ref,
+                        q,
+                        dq,
+                        dt_physics,
+                        dq_limit=dq_limit,
+                        use_feedforward_vel=use_feedforward_vel,
+                    )
+                    args = self._build_args(q, dq)
+                    if executor is None:
+                        M = np.array(self.func_M(*args)).astype(np.float64)
+                        C = np.array(self.func_C(*args)).flatten().astype(np.float64)
+                        G = np.array(self.func_G(*args)).flatten().astype(np.float64)
+                    else:
+                        futures = {
+                            "M": executor.submit(_eval_worker, ("M", args)),
+                            "C": executor.submit(_eval_worker, ("C", args)),
+                            "G": executor.submit(_eval_worker, ("G", args)),
+                        }
+                        M = np.array(futures["M"].result()).astype(np.float64)
+                        C = np.array(futures["C"].result()).flatten().astype(np.float64)
+                        G = np.array(futures["G"].result()).flatten().astype(np.float64)
+
+                    e_pid = self._wrap_to_pi(q_d - q)
+                    e_dot = dq_d - dq
+                    u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
+                    tau = M @ u + C + G
+
+                    ddq = np.linalg.solve(M, tau - C - G)
+                    q += dq * dt_physics
+                    dq += ddq * dt_physics
+                    q = self._wrap_to_pi(q) # Wrap essencial
+
+                res_q[i,:] = e_pid
+                res_tau[i,:] = tau
+
+                # FK para animação
+                links_pose = [[0,0,0]]
+                args_vis = self._build_args(q, dq)
+                for f_fk in self.funcs_fk_all_links:
+                    pos = np.array(f_fk(*args_vis)).flatten()
+                    links_pose.append(list(pos))
+                anim_data.append(links_pose)
+
+        if use_parallel:
+            worker_count = max_workers
+            if worker_count is None:
+                worker_count = max(1, min(3, os.cpu_count() or 1))
+            with ProcessPoolExecutor(
+                max_workers=worker_count,
+                initializer=_init_worker,
+                initargs=(self.sym_vars, self.expr_M, self.expr_C, self.expr_G),
+            ) as executor:
+                _run_steps(executor)
+        else:
+            _run_steps(None)
+
         return res_time, res_q, res_tau, anim_data
