@@ -9,6 +9,7 @@ class RobotSimulator:
         self.params_values = {} 
         self.q_home = np.zeros(self.num_dof)
         self.last_converged_q = None
+        self.J_prev = None
 
         print(f"[{mode}] Compilando equações (Isso pode demorar um pouco)...")
         
@@ -152,43 +153,57 @@ class RobotSimulator:
         use_feedforward_vel=True,
     ):
         """ 
-        Cinemática Inversa Numérica com Feedforward de Velocidade.
-        Agora o robô 'sabe' a velocidade da curva, não só a posição.
+        Cinemática Inversa Numérica com Feedforward de Aceleração CORRIGIDO.
+        Inclui compensação do termo de drift do Jacobiano (J_dot * dq).
         """
         f_end = self.funcs_fk_all_links[-1]
         args_0 = self._build_args(q_curr, np.zeros(self.num_dof))
         curr_pos = np.array(f_end(*args_0)).flatten()
         
-        # Erro de Posição (Proporcional)
+        # Erro de Posição
         error = target_pos - curr_pos
         
-        # Jacobiano
+        # Jacobiano Atual
         J_num = np.array(self.func_J(*args_0))
         J_pos = J_num[:3, :] 
         
+        # --- CORREÇÃO: CÁLCULO NUMÉRICO DE J_DOT ---
+        if self.J_prev is None:
+            self.J_prev = J_pos.copy()
+            J_dot = np.zeros_like(J_pos)
+        else:
+            # Derivada numérica finita: (J_curr - J_prev) / dt
+            J_dot = (J_pos - self.J_prev) / dt
+            self.J_prev = J_pos.copy()
+            
+        # Termo de Drift (Coriolis Cinemático): J_dot * dq
+        # Isso diz: "Quanto a ponta se moveria só pela mudança da geometria?"
+        drift_acc = J_dot @ dq_curr
+        # -------------------------------------------
+
         # Damped Least Squares
         J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
         
-        # Antes era apenas: dq_task = J_dls_pinv @ (error * Kp_ik)
-        # AGORA somamos a velocidade desejada (target_vel) vinda do planejador
-        # Isso é o Feedforward: O robô já se move na velocidade da curva mesmo se o erro for zero.
+        # Feedforward de Velocidade
         vel_ff = target_vel if use_feedforward_vel else np.zeros_like(target_vel)
         acc_ff = target_acc if use_feedforward_vel else np.zeros_like(target_acc)
-        v_command = vel_ff + (error * Kp_ik)
         
+        v_command = vel_ff + (error * Kp_ik)
         dq_task = J_dls_pinv @ v_command
 
         v_curr = J_pos @ dq_curr
         v_error = vel_ff - v_curr
         Kd_ik = 2.0 * np.sqrt(Kp_ik)
-        # Evita redundância com o ganho de posição da dinâmica (Kp_val).
-        a_command = acc_ff + (Kd_ik * v_error)
-        ddq_task = J_dls_pinv @ a_command
         
-        # Controle de Espaço Nulo (Mantém igual)
+        # Aceleração Comandada no Espaço Cartesiano
+        a_cartesian_target = acc_ff + (Kd_ik * v_error)
+        
+        # --- CORREÇÃO FINAL NA FÓRMULA DE ACELERAÇÃO ---
+        # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
+        ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc)
+        
+        # Controle de Espaço Nulo
         I = np.eye(self.num_dof)
-        
-        # Usa o q_home da classe se existir, senão zero
         q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
         q_err_null = self._wrap_to_pi(q_target_null - q_curr)
         
@@ -202,9 +217,7 @@ class RobotSimulator:
         
         q_next = q_curr + dq_total * dt
         
-        # Retornamos dq_total e ddq_total para usar na dinâmica
         return q_next, dq_total, ddq_task
-
     def solve_ik_initial(
         self,
         target_pos,

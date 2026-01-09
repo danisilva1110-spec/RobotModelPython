@@ -513,6 +513,20 @@ class App(ctk.CTk):
         
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(6, 5), sharex=True)
         ax1.plot(t, err); ax1.set_title("Erro (rad)"); ax1.grid(True)
+
+        # Opção 1: Limites Fixos (Ex: de -0.1 a 0.1 rad, aprox 5 graus)
+        # Isso vai fazer seu erro de 0.005 parecer uma linha reta (o que é bom visualmente)
+        ax1.set_ylim(-0.2, 0.2) 
+        
+        # OU
+        
+        # Opção 2: Escala Inteligente (Define um zoom mínimo de 0.05)
+        # Se o erro for menor que 0.05, ele mantém a escala em 0.05. Se for maior, ele ajusta.
+        # max_err = np.max(np.abs(err))
+        # visual_limit = max(max_err * 1.2, 0.05) 
+        # ax1.set_ylim(-visual_limit, visual_limit)
+        # ---------------------------------------------------------
+
         ax2.plot(t, tau); ax2.set_title("Torque (Nm)"); ax2.grid(True)
         plt.tight_layout()
         
