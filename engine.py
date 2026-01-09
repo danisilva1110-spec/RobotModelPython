@@ -1,3 +1,6 @@
+from concurrent.futures import ProcessPoolExecutor
+from itertools import repeat
+
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
 from sympy.printing.octave import octave_code
@@ -5,6 +8,23 @@ from sympy.printing.octave import octave_code
 # ==============================================================================
 # 1. ENGINE MATEMÁTICA - STANDARD (AR / SECO)
 # ==============================================================================
+def _calc_coriolis_row(i, q, dq, dM_dq):
+    n = len(q)
+    termo_linha = 0
+    for j in range(n):
+        for k in range(j, n):
+            dM_ij_dk = dM_dq[k][i, j]
+            dM_ik_dj = dM_dq[j][i, k]
+            dM_jk_di = dM_dq[i][j, k]
+            c_ijk = sp.Rational(1, 2) * (dM_ij_dk + dM_ik_dj - dM_jk_di)
+            if c_ijk != 0:
+                termo = c_ijk * dq[j] * dq[k]
+                if k != j:
+                    termo *= 2
+                termo_linha += termo
+    return sp.collect(termo_linha, dq)
+
+
 class RobotMathEngine:
     def __init__(self, joint_config, link_vectors_mask, logger_callback=None):
         self.joint_config = joint_config
@@ -140,19 +160,19 @@ class RobotMathEngine:
         self.C_total = sp.zeros(n, 1)
         dM_dq = [self.M.diff(qk) for qk in self.q]
 
-        for i in range(n):
-            termo_linha = 0
-            for j in range(n):
-                for k in range(j, n): 
-                    dM_ij_dk = dM_dq[k][i, j]
-                    dM_ik_dj = dM_dq[j][i, k]
-                    dM_jk_di = dM_dq[i][j, k]
-                    c_ijk = sp.Rational(1,2) * (dM_ij_dk + dM_ik_dj - dM_jk_di)
-                    if c_ijk != 0:
-                        termo = c_ijk * self.dq[j] * self.dq[k]
-                        if k != j: termo *= 2
-                        termo_linha += termo
-            self.C_total[i] = sp.collect(termo_linha, self.dq)
+        with ProcessPoolExecutor() as executor:
+            results = list(
+                executor.map(
+                    _calc_coriolis_row,
+                    range(n),
+                    repeat(self.q),
+                    repeat(self.dq),
+                    repeat(dM_dq),
+                )
+            )
+
+        for i, row in enumerate(results):
+            self.C_total[i] = row
 
     def step_4_prepare_export(self):
         self.log("4. Otimizando equações...")
