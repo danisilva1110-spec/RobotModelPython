@@ -1,5 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
+import os
 
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
@@ -26,10 +27,11 @@ def _calc_coriolis_row(i, q, dq, dM_dq):
 
 
 class RobotMathEngine:
-    def __init__(self, joint_config, link_vectors_mask, logger_callback=None):
+    def __init__(self, joint_config, link_vectors_mask, logger_callback=None, num_workers=None):
         self.joint_config = joint_config
         self.link_vectors_mask = [sp.Matrix(v) for v in link_vectors_mask]
         self.log = logger_callback if logger_callback else print
+        self.num_workers = num_workers
 
         self.t = sp.symbols('t')
         self.g = sp.symbols('g')
@@ -159,20 +161,23 @@ class RobotMathEngine:
         n = len(self.q)
         self.C_total = sp.zeros(n, 1)
         dM_dq = [self.M.diff(qk) for qk in self.q]
+        cpu_total = os.cpu_count() or 1
+        workers = self.num_workers if self.num_workers is not None else cpu_total
+        self.log(f"Usando {workers} de {cpu_total} CPUs")
 
-        with ProcessPoolExecutor() as executor:
-            results = list(
+        with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
+            for i, row in enumerate(
                 executor.map(
                     _calc_coriolis_row,
                     range(n),
                     repeat(self.q),
                     repeat(self.dq),
                     repeat(dM_dq),
-                )
-            )
-
-        for i, row in enumerate(results):
-            self.C_total[i] = row
+                ),
+                start=1,
+            ):
+                self.C_total[i - 1] = row
+                self.log(f"Coriolis: linha {i}/{n} concluída")
 
     def step_4_prepare_export(self):
         self.log("4. Otimizando equações...")
@@ -193,8 +198,8 @@ class RobotMathEngine:
 # 2. ENGINE MATEMÁTICA - HYDRO (ÁGUA / UVMS)
 # ==============================================================================
 class RobotMathHydro(RobotMathEngine):
-    def __init__(self, joint_config, link_vectors_mask, logger_callback=None):
-        super().__init__(joint_config, link_vectors_mask, logger_callback)
+    def __init__(self, joint_config, link_vectors_mask, logger_callback=None, num_workers=None):
+        super().__init__(joint_config, link_vectors_mask, logger_callback, num_workers)
         self.rho = sp.symbols('rho')
         self.volumes = []
 
