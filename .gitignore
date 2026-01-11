@@ -9,3 +9,6 @@ dist/
 
 # Pasta específica que aparece na sua lista
 EXECUTAVEL/
+
+# Ícone
+*.ico
