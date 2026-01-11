@@ -1,0 +1,11 @@
+# Arquivos de cache do Python (não devem ir para o git)
+__pycache__/
+*.pyc
+
+# Pastas geradas pelo PyInstaller (onde fica o executável e arquivos temporários)
+build/
+dist/
+*.spec
+
+# Pasta específica que aparece na sua lista
+EXECUTAVEL/
