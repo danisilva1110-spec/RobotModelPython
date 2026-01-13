@@ -170,31 +170,59 @@ class RobotSimulator:
         z_axis = self._normalize_vector(np.array(z_axis, dtype=float))
         if z_axis is None:
             return None
-        up = np.array([0.0, 0.0, 1.0]) if up_ref is None else np.array(up_ref, dtype=float)
-        x_axis = np.cross(up, z_axis)
-        if np.linalg.norm(x_axis) < 1e-6:
-            up = np.array([0.0, 1.0, 0.0])
+        up_candidates = []
+        if up_ref is not None:
+            up_candidates.append(np.array(up_ref, dtype=float))
+        elif self.last_target_rot is not None:
+            up_candidates.append(self.last_target_rot[:, 1])
+            up_candidates.append(self.last_target_rot[:, 0])
+        up_candidates.append(np.array([0.0, 0.0, 1.0]))
+        up_candidates.append(np.array([0.0, 1.0, 0.0]))
+
+        x_axis = None
+        for up in up_candidates:
             x_axis = np.cross(up, z_axis)
+            if np.linalg.norm(x_axis) >= 1e-6:
+                break
+            x_axis = None
+        if x_axis is None:
+            return None
         x_axis = self._normalize_vector(x_axis)
         if x_axis is None:
             return None
         y_axis = np.cross(z_axis, x_axis)
-        return np.column_stack((x_axis, y_axis, z_axis))
+        target_rot = np.column_stack((x_axis, y_axis, z_axis))
+        self.last_target_rot = target_rot
+        return target_rot
 
     def _rotation_from_x_axis(self, x_axis, up_ref=None):
         x_axis = self._normalize_vector(np.array(x_axis, dtype=float))
         if x_axis is None:
             return None
-        up = np.array([0.0, 0.0, 1.0]) if up_ref is None else np.array(up_ref, dtype=float)
-        y_axis = np.cross(up, x_axis)
-        if np.linalg.norm(y_axis) < 1e-6:
-            up = np.array([0.0, 1.0, 0.0])
+        up_candidates = []
+        if up_ref is not None:
+            up_candidates.append(np.array(up_ref, dtype=float))
+        elif self.last_target_rot is not None:
+            up_candidates.append(self.last_target_rot[:, 2])
+            up_candidates.append(self.last_target_rot[:, 1])
+        up_candidates.append(np.array([0.0, 0.0, 1.0]))
+        up_candidates.append(np.array([0.0, 1.0, 0.0]))
+
+        y_axis = None
+        for up in up_candidates:
             y_axis = np.cross(up, x_axis)
+            if np.linalg.norm(y_axis) >= 1e-6:
+                break
+            y_axis = None
+        if y_axis is None:
+            return None
         y_axis = self._normalize_vector(y_axis)
         if y_axis is None:
             return None
         z_axis = np.cross(x_axis, y_axis)
-        return np.column_stack((x_axis, y_axis, z_axis))
+        target_rot = np.column_stack((x_axis, y_axis, z_axis))
+        self.last_target_rot = target_rot
+        return target_rot
 
     def _derive_orientation_reference(
         self,
