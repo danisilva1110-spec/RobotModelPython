@@ -57,6 +57,11 @@ class RobotSimulator:
         
         # 4. Compila Jacobiano e FK
         self.func_J = sp.lambdify(self.sym_vars, self.bot.Jacobian, modules='numpy')
+        self.func_fk_rot = sp.lambdify(
+            self.sym_vars,
+            self.bot.frames[-1][:3, :3],
+            modules='numpy',
+        )
 
         self.funcs_fk_all_links = []
         for frame in self.bot.frames:
@@ -80,6 +85,17 @@ class RobotSimulator:
         """ Força o erro a ficar entre -PI e +PI (Menor Caminho) """
         wrapped = (error_vector + np.pi) % (2 * np.pi) - np.pi
         return np.where(self.is_rotational, wrapped, error_vector)
+
+    def _orientation_error(self, target_rot, curr_rot):
+        """Erro de orientação baseado em matriz de rotação (aprox. eixo-ângulo)."""
+        rot_err = target_rot @ curr_rot.T
+        return 0.5 * np.array(
+            [
+                rot_err[2, 1] - rot_err[1, 2],
+                rot_err[0, 2] - rot_err[2, 0],
+                rot_err[1, 0] - rot_err[0, 1],
+            ]
+        )
 
     def trajectory_planning(self, t, t_total, Pi, Pf, mode="Line", params=None):
         """ Implementação fiel do algoritmo MATLAB 'Planejamentos.txt' """
@@ -174,6 +190,10 @@ class RobotSimulator:
         lambda_dls=0.1,
         dq_limit=3.0,
         use_feedforward_vel=True,
+        target_rot=None,
+        target_ang_vel=None,
+        target_ang_acc=None,
+        priority="position",
     ):
         """ 
         Cinemática Inversa Numérica com Feedforward de Aceleração CORRIGIDO.
@@ -182,37 +202,66 @@ class RobotSimulator:
         f_end = self.funcs_fk_all_links[-1]
         args_0 = self._build_args(q_curr, np.zeros(self.num_dof))
         curr_pos = np.array(f_end(*args_0)).flatten()
+        curr_rot = np.array(self.func_fk_rot(*args_0))
+        if target_rot is not None:
+            target_rot = np.array(target_rot, dtype=float)
         
         # Erro de Posição
         error = target_pos - curr_pos
+        orient_error = (
+            self._orientation_error(target_rot, curr_rot)
+            if target_rot is not None
+            else np.zeros(3)
+        )
         
         # Jacobiano Atual
         J_num = np.array(self.func_J(*args_0))
         J_pos = J_num[:3, :] 
+        J_ang = J_num[3:6, :]
         
         # --- CORREÇÃO: CÁLCULO NUMÉRICO DE J_DOT ---
         if self.J_prev is None:
-            self.J_prev = J_pos.copy()
-            J_dot = np.zeros_like(J_pos)
+            self.J_prev = J_num.copy()
+            J_dot = np.zeros_like(J_num)
         else:
             # Derivada numérica finita: (J_curr - J_prev) / dt
-            J_dot = (J_pos - self.J_prev) / dt
-            self.J_prev = J_pos.copy()
+            J_dot = (J_num - self.J_prev) / dt
+            self.J_prev = J_num.copy()
             
         # Termo de Drift (Coriolis Cinemático): J_dot * dq
         # Isso diz: "Quanto a ponta se moveria só pela mudança da geometria?"
-        drift_acc = J_dot @ dq_curr
+        drift_acc_pos = J_dot[:3, :] @ dq_curr
+        drift_acc_ang = J_dot[3:6, :] @ dq_curr
         # -------------------------------------------
 
+        if target_rot is None:
+            priority = "position"
+
+        valid_priorities = {"position", "orientation", "balanced"}
+        if priority not in valid_priorities:
+            raise ValueError(
+                f"Prioridade inválida ({priority}). Use uma de {valid_priorities}."
+            )
+
         # Damped Least Squares
-        J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
+        J_dls_pinv = J_pos.T @ np.linalg.inv(
+            J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
+        )
         
         # Feedforward de Velocidade
         vel_ff = target_vel if use_feedforward_vel else np.zeros_like(target_vel)
         acc_ff = target_acc if use_feedforward_vel else np.zeros_like(target_acc)
+        ang_vel_ff = (
+            target_ang_vel if target_ang_vel is not None else np.zeros(3)
+        )
+        ang_acc_ff = (
+            target_ang_acc if target_ang_acc is not None else np.zeros(3)
+        )
+        if not use_feedforward_vel:
+            ang_vel_ff = np.zeros(3)
+            ang_acc_ff = np.zeros(3)
         
         v_command = vel_ff + (error * Kp_ik)
-        dq_task = J_dls_pinv @ v_command
 
         v_curr = J_pos @ dq_curr
         v_error = vel_ff - v_curr
@@ -220,10 +269,70 @@ class RobotSimulator:
         
         # Aceleração Comandada no Espaço Cartesiano
         a_cartesian_target = acc_ff + (Kd_ik * v_error)
-        
-        # --- CORREÇÃO FINAL NA FÓRMULA DE ACELERAÇÃO ---
-        # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
-        ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc)
+        w_curr = J_ang @ dq_curr
+        w_error = ang_vel_ff - w_curr
+        a_ang_target = ang_acc_ff + (Kd_ik * w_error)
+
+        if priority == "position":
+            if self.num_dof < 3 or np.linalg.matrix_rank(J_pos) < 3:
+                print(
+                    "⚠️ DOFs insuficientes para tarefa de posição. "
+                    "Usando solução aproximada (DLS)."
+                )
+            dq_task = J_dls_pinv @ v_command
+            # --- CORREÇÃO FINAL NA FÓRMULA DE ACELERAÇÃO ---
+            # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
+            ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc_pos)
+        elif priority == "orientation":
+            if self.num_dof < 3 or np.linalg.matrix_rank(J_ang) < 3:
+                print(
+                    "⚠️ DOFs insuficientes para tarefa de orientação. "
+                    "Usando solução aproximada (DLS)."
+                )
+            J_ang_pinv = J_ang.T @ np.linalg.inv(
+                J_ang @ J_ang.T + lambda_dls**2 * np.eye(3)
+            )
+            w_command = ang_vel_ff + (orient_error * Kp_ik)
+            dq_orient = J_ang_pinv @ w_command
+            ddq_orient = J_ang_pinv @ (a_ang_target - drift_acc_ang)
+
+            null_projection_orient = np.eye(self.num_dof) - J_ang_pinv @ J_ang
+            J_pos_null = J_pos @ null_projection_orient
+            if self.num_dof < 3 or np.linalg.matrix_rank(J_pos_null) < 3:
+                print(
+                    "⚠️ DOFs insuficientes para tarefa de posição no espaço nulo. "
+                    "Usando solução aproximada (DLS)."
+                )
+            J_pos_null_pinv = J_pos_null.T @ np.linalg.inv(
+                J_pos_null @ J_pos_null.T + lambda_dls**2 * np.eye(3)
+            )
+            dq_pos = J_pos_null_pinv @ (v_command - J_pos @ dq_orient)
+            ddq_pos = J_pos_null_pinv @ (
+                a_cartesian_target - drift_acc_pos - J_pos @ ddq_orient
+            )
+            dq_task = dq_orient + null_projection_orient @ dq_pos
+            ddq_task = ddq_orient + null_projection_orient @ ddq_pos
+        else:
+            if self.num_dof < 6 or np.linalg.matrix_rank(J_num) < 6:
+                print(
+                    "⚠️ DOFs insuficientes para tarefa 6D. "
+                    "Usando solução aproximada (DLS)."
+                )
+            weight_pos = 1.0
+            weight_ang = 1.0
+            J_task = np.vstack((weight_pos * J_pos, weight_ang * J_ang))
+            v_command_6d = np.hstack(
+                (weight_pos * v_command, weight_ang * (ang_vel_ff + orient_error * Kp_ik))
+            )
+            a_command_6d = np.hstack(
+                (weight_pos * a_cartesian_target, weight_ang * a_ang_target)
+            )
+            drift_6d = np.hstack((weight_pos * drift_acc_pos, weight_ang * drift_acc_ang))
+            J_task_pinv = J_task.T @ np.linalg.inv(
+                J_task @ J_task.T + lambda_dls**2 * np.eye(6)
+            )
+            dq_task = J_task_pinv @ v_command_6d
+            ddq_task = J_task_pinv @ (a_command_6d - drift_6d)
         
         # Controle de Espaço Nulo
         I = np.eye(self.num_dof)
@@ -241,6 +350,7 @@ class RobotSimulator:
         q_next = q_curr + dq_total * dt
         
         return q_next, dq_total, ddq_task
+
     def solve_ik_initial(
         self,
         target_pos,
