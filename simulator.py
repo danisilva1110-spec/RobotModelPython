@@ -643,7 +643,6 @@ class RobotSimulator:
         use_parallel=True,
         max_workers=None,
         orientation_preset=None,
-        orientation_priority=None,
     ):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
@@ -663,21 +662,11 @@ class RobotSimulator:
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
 
-        priority = orientation_priority
-        if self.num_dof < 6:
-            if priority is None:
-                priority = "balanced"
-                print(
-                    "ℹ️ DOFs < 6; prioridade não configurada, "
-                    "usando fallback 'balanced'."
-                )
-            else:
-                print(
-                    f"ℹ️ DOFs < 6; usando prioridade configurada '{priority}'."
-                )
-        elif priority is None:
+        if orientation_preset == "Desligado":
             priority = "position"
-        
+        else:
+            priority = "balanced"
+
         # Inicialização (Com postura preferida se definida)
         q_home = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
         q = np.copy(q_home)
