@@ -482,6 +482,8 @@ class RobotSimulator:
         tol=1e-3,
         lambda_init=0.2,
         min_step=1e-4,
+        target_rot=None,
+        priority="position",
     ):
         """
         IK inicial mais robusta (Levenberg-Marquardt + line search).
@@ -493,21 +495,78 @@ class RobotSimulator:
         last_error = np.inf
         stall_count = 0
 
+        if target_rot is not None:
+            target_rot = np.array(target_rot, dtype=float)
+
+        if target_rot is None:
+            priority = "position"
+
+        valid_priorities = {"position", "orientation", "balanced"}
+        if priority not in valid_priorities:
+            raise ValueError(
+                f"Prioridade inválida ({priority}). Use uma de {valid_priorities}."
+            )
+
         for i in range(max_iters):
             args = self._build_args(q_curr, np.zeros(self.num_dof))
             curr_pos = np.array(f_end(*args)).flatten()
+            curr_rot = np.array(self.func_fk_rot(*args))
             error = target_pos - curr_pos
-            error_norm = np.linalg.norm(error)
+            orient_error = (
+                self._orientation_error(target_rot, curr_rot)
+                if target_rot is not None
+                else np.zeros(3)
+            )
+            if priority == "position":
+                error_vec = error
+            elif priority == "orientation":
+                error_vec = orient_error
+            else:
+                error_vec = np.hstack((error, orient_error))
+            error_norm = np.linalg.norm(error_vec)
 
             if error_norm < tol:
                 return q_curr, True, error_norm, i + 1
 
             J_num = np.array(self.func_J(*args))
             J_pos = J_num[:3, :]
-            J_dls_pinv = J_pos.T @ np.linalg.inv(
-                J_pos @ J_pos.T + (lambda_dls**2) * np.eye(3)
-            )
-            dq = J_dls_pinv @ error
+            J_ang = J_num[3:6, :]
+            if priority == "position":
+                J_dls_pinv = J_pos.T @ np.linalg.inv(
+                    J_pos @ J_pos.T + (lambda_dls**2) * np.eye(3)
+                )
+                dq = J_dls_pinv @ error
+            elif priority == "orientation":
+                orient_indices = list(range(self.num_dof))
+                if self.has_vehicle_base and self.manipulator_dof_indices:
+                    orient_indices = self.manipulator_dof_indices
+                    J_ang_subset = J_ang[:, orient_indices]
+                    if self.num_dof < 3 or np.linalg.matrix_rank(J_ang_subset) < 3:
+                        print(
+                            "⚠️ DOFs insuficientes na orientação do manipulador. "
+                            "Usando todos os DOFs disponíveis."
+                        )
+                        orient_indices = list(range(self.num_dof))
+                J_ang_masked = np.zeros_like(J_ang)
+                J_ang_masked[:, orient_indices] = J_ang[:, orient_indices]
+                J_ang_pinv = J_ang_masked.T @ np.linalg.inv(
+                    J_ang_masked @ J_ang_masked.T + (lambda_dls**2) * np.eye(3)
+                )
+                dq_orient = J_ang_pinv @ orient_error
+                null_projection = np.eye(self.num_dof) - J_ang_pinv @ J_ang_masked
+                J_pos_null = J_pos @ null_projection
+                J_pos_null_pinv = J_pos_null.T @ np.linalg.inv(
+                    J_pos_null @ J_pos_null.T + (lambda_dls**2) * np.eye(3)
+                )
+                dq_pos = J_pos_null_pinv @ (error - J_pos @ dq_orient)
+                dq = dq_orient + null_projection @ dq_pos
+            else:
+                J_task = np.vstack((J_pos, J_ang))
+                error_task = np.hstack((error, orient_error))
+                J_task_pinv = J_task.T @ np.linalg.inv(
+                    J_task @ J_task.T + (lambda_dls**2) * np.eye(6)
+                )
+                dq = J_task_pinv @ error_task
 
             # Line search: reduz passo até melhorar o erro
             alpha = 1.0
@@ -517,7 +576,19 @@ class RobotSimulator:
                 args_next = self._build_args(q_next, np.zeros(self.num_dof))
                 next_pos = np.array(f_end(*args_next)).flatten()
                 next_error = target_pos - next_pos
-                next_error_norm = np.linalg.norm(next_error)
+                next_rot = np.array(self.func_fk_rot(*args_next))
+                next_orient_error = (
+                    self._orientation_error(target_rot, next_rot)
+                    if target_rot is not None
+                    else np.zeros(3)
+                )
+                if priority == "position":
+                    next_error_vec = next_error
+                elif priority == "orientation":
+                    next_error_vec = next_orient_error
+                else:
+                    next_error_vec = np.hstack((next_error, next_orient_error))
+                next_error_norm = np.linalg.norm(next_error_vec)
                 if next_error_norm < error_norm:
                     q_curr = q_next
                     error_norm = next_error_norm
@@ -604,12 +675,21 @@ class RobotSimulator:
                 q_init = np.copy(self.last_converged_q) if self.last_converged_q is not None else np.copy(q_home)
             else:
                 q_init = np.array(q_init, dtype=float).copy()
+            target_rot = self._derive_orientation_reference(
+                orientation_preset,
+                Pi,
+            )
+            init_priority = priority
+            if target_rot is not None and init_priority == "position":
+                init_priority = "balanced"
             q_init, converged, init_error, init_iters = self.solve_ik_initial(
                 target_pos=Pi,
                 q_init=q_init,
                 max_iters=300,
                 tol=1e-3,
                 lambda_init=0.2,
+                target_rot=target_rot,
+                priority=init_priority,
             )
             if converged:
                 q = q_init
