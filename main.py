@@ -283,6 +283,31 @@ class App(ctk.CTk):
                                         onvalue="Anti-Horário (+1)", offvalue="Horário (-1)")
         self.switch_dir.pack(pady=5)
 
+        # === NOVA SEÇÃO: ORIENTAÇÃO ===
+        ctk.CTkLabel(self.sim_left, text="--- Orientação ---", font=("Arial", 12, "bold")).pack(pady=5)
+        ctk.CTkLabel(self.sim_left, text="Preset:").pack(anchor="w")
+        self.orientation_preset_var = ctk.StringVar(value="Desligado")
+        self.orientation_preset_dd = ctk.CTkOptionMenu(
+            self.sim_left,
+            values=[
+                "Desligado",
+                "Sempre para baixo",
+                "Olhar para o alvo",
+                "Inspeção frontal",
+            ],
+            variable=self.orientation_preset_var,
+        )
+        self.orientation_preset_dd.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.sim_left, text="Prioridade:").pack(anchor="w")
+        self.orientation_priority_var = ctk.StringVar(value="Posição")
+        self.orientation_priority_dd = ctk.CTkOptionMenu(
+            self.sim_left,
+            values=["Posição", "Orientação", "Balanceada"],
+            variable=self.orientation_priority_var,
+        )
+        self.orientation_priority_dd.pack(fill="x", pady=(0, 10))
+
         ctk.CTkLabel(self.sim_left, text="--- Constantes Físicas ---", font=("Arial", 12, "bold")).pack(pady=5)
         self.params_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
         self.params_container.pack(fill="both", expand=True)
@@ -472,6 +497,17 @@ class App(ctk.CTk):
                     self.log("❌ Erro nos parâmetros do Círculo. Verifique números e vírgulas.")
                     return
 
+            orientation_preset = self.orientation_preset_var.get()
+            priority_map = {
+                "Posição": "position",
+                "Orientação": "orientation",
+                "Balanceada": "balanced",
+            }
+            orientation_priority = priority_map.get(
+                self.orientation_priority_var.get(),
+                "position",
+            )
+
         except ValueError as ve:
             self.log(f"❌ Erro de formatação nos vetores: {ve}")
             return
@@ -494,7 +530,9 @@ class App(ctk.CTk):
                 zeta=zeta,
                 dq_limit=dq_limit,
                 use_feedforward_vel=use_feedforward_vel,
-                q_init=q_init
+                q_init=q_init,
+                orientation_preset=orientation_preset,
+                orientation_priority=orientation_priority,
             )
             
             self.last_anim_data = anim_data
