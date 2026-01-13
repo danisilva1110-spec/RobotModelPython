@@ -97,6 +97,56 @@ class RobotSimulator:
             ]
         )
 
+    def _normalize_vector(self, vec, eps=1e-8):
+        norm = np.linalg.norm(vec)
+        if norm < eps:
+            return None
+        return vec / norm
+
+    def _rotation_from_z_axis(self, z_axis, up_ref=None):
+        z_axis = self._normalize_vector(np.array(z_axis, dtype=float))
+        if z_axis is None:
+            return None
+        up = np.array([0.0, 0.0, 1.0]) if up_ref is None else np.array(up_ref, dtype=float)
+        x_axis = np.cross(up, z_axis)
+        if np.linalg.norm(x_axis) < 1e-6:
+            up = np.array([0.0, 1.0, 0.0])
+            x_axis = np.cross(up, z_axis)
+        x_axis = self._normalize_vector(x_axis)
+        if x_axis is None:
+            return None
+        y_axis = np.cross(z_axis, x_axis)
+        return np.column_stack((x_axis, y_axis, z_axis))
+
+    def _rotation_from_x_axis(self, x_axis, up_ref=None):
+        x_axis = self._normalize_vector(np.array(x_axis, dtype=float))
+        if x_axis is None:
+            return None
+        up = np.array([0.0, 0.0, 1.0]) if up_ref is None else np.array(up_ref, dtype=float)
+        y_axis = np.cross(up, x_axis)
+        if np.linalg.norm(y_axis) < 1e-6:
+            up = np.array([0.0, 1.0, 0.0])
+            y_axis = np.cross(up, x_axis)
+        y_axis = self._normalize_vector(y_axis)
+        if y_axis is None:
+            return None
+        z_axis = np.cross(x_axis, y_axis)
+        return np.column_stack((x_axis, y_axis, z_axis))
+
+    def _derive_orientation_reference(self, preset, target_pos):
+        if preset is None or preset == "Desligado":
+            return None
+        if preset == "Sempre para baixo":
+            return self._rotation_from_z_axis([0.0, 0.0, -1.0])
+        direction = self._normalize_vector(np.array(target_pos, dtype=float))
+        if direction is None:
+            return None
+        if preset == "Olhar para o alvo":
+            return self._rotation_from_z_axis(direction)
+        if preset == "Inspeção frontal":
+            return self._rotation_from_x_axis(direction)
+        return None
+
     def trajectory_planning(self, t, t_total, Pi, Pf, mode="Line", params=None):
         """ Implementação fiel do algoritmo MATLAB 'Planejamentos.txt' """
         if t >= t_total: return Pf, np.zeros(3), np.zeros(3)
@@ -418,9 +468,26 @@ class RobotSimulator:
 
         return q_curr, False, last_error, max_iters
 
-    def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
-            dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
-            dq_limit=3.0, use_feedforward_vel=True, use_parallel=True, max_workers=None):
+    def run(
+        self,
+        t_total,
+        Pi_list,
+        Pf_list,
+        Kp_val,
+        traj_mode="Line",
+        traj_params=None,
+        dt_physics=None,
+        dt_visual=None,
+        init_at_start=True,
+        q_init=None,
+        zeta=1.0,
+        dq_limit=3.0,
+        use_feedforward_vel=True,
+        use_parallel=True,
+        max_workers=None,
+        orientation_preset=None,
+        orientation_priority=None,
+    ):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -438,6 +505,21 @@ class RobotSimulator:
         
         Pi = np.array(Pi_list, dtype=float)
         Pf = np.array(Pf_list, dtype=float)
+
+        priority = orientation_priority
+        if self.num_dof < 6:
+            if priority is None:
+                priority = "balanced"
+                print(
+                    "ℹ️ DOFs < 6; prioridade não configurada, "
+                    "usando fallback 'balanced'."
+                )
+            else:
+                print(
+                    f"ℹ️ DOFs < 6; usando prioridade configurada '{priority}'."
+                )
+        elif priority is None:
+            priority = "position"
         
         # Inicialização (Com postura preferida se definida)
         q_home = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
@@ -500,6 +582,10 @@ class RobotSimulator:
                         current_time, t_total, Pi, Pf,
                         mode=traj_mode, params=traj_params
                     )
+                    target_rot = self._derive_orientation_reference(
+                        orientation_preset,
+                        P_ref,
+                    )
 
                     # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
                     # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
@@ -512,6 +598,8 @@ class RobotSimulator:
                         dt_physics,
                         dq_limit=dq_limit,
                         use_feedforward_vel=use_feedforward_vel,
+                        target_rot=target_rot,
+                        priority=priority,
                     )
                     args = self._build_args(q, dq)
                     if executor is None:
