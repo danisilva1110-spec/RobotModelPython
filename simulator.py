@@ -146,15 +146,19 @@ class RobotSimulator:
         return np.where(self.is_rotational, wrapped, error_vector)
 
     def _orientation_error(self, target_rot, curr_rot):
-        """Erro de orientação baseado em matriz de rotação (aprox. eixo-ângulo)."""
+        """Erro de orientação via logaritmo de matriz (eixo-ângulo exato)."""
         rot_err = target_rot @ curr_rot.T
-        return 0.5 * np.array(
-            [
-                rot_err[2, 1] - rot_err[1, 2],
-                rot_err[0, 2] - rot_err[2, 0],
-                rot_err[1, 0] - rot_err[0, 1],
-            ]
+        trace_val = np.trace(rot_err)
+        cos_theta = (trace_val - 1.0) / 2.0
+        cos_theta = np.clip(cos_theta, -1.0, 1.0)
+        theta = np.arccos(cos_theta)
+        if theta < 1e-8:
+            return np.zeros(3)
+        skew = rot_err - rot_err.T
+        omega = (theta / (2.0 * np.sin(theta))) * np.array(
+            [skew[2, 1], skew[0, 2], skew[1, 0]]
         )
+        return omega
 
     def _normalize_vector(self, vec, eps=1e-8):
         norm = np.linalg.norm(vec)
