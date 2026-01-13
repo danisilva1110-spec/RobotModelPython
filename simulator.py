@@ -360,6 +360,9 @@ class RobotSimulator:
 
         if target_rot is None:
             priority = "position"
+        elif priority == "position" and self.num_dof < 6:
+            # Permite orientação no espaço nulo quando não há 6 DOFs.
+            priority = "balanced"
 
         valid_priorities = {"position", "orientation", "balanced"}
         if priority not in valid_priorities:
@@ -449,26 +452,64 @@ class RobotSimulator:
             dq_task = dq_orient + null_projection_orient @ dq_pos
             ddq_task = ddq_orient + null_projection_orient @ ddq_pos
         else:
-            if self.num_dof < 6 or np.linalg.matrix_rank(J_num) < 6:
-                print(
-                    "⚠️ DOFs insuficientes para tarefa 6D. "
-                    "Usando solução aproximada (DLS)."
+            if self.num_dof < 6:
+                # Robôs com <6 DOFs: prioriza posição e aplica orientação
+                # apenas no espaço nulo restante (componentes inalcançáveis
+                # são descartadas via projeção do J_ang).
+                if self.num_dof < 3 or np.linalg.matrix_rank(J_pos) < 3:
+                    print(
+                        "⚠️ DOFs insuficientes para tarefa de posição. "
+                        "Usando solução aproximada (DLS)."
+                    )
+                dq_task = J_dls_pinv @ v_command
+                ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc_pos)
+
+                remaining_dofs = self.num_dof - np.linalg.matrix_rank(J_pos)
+                if remaining_dofs > 0 and target_rot is not None:
+                    null_projection_pos = np.eye(self.num_dof) - J_dls_pinv @ J_pos
+                    J_ang_null = J_ang @ null_projection_pos
+                    if np.linalg.matrix_rank(J_ang_null) < 1:
+                        print(
+                            "⚠️ Espaço nulo sem liberdade angular efetiva; "
+                            "orientação ignorada."
+                        )
+                    else:
+                        J_ang_null_pinv = J_ang_null.T @ np.linalg.inv(
+                            J_ang_null @ J_ang_null.T + lambda_dls**2 * np.eye(3)
+                        )
+                        w_command = ang_vel_ff + (orient_error * Kp_ik)
+                        w_residual = w_command - (J_ang @ dq_task)
+                        a_residual = a_ang_target - drift_acc_ang - (J_ang @ ddq_task)
+                        dq_orient = null_projection_pos @ (J_ang_null_pinv @ w_residual)
+                        ddq_orient = null_projection_pos @ (J_ang_null_pinv @ a_residual)
+                        dq_task = dq_task + dq_orient
+                        ddq_task = ddq_task + ddq_orient
+            else:
+                if np.linalg.matrix_rank(J_num) < 6:
+                    print(
+                        "⚠️ DOFs insuficientes para tarefa 6D. "
+                        "Usando solução aproximada (DLS)."
+                    )
+                weight_pos = 1.0
+                weight_ang = 1.0
+                J_task = np.vstack((weight_pos * J_pos, weight_ang * J_ang))
+                v_command_6d = np.hstack(
+                    (
+                        weight_pos * v_command,
+                        weight_ang * (ang_vel_ff + orient_error * Kp_ik),
+                    )
                 )
-            weight_pos = 1.0
-            weight_ang = 1.0
-            J_task = np.vstack((weight_pos * J_pos, weight_ang * J_ang))
-            v_command_6d = np.hstack(
-                (weight_pos * v_command, weight_ang * (ang_vel_ff + orient_error * Kp_ik))
-            )
-            a_command_6d = np.hstack(
-                (weight_pos * a_cartesian_target, weight_ang * a_ang_target)
-            )
-            drift_6d = np.hstack((weight_pos * drift_acc_pos, weight_ang * drift_acc_ang))
-            J_task_pinv = J_task.T @ np.linalg.inv(
-                J_task @ J_task.T + lambda_dls**2 * np.eye(6)
-            )
-            dq_task = J_task_pinv @ v_command_6d
-            ddq_task = J_task_pinv @ (a_command_6d - drift_6d)
+                a_command_6d = np.hstack(
+                    (weight_pos * a_cartesian_target, weight_ang * a_ang_target)
+                )
+                drift_6d = np.hstack(
+                    (weight_pos * drift_acc_pos, weight_ang * drift_acc_ang)
+                )
+                J_task_pinv = J_task.T @ np.linalg.inv(
+                    J_task @ J_task.T + lambda_dls**2 * np.eye(6)
+                )
+                dq_task = J_task_pinv @ v_command_6d
+                ddq_task = J_task_pinv @ (a_command_6d - drift_6d)
         
         # Controle de Espaço Nulo
         I = np.eye(self.num_dof)
@@ -665,7 +706,7 @@ class RobotSimulator:
         if orientation_preset == "Desligado":
             priority = "position"
         else:
-            priority = "balanced"
+            priority = "balanced" if self.num_dof >= 6 else "position"
 
         # Inicialização (Com postura preferida se definida)
         q_home = np.copy(self.q_home) if hasattr(self, 'q_home') else np.zeros(self.num_dof)
@@ -683,7 +724,11 @@ class RobotSimulator:
                 fallback_direction=(Pf - Pi),
             )
             init_priority = priority
-            if target_rot is not None and init_priority == "position":
+            if (
+                target_rot is not None
+                and init_priority == "position"
+                and self.num_dof >= 6
+            ):
                 init_priority = "balanced"
             q_init, converged, init_error, init_iters = self.solve_ik_initial(
                 target_pos=Pi,
