@@ -27,11 +27,56 @@ def _calc_coriolis_row(i, q, dq, dM_dq):
 
 
 class RobotMathEngine:
-    def __init__(self, joint_config, link_vectors_mask, logger_callback=None, num_workers=None):
+    def __init__(
+        self,
+        joint_config,
+        link_vectors_mask,
+        logger_callback=None,
+        num_workers=None,
+        has_vehicle_base=False,
+        vehicle_dof_indices=None,
+        manipulator_dof_indices=None,
+    ):
         self.joint_config = joint_config
         self.link_vectors_mask = [sp.Matrix(v) for v in link_vectors_mask]
         self.log = logger_callback if logger_callback else print
         self.num_workers = num_workers
+        self.has_vehicle_base = bool(has_vehicle_base)
+
+        num_dof = len(joint_config)
+        self.vehicle_dof_indices = (
+            list(vehicle_dof_indices) if vehicle_dof_indices is not None else []
+        )
+        self.manipulator_dof_indices = (
+            list(manipulator_dof_indices) if manipulator_dof_indices is not None else []
+        )
+        if not self.has_vehicle_base:
+            self.vehicle_dof_indices = []
+            self.manipulator_dof_indices = list(range(num_dof))
+        else:
+            if not self.vehicle_dof_indices and not self.manipulator_dof_indices:
+                self.vehicle_dof_indices = list(range(min(6, num_dof)))
+                self.manipulator_dof_indices = [
+                    i for i in range(num_dof) if i not in self.vehicle_dof_indices
+                ]
+            if not self.manipulator_dof_indices:
+                self.manipulator_dof_indices = [
+                    i for i in range(num_dof) if i not in self.vehicle_dof_indices
+                ]
+            if not self.vehicle_dof_indices:
+                self.vehicle_dof_indices = [
+                    i for i in range(num_dof) if i not in self.manipulator_dof_indices
+                ]
+        self.vehicle_dof_indices = [
+            i
+            for i in sorted(set(self.vehicle_dof_indices))
+            if 0 <= i < num_dof
+        ]
+        self.manipulator_dof_indices = [
+            i
+            for i in sorted(set(self.manipulator_dof_indices))
+            if 0 <= i < num_dof and i not in self.vehicle_dof_indices
+        ]
 
         self.t = sp.symbols('t')
         self.g = sp.symbols('g')
