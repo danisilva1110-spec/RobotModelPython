@@ -192,14 +192,20 @@ class RobotSimulator:
         z_axis = np.cross(x_axis, y_axis)
         return np.column_stack((x_axis, y_axis, z_axis))
 
-    def _derive_orientation_reference(self, preset, target_pos, fallback_direction=None):
+    def _derive_orientation_reference(
+        self,
+        preset,
+        target_pos,
+        curr_pos,
+        fallback_direction=None,
+    ):
         if preset is None or preset == "Desligado":
             return None
         if preset == "Sempre para baixo":
             target_rot = self._rotation_from_z_axis([0.0, 0.0, -1.0])
             self.last_target_rot = target_rot
             return target_rot
-        target_vec = np.array(target_pos, dtype=float)
+        target_vec = np.array(target_pos, dtype=float) - np.array(curr_pos, dtype=float)
         if np.linalg.norm(target_vec) < 1e-6:
             if self.last_target_rot is not None:
                 return self.last_target_rot
@@ -779,9 +785,12 @@ class RobotSimulator:
                 q_init = np.copy(self.last_converged_q) if self.last_converged_q is not None else np.copy(q_home)
             else:
                 q_init = np.array(q_init, dtype=float).copy()
+            args_init = self._build_args(q_init, np.zeros(self.num_dof))
+            curr_pos_init = np.array(self.funcs_fk_all_links[-1](*args_init)).flatten()
             target_rot = self._derive_orientation_reference(
                 orientation_preset,
                 Pi,
+                curr_pos_init,
                 fallback_direction=(Pf - Pi),
             )
             init_priority = priority
@@ -844,9 +853,14 @@ class RobotSimulator:
                         current_time, t_total, Pi, Pf,
                         mode=traj_mode, params=traj_params
                     )
+                    args_curr = self._build_args(q, dq)
+                    curr_pos = np.array(
+                        self.funcs_fk_all_links[-1](*args_curr)
+                    ).flatten()
                     target_rot = self._derive_orientation_reference(
                         orientation_preset,
                         P_ref,
+                        curr_pos,
                         fallback_direction=V_ref,
                     )
 
