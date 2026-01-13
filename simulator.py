@@ -309,6 +309,13 @@ class RobotSimulator:
         dt,
         Kp_ik=5.0,
         lambda_dls=0.1,
+        lambda_min=1e-4,
+        lambda_max=1.0,
+        lambda_growth=1.4,
+        lambda_decay=0.9,
+        manip_threshold=1e-3,
+        error_growth_ratio=1.05,
+        log_dls=False,
         dq_limit=3.0,
         use_feedforward_vel=True,
         target_rot=None,
@@ -370,9 +377,55 @@ class RobotSimulator:
                 f"Prioridade inválida ({priority}). Use uma de {valid_priorities}."
             )
 
-        # Damped Least Squares
+        if priority == "position":
+            error_vec = error
+        elif priority == "orientation":
+            error_vec = orient_error
+        else:
+            error_vec = np.hstack((error, orient_error))
+        error_norm = np.linalg.norm(error_vec)
+
+        def _manipulability_metric(J_task):
+            JJ = J_task @ J_task.T
+            det_val = np.linalg.det(JJ)
+            if det_val < 0:
+                det_val = 0.0
+            return np.sqrt(det_val)
+
+        if priority == "orientation":
+            manip = _manipulability_metric(J_ang)
+        elif priority == "balanced" and self.num_dof >= 6:
+            weight_pos = 1.0
+            weight_ang = 1.0
+            J_task = np.vstack((weight_pos * J_pos, weight_ang * J_ang))
+            manip = _manipulability_metric(J_task)
+        else:
+            manip = _manipulability_metric(J_pos)
+
+        lambda_dls_dynamic = getattr(self, "_lambda_dls_dynamic", lambda_dls)
+        prev_error = getattr(self, "_prev_ik_error", None)
+        error_growing = prev_error is not None and error_norm > prev_error * error_growth_ratio
+        if manip < manip_threshold:
+            lambda_dls_dynamic *= lambda_growth
+        if error_growing:
+            lambda_dls_dynamic *= lambda_growth
+        if manip >= manip_threshold and not error_growing:
+            lambda_dls_dynamic *= lambda_decay
+        lambda_dls_dynamic = float(
+            np.clip(lambda_dls_dynamic, lambda_min, lambda_max)
+        )
+        self._lambda_dls_dynamic = lambda_dls_dynamic
+        self._prev_ik_error = error_norm
+
+        if log_dls:
+            print(
+                f"ℹ️ DLS dinâmica: lambda={lambda_dls_dynamic:.4e}, "
+                f"manip={manip:.4e}, erro={error_norm:.4e}"
+            )
+
+        # Damped Least Squares (lambda dinâmica)
         J_dls_pinv = J_pos.T @ np.linalg.inv(
-            J_pos @ J_pos.T + lambda_dls**2 * np.eye(3)
+            J_pos @ J_pos.T + lambda_dls_dynamic**2 * np.eye(3)
         )
         
         # Feedforward de Velocidade
@@ -429,7 +482,7 @@ class RobotSimulator:
                     "Usando solução aproximada (DLS)."
                 )
             J_ang_pinv = J_ang_masked.T @ np.linalg.inv(
-                J_ang_masked @ J_ang_masked.T + lambda_dls**2 * np.eye(3)
+                J_ang_masked @ J_ang_masked.T + lambda_dls_dynamic**2 * np.eye(3)
             )
             w_command = ang_vel_ff + (orient_error * Kp_ik)
             dq_orient = J_ang_pinv @ w_command
@@ -443,7 +496,7 @@ class RobotSimulator:
                     "Usando solução aproximada (DLS)."
                 )
             J_pos_null_pinv = J_pos_null.T @ np.linalg.inv(
-                J_pos_null @ J_pos_null.T + lambda_dls**2 * np.eye(3)
+                J_pos_null @ J_pos_null.T + lambda_dls_dynamic**2 * np.eye(3)
             )
             dq_pos = J_pos_null_pinv @ (v_command - J_pos @ dq_orient)
             ddq_pos = J_pos_null_pinv @ (
@@ -475,7 +528,7 @@ class RobotSimulator:
                         )
                     else:
                         J_ang_null_pinv = J_ang_null.T @ np.linalg.inv(
-                            J_ang_null @ J_ang_null.T + lambda_dls**2 * np.eye(3)
+                            J_ang_null @ J_ang_null.T + lambda_dls_dynamic**2 * np.eye(3)
                         )
                         w_command = ang_vel_ff + (orient_error * Kp_ik)
                         w_residual = w_command - (J_ang @ dq_task)
@@ -506,7 +559,7 @@ class RobotSimulator:
                     (weight_pos * drift_acc_pos, weight_ang * drift_acc_ang)
                 )
                 J_task_pinv = J_task.T @ np.linalg.inv(
-                    J_task @ J_task.T + lambda_dls**2 * np.eye(6)
+                    J_task @ J_task.T + lambda_dls_dynamic**2 * np.eye(6)
                 )
                 dq_task = J_task_pinv @ v_command_6d
                 ddq_task = J_task_pinv @ (a_command_6d - drift_6d)
@@ -684,6 +737,14 @@ class RobotSimulator:
         use_parallel=True,
         max_workers=None,
         orientation_preset=None,
+        lambda_dls=0.1,
+        lambda_min=1e-4,
+        lambda_max=1.0,
+        lambda_growth=1.4,
+        lambda_decay=0.9,
+        manip_threshold=1e-3,
+        error_growth_ratio=1.05,
+        log_dls=False,
     ):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
@@ -798,6 +859,14 @@ class RobotSimulator:
                         q,
                         dq,
                         dt_physics,
+                        lambda_dls=lambda_dls,
+                        lambda_min=lambda_min,
+                        lambda_max=lambda_max,
+                        lambda_growth=lambda_growth,
+                        lambda_decay=lambda_decay,
+                        manip_threshold=manip_threshold,
+                        error_growth_ratio=error_growth_ratio,
+                        log_dls=log_dls,
                         dq_limit=dq_limit,
                         use_feedforward_vel=use_feedforward_vel,
                         target_rot=target_rot,
