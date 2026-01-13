@@ -29,6 +29,7 @@ class RobotSimulator:
         self.params_values = {} 
         self.q_home = np.zeros(self.num_dof)
         self.last_converged_q = None
+        self.last_target_rot = None
         self.J_prev = None
         self.has_vehicle_base = False
         self.vehicle_dof_indices = []
@@ -191,18 +192,30 @@ class RobotSimulator:
         z_axis = np.cross(x_axis, y_axis)
         return np.column_stack((x_axis, y_axis, z_axis))
 
-    def _derive_orientation_reference(self, preset, target_pos):
+    def _derive_orientation_reference(self, preset, target_pos, fallback_direction=None):
         if preset is None or preset == "Desligado":
             return None
         if preset == "Sempre para baixo":
-            return self._rotation_from_z_axis([0.0, 0.0, -1.0])
-        direction = self._normalize_vector(np.array(target_pos, dtype=float))
+            target_rot = self._rotation_from_z_axis([0.0, 0.0, -1.0])
+            self.last_target_rot = target_rot
+            return target_rot
+        target_vec = np.array(target_pos, dtype=float)
+        if np.linalg.norm(target_vec) < 1e-6:
+            if self.last_target_rot is not None:
+                return self.last_target_rot
+            if fallback_direction is not None:
+                target_vec = np.array(fallback_direction, dtype=float)
+        direction = self._normalize_vector(target_vec)
         if direction is None:
             return None
         if preset == "Olhar para o alvo":
-            return self._rotation_from_z_axis(direction)
+            target_rot = self._rotation_from_z_axis(direction)
+            self.last_target_rot = target_rot
+            return target_rot
         if preset == "Inspeção frontal":
-            return self._rotation_from_x_axis(direction)
+            target_rot = self._rotation_from_x_axis(direction)
+            self.last_target_rot = target_rot
+            return target_rot
         return None
 
     def trajectory_planning(self, t, t_total, Pi, Pf, mode="Line", params=None):
@@ -678,6 +691,7 @@ class RobotSimulator:
             target_rot = self._derive_orientation_reference(
                 orientation_preset,
                 Pi,
+                fallback_direction=(Pf - Pi),
             )
             init_priority = priority
             if target_rot is not None and init_priority == "position":
@@ -738,6 +752,7 @@ class RobotSimulator:
                     target_rot = self._derive_orientation_reference(
                         orientation_preset,
                         P_ref,
+                        fallback_direction=V_ref,
                     )
 
                     # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
