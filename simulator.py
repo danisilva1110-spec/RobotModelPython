@@ -30,6 +30,10 @@ class RobotSimulator:
         self.q_home = np.zeros(self.num_dof)
         self.last_converged_q = None
         self.J_prev = None
+        self.has_vehicle_base = False
+        self.vehicle_dof_indices = []
+        self.manipulator_dof_indices = []
+        self._resolve_dof_groups()
 
         print(f"[{mode}] Compilando equações (Isso pode demorar um pouco)...")
         
@@ -70,6 +74,60 @@ class RobotSimulator:
             self.funcs_fk_all_links.append(f_fk)
 
         print("Compilação concluída!")
+
+    def _resolve_dof_groups(self):
+        num_dof = self.num_dof
+        has_vehicle_base = bool(getattr(self.bot, "has_vehicle_base", False))
+        vehicle_dof_indices = list(
+            getattr(self.bot, "vehicle_dof_indices", []) or []
+        )
+        manipulator_dof_indices = list(
+            getattr(self.bot, "manipulator_dof_indices", []) or []
+        )
+        vehicle_dof_indices = [
+            i for i in sorted(set(vehicle_dof_indices)) if 0 <= i < num_dof
+        ]
+        manipulator_dof_indices = [
+            i for i in sorted(set(manipulator_dof_indices)) if 0 <= i < num_dof
+        ]
+
+        if not has_vehicle_base:
+            vehicle_dof_indices = []
+            manipulator_dof_indices = list(range(num_dof))
+            print("ℹ️ Base móvel desativada; solver opera como robô fixo.")
+        else:
+            if not vehicle_dof_indices and not manipulator_dof_indices:
+                vehicle_dof_indices = list(range(min(6, num_dof)))
+                manipulator_dof_indices = [
+                    i for i in range(num_dof) if i not in vehicle_dof_indices
+                ]
+                print(
+                    "ℹ️ Base móvel ativa sem índices; usando fallback "
+                    "para separar base/manipulador."
+                )
+            elif not manipulator_dof_indices:
+                manipulator_dof_indices = [
+                    i for i in range(num_dof) if i not in vehicle_dof_indices
+                ]
+            elif not vehicle_dof_indices:
+                vehicle_dof_indices = [
+                    i for i in range(num_dof) if i not in manipulator_dof_indices
+                ]
+            manipulator_dof_indices = [
+                i for i in manipulator_dof_indices if i not in vehicle_dof_indices
+            ]
+            if not manipulator_dof_indices:
+                manipulator_dof_indices = [
+                    i for i in range(num_dof) if i not in vehicle_dof_indices
+                ]
+            if not vehicle_dof_indices:
+                vehicle_dof_indices = [
+                    i for i in range(num_dof) if i not in manipulator_dof_indices
+                ]
+
+        self.has_vehicle_base = has_vehicle_base
+        self.vehicle_dof_indices = vehicle_dof_indices
+        self.manipulator_dof_indices = manipulator_dof_indices
 
     def set_parameters(self, user_values_dict):
         self.params_values = user_values_dict
@@ -284,6 +342,9 @@ class RobotSimulator:
         drift_acc_ang = J_dot[3:6, :] @ dq_curr
         # -------------------------------------------
 
+        if self.has_vehicle_base and target_rot is not None:
+            priority = "orientation"
+
         if target_rot is None:
             priority = "position"
 
@@ -334,19 +395,31 @@ class RobotSimulator:
             # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
             ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc_pos)
         elif priority == "orientation":
-            if self.num_dof < 3 or np.linalg.matrix_rank(J_ang) < 3:
+            orient_indices = list(range(self.num_dof))
+            if self.has_vehicle_base and self.manipulator_dof_indices:
+                orient_indices = self.manipulator_dof_indices
+                J_ang_subset = J_ang[:, orient_indices]
+                if self.num_dof < 3 or np.linalg.matrix_rank(J_ang_subset) < 3:
+                    print(
+                        "⚠️ DOFs insuficientes na orientação do manipulador. "
+                        "Usando todos os DOFs disponíveis."
+                    )
+                    orient_indices = list(range(self.num_dof))
+            J_ang_masked = np.zeros_like(J_ang)
+            J_ang_masked[:, orient_indices] = J_ang[:, orient_indices]
+            if self.num_dof < 3 or np.linalg.matrix_rank(J_ang_masked) < 3:
                 print(
                     "⚠️ DOFs insuficientes para tarefa de orientação. "
                     "Usando solução aproximada (DLS)."
                 )
-            J_ang_pinv = J_ang.T @ np.linalg.inv(
-                J_ang @ J_ang.T + lambda_dls**2 * np.eye(3)
+            J_ang_pinv = J_ang_masked.T @ np.linalg.inv(
+                J_ang_masked @ J_ang_masked.T + lambda_dls**2 * np.eye(3)
             )
             w_command = ang_vel_ff + (orient_error * Kp_ik)
             dq_orient = J_ang_pinv @ w_command
             ddq_orient = J_ang_pinv @ (a_ang_target - drift_acc_ang)
 
-            null_projection_orient = np.eye(self.num_dof) - J_ang_pinv @ J_ang
+            null_projection_orient = np.eye(self.num_dof) - J_ang_pinv @ J_ang_masked
             J_pos_null = J_pos @ null_projection_orient
             if self.num_dof < 3 or np.linalg.matrix_rank(J_pos_null) < 3:
                 print(
