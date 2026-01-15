@@ -491,6 +491,7 @@ class RobotSimulator:
         w_error = ang_vel_ff - w_curr
         a_ang_target = ang_acc_ff + (Kd_ik * w_error)
 
+        null_projection_task = None
         if priority == "position":
             if self.num_dof < 3 or np.linalg.matrix_rank(J_pos) < 3:
                 print(
@@ -501,6 +502,7 @@ class RobotSimulator:
             # --- CORREÇÃO FINAL NA FÓRMULA DE ACELERAÇÃO ---
             # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
             ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc_pos)
+            null_projection_task = np.eye(self.num_dof) - J_dls_pinv @ J_pos
         elif priority == "orientation":
             orient_indices = list(range(self.num_dof))
             if self.has_vehicle_base and self.manipulator_dof_indices:
@@ -527,6 +529,7 @@ class RobotSimulator:
             ddq_orient = J_ang_pinv @ (a_ang_target - drift_acc_ang)
 
             null_projection_orient = np.eye(self.num_dof) - J_ang_pinv @ J_ang_masked
+            null_projection_task = null_projection_orient
             J_pos_null = J_pos @ null_projection_orient
             if self.num_dof < 3 or np.linalg.matrix_rank(J_pos_null) < 3:
                 print(
@@ -601,6 +604,7 @@ class RobotSimulator:
                 )
                 dq_task = J_task_pinv @ v_command_6d
                 ddq_task = J_task_pinv @ (a_command_6d - drift_6d)
+                null_projection_task = np.eye(self.num_dof) - J_task_pinv @ J_task
         
         # Controle de Espaço Nulo
         I = np.eye(self.num_dof)
@@ -608,8 +612,9 @@ class RobotSimulator:
         q_err_null = self._wrap_to_pi(q_target_null - q_curr)
         
         Kp_null = 1.0 
-        null_projection = (I - J_dls_pinv @ J_pos)
-        dq_null = null_projection @ (Kp_null * q_err_null)
+        if null_projection_task is None:
+            null_projection_task = I - J_dls_pinv @ J_pos
+        dq_null = null_projection_task @ (Kp_null * q_err_null)
         
         dq_total = dq_task + dq_null
         if dq_limit > 0:
