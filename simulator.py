@@ -152,12 +152,32 @@ class RobotSimulator:
         cos_theta = (trace_val - 1.0) / 2.0
         cos_theta = np.clip(cos_theta, -1.0, 1.0)
         theta = np.arccos(cos_theta)
-        if theta < 1e-8:
+        eps = 1e-8
+        if theta < eps:
             return np.zeros(3)
+        if abs(np.pi - theta) < 1e-5:
+            eigvals, eigvecs = np.linalg.eig(rot_err)
+            eigvals = np.real_if_close(eigvals, tol=1e-6)
+            eigvecs = np.real_if_close(eigvecs, tol=1e-6)
+            idx = int(np.argmin(np.abs(eigvals - 1.0)))
+            axis = np.real(eigvecs[:, idx]).astype(float)
+            axis = self._normalize_vector(axis, eps=eps)
+            if axis is None:
+                axis = np.zeros(3)
+            skew = rot_err - rot_err.T
+            skew_vec = np.array([skew[2, 1], skew[0, 2], skew[1, 0]])
+            if np.dot(axis, skew_vec) < 0.0:
+                axis = -axis
+            return theta * axis
         skew = rot_err - rot_err.T
-        omega = (theta / (2.0 * np.sin(theta))) * np.array(
-            [skew[2, 1], skew[0, 2], skew[1, 0]]
-        )
+        skew_vec = np.array([skew[2, 1], skew[0, 2], skew[1, 0]])
+        skew_norm = np.linalg.norm(skew_vec)
+        if skew_norm < eps:
+            axis = self._normalize_vector(skew_vec, eps=eps)
+            if axis is None:
+                return np.zeros(3)
+            return theta * axis
+        omega = (theta / (2.0 * np.sin(theta))) * skew_vec
         return omega
 
     def _normalize_vector(self, vec, eps=1e-8):
