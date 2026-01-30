@@ -506,6 +506,9 @@ class App(ctk.CTk):
                 omega_c = float(self.entry_omega_c.get())
                 omega_o = float(self.entry_omega_o.get())
                 b0 = float(self.entry_b0.get())
+                if omega_c <= 0 or omega_o <= 0 or b0 <= 0:
+                    self.log("❌ omega_c, omega_o e b0 devem ser maiores que zero.")
+                    return
                 kp = omega_c ** 2
                 zeta = 1.0
                 ctrl_params.update(
@@ -523,6 +526,9 @@ class App(ctk.CTk):
                 lambda_gain = float(self.entry_lambda.get())
                 smc_k = float(self.entry_smc_k.get())
                 phi = float(self.entry_phi.get())
+                if lambda_gain <= 0 or smc_k <= 0:
+                    self.log("❌ lambda e K devem ser maiores que zero.")
+                    return
                 ctrl_params.update(
                     {
                         "lambda": lambda_gain,
@@ -584,9 +590,13 @@ class App(ctk.CTk):
             self.log(f"❌ Erro crítico na preparação: {e}")
             return
 
-        disturbance_torque = float(self.disturbance_slider.get())
+        dist_value = float(self.disturbance_slider.get())
 
-        self.log(f"Iniciando Simulação (Modo: {mode_str}, Controle: {ctrl_mode})...")
+        ctrl_label = ctrl_params.get("type", ctrl_mode)
+        self.log(
+            "Iniciando Simulação "
+            f"(Modo: {mode_str}, Controle: {ctrl_label}, Perturbação: {dist_value:.1f} Nm)..."
+        )
         
         # ---------------------------------------------------------
         # 5. Execução
@@ -603,7 +613,7 @@ class App(ctk.CTk):
                 use_feedforward_vel=use_feedforward_vel,
                 q_init=q_init,
                 ctrl_params=ctrl_params,
-                disturbance_torque=disturbance_torque
+                disturbance_torque=dist_value
             )
             
             self.last_anim_data = anim_data
