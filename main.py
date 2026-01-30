@@ -232,15 +232,63 @@ class App(ctk.CTk):
         self.entry_dt_visual.insert(0, "0.05")
         self.entry_dt_visual.pack(fill="x", pady=(0, 5))
         
-        ctk.CTkLabel(self.sim_left, text="Ganho Kp (ωn²):").pack(anchor="w")
-        self.entry_kp = ctk.CTkEntry(self.sim_left)
+        ctk.CTkLabel(self.sim_left, text="--- Controle ---", font=("Arial", 12, "bold")).pack(pady=5)
+        self.ctrl_mode_var = ctk.StringVar(value="Torque Computado")
+        self.ctrl_mode_dd = ctk.CTkOptionMenu(
+            self.sim_left,
+            values=["Torque Computado", "ADRC (Robust)", "Sliding Mode (SMC)"],
+            variable=self.ctrl_mode_var,
+            command=self.update_ctrl_inputs
+        )
+        self.ctrl_mode_dd.pack(fill="x", pady=(0, 5))
+
+        self.ctrl_inputs_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
+        self.ctrl_inputs_container.pack(fill="x", pady=(0, 10))
+
+        self.ctc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
+        ctk.CTkLabel(self.ctc_frame, text="Ganho Kp (ωn²):").pack(anchor="w")
+        self.entry_kp = ctk.CTkEntry(self.ctc_frame)
         self.entry_kp.insert(0, "50.0")
         self.entry_kp.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.sim_left, text="Fator de amortecimento ζ:").pack(anchor="w")
-        self.entry_zeta = ctk.CTkEntry(self.sim_left)
+        ctk.CTkLabel(self.ctc_frame, text="Fator de amortecimento ζ:").pack(anchor="w")
+        self.entry_zeta = ctk.CTkEntry(self.ctc_frame)
         self.entry_zeta.insert(0, "1.0")
         self.entry_zeta.pack(fill="x", pady=(0, 5))
+
+        self.adrc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
+        ctk.CTkLabel(self.adrc_frame, text="ωc (rad/s):").pack(anchor="w")
+        self.entry_omega_c = ctk.CTkEntry(self.adrc_frame)
+        self.entry_omega_c.insert(0, "8.0")
+        self.entry_omega_c.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="ωo (rad/s):").pack(anchor="w")
+        self.entry_omega_o = ctk.CTkEntry(self.adrc_frame)
+        self.entry_omega_o.insert(0, "20.0")
+        self.entry_omega_o.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="b0:").pack(anchor="w")
+        self.entry_b0 = ctk.CTkEntry(self.adrc_frame)
+        self.entry_b0.insert(0, "1.0")
+        self.entry_b0.pack(fill="x", pady=(0, 5))
+
+        self.smc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
+        ctk.CTkLabel(self.smc_frame, text="Lambda (λ):").pack(anchor="w")
+        self.entry_lambda = ctk.CTkEntry(self.smc_frame)
+        self.entry_lambda.insert(0, "5.0")
+        self.entry_lambda.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.smc_frame, text="Ganho K:").pack(anchor="w")
+        self.entry_smc_k = ctk.CTkEntry(self.smc_frame)
+        self.entry_smc_k.insert(0, "5.0")
+        self.entry_smc_k.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.smc_frame, text="Camada limite ϕ:").pack(anchor="w")
+        self.entry_phi = ctk.CTkEntry(self.smc_frame)
+        self.entry_phi.insert(0, "0.1")
+        self.entry_phi.pack(fill="x", pady=(0, 5))
+
+        self.update_ctrl_inputs(self.ctrl_mode_var.get())
 
         ctk.CTkLabel(self.sim_left, text="Limite suave dq (rad/s):").pack(anchor="w")
         self.entry_dq_limit = ctk.CTkEntry(self.sim_left)
@@ -253,7 +301,19 @@ class App(ctk.CTk):
             text="Usar feedforward de velocidade",
             variable=self.use_feedforward_vel_var
         )
-        self.use_feedforward_vel_check.pack(anchor="w", pady=(0, 20))
+        self.use_feedforward_vel_check.pack(anchor="w", pady=(0, 10))
+
+        ctk.CTkLabel(self.sim_left, text="Perturbação (Nm):").pack(anchor="w")
+        self.disturbance_value_label = ctk.CTkLabel(self.sim_left, text="0.0 Nm")
+        self.disturbance_value_label.pack(anchor="w")
+        self.disturbance_slider = ctk.CTkSlider(
+            self.sim_left,
+            from_=-20,
+            to=20,
+            command=self.update_disturbance_label
+        )
+        self.disturbance_slider.set(0.0)
+        self.disturbance_slider.pack(fill="x", pady=(0, 20))
 
         # === NOVA SEÇÃO: PLANEJAMENTO ===
         ctk.CTkLabel(self.sim_left, text="--- Trajetória ---", font=("Arial", 12, "bold")).pack(pady=5)
@@ -317,6 +377,19 @@ class App(ctk.CTk):
             self.circle_frame.pack(fill="x", pady=5, after=self.traj_dd)
         else:
             self.circle_frame.pack_forget()
+
+    def update_ctrl_inputs(self, choice):
+        for frame in (self.ctc_frame, self.adrc_frame, self.smc_frame):
+            frame.pack_forget()
+        if choice == "Torque Computado":
+            self.ctc_frame.pack(fill="x")
+        elif choice == "ADRC (Robust)":
+            self.adrc_frame.pack(fill="x")
+        elif choice == "Sliding Mode (SMC)":
+            self.smc_frame.pack(fill="x")
+
+    def update_disturbance_label(self, value):
+        self.disturbance_value_label.configure(text=f"{float(value):.1f} Nm")
 
     def generate_sim_inputs(self):
         for widget in self.params_container.winfo_children():
@@ -426,6 +499,38 @@ class App(ctk.CTk):
             zeta      = float(self.entry_zeta.get())
             dq_limit  = float(self.entry_dq_limit.get())
             use_feedforward_vel = self.use_feedforward_vel_var.get()
+            ctrl_mode = self.ctrl_mode_var.get()
+
+            ctrl_params = {"type": ctrl_mode}
+            if ctrl_mode == "ADRC (Robust)":
+                omega_c = float(self.entry_omega_c.get())
+                omega_o = float(self.entry_omega_o.get())
+                b0 = float(self.entry_b0.get())
+                kp = omega_c ** 2
+                zeta = 1.0
+                ctrl_params.update(
+                    {
+                        "omega_c": omega_c,
+                        "omega_o": omega_o,
+                        "b0": b0,
+                        "kp": kp,
+                        "kd": 2 * omega_c,
+                        "wo": omega_o,
+                        "type": "ADRC",
+                    }
+                )
+            elif ctrl_mode == "Sliding Mode (SMC)":
+                lambda_gain = float(self.entry_lambda.get())
+                smc_k = float(self.entry_smc_k.get())
+                phi = float(self.entry_phi.get())
+                ctrl_params.update(
+                    {
+                        "lambda": lambda_gain,
+                        "K": smc_k,
+                        "phi": phi,
+                        "type": "SMC",
+                    }
+                )
 
             if dt_physics <= 0 or dt_visual <= 0:
                 self.log("❌ dt_physics e dt_visual devem ser maiores que zero.")
@@ -479,7 +584,9 @@ class App(ctk.CTk):
             self.log(f"❌ Erro crítico na preparação: {e}")
             return
 
-        self.log(f"Iniciando Simulação (Modo: {mode_str})...")
+        disturbance_torque = float(self.disturbance_slider.get())
+
+        self.log(f"Iniciando Simulação (Modo: {mode_str}, Controle: {ctrl_mode})...")
         
         # ---------------------------------------------------------
         # 5. Execução
@@ -494,7 +601,9 @@ class App(ctk.CTk):
                 zeta=zeta,
                 dq_limit=dq_limit,
                 use_feedforward_vel=use_feedforward_vel,
-                q_init=q_init
+                q_init=q_init,
+                ctrl_params=ctrl_params,
+                disturbance_torque=disturbance_torque
             )
             
             self.last_anim_data = anim_data
