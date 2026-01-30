@@ -7,6 +7,63 @@ import sympy as sp
 _WORKER_FUNCS = {}
 
 
+class Decentralized_LADRC:
+    """LADRC descentralizado para múltiplas juntas (2ª ordem)."""
+
+    def __init__(self, num_dof, b0, wo, kp, kd, dt):
+        self.num_dof = num_dof
+        self.b0 = np.full(num_dof, b0, dtype=float) if np.isscalar(b0) else np.array(b0, dtype=float)
+        self.wo = np.full(num_dof, wo, dtype=float) if np.isscalar(wo) else np.array(wo, dtype=float)
+        self.kp = np.full(num_dof, kp, dtype=float) if np.isscalar(kp) else np.array(kp, dtype=float)
+        self.kd = np.full(num_dof, kd, dtype=float) if np.isscalar(kd) else np.array(kd, dtype=float)
+        self.dt = dt
+
+        self.beta1 = 3.0 * self.wo
+        self.beta2 = 3.0 * (self.wo ** 2)
+        self.beta3 = self.wo ** 3
+
+        self.z1 = np.zeros(num_dof, dtype=float)
+        self.z2 = np.zeros(num_dof, dtype=float)
+        self.z3 = np.zeros(num_dof, dtype=float)
+
+    def update_eso(self, q, tau_prev):
+        error = self.z1 - q
+        z1_dot = self.z2 - self.beta1 * error
+        z2_dot = self.z3 - self.beta2 * error + self.b0 * tau_prev
+        z3_dot = -self.beta3 * error
+
+        self.z1 += z1_dot * self.dt
+        self.z2 += z2_dot * self.dt
+        self.z3 += z3_dot * self.dt
+
+    def compute_control(self, q_d, dq_d, ddq_d):
+        u0 = ddq_d + self.kp * (q_d - self.z1) + self.kd * (dq_d - self.z2)
+        return (u0 - self.z3) / self.b0
+
+
+class SlidingModeControl:
+    """Controlador SMC descentralizado com camada limite."""
+
+    def __init__(self, num_dof, lambda_gain, K, phi):
+        self.num_dof = num_dof
+        self.lambda_gain = (
+            np.full(num_dof, lambda_gain, dtype=float)
+            if np.isscalar(lambda_gain)
+            else np.array(lambda_gain, dtype=float)
+        )
+        self.K = np.full(num_dof, K, dtype=float) if np.isscalar(K) else np.array(K, dtype=float)
+        self.phi = np.full(num_dof, phi, dtype=float) if np.isscalar(phi) else np.array(phi, dtype=float)
+        self.phi = np.where(self.phi == 0, 1e-6, self.phi)
+
+    def compute_tau(self, q, dq, q_d, dq_d, ddq_d):
+        e = q - q_d
+        e_dot = dq - dq_d
+        S = e_dot + self.lambda_gain * e
+        u_eq = ddq_d - self.lambda_gain * e_dot
+        u_sw = self.K * np.tanh(S / self.phi)
+        return u_eq - u_sw
+
+
 def _init_worker(sym_vars, expr_M, expr_C, expr_G):
     global _WORKER_FUNCS
     _WORKER_FUNCS = {
@@ -310,7 +367,8 @@ class RobotSimulator:
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
-            dq_limit=3.0, use_feedforward_vel=True, use_parallel=True, max_workers=None):
+            dq_limit=3.0, use_feedforward_vel=True, use_parallel=True, max_workers=None,
+            ctrl_params=None, disturbance_torque=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -378,9 +436,31 @@ class RobotSimulator:
         anim_data = []
 
         current_time = 0.0
+        ctrl_params = ctrl_params or {}
+        controller_type = ctrl_params.get("type", "Torque Computado")
+        controller_type = controller_type.lower()
+        ladrc = None
+        smc = None
+        tau_prev = np.zeros(self.num_dof)
+        if controller_type in {"adrc", "ladrc"}:
+            ladrc = Decentralized_LADRC(
+                num_dof=self.num_dof,
+                b0=ctrl_params.get("b0", 1.0),
+                wo=ctrl_params.get("wo", 20.0),
+                kp=ctrl_params.get("kp", Kp_val),
+                kd=ctrl_params.get("kd", 2 * zeta * np.sqrt(Kp_val)),
+                dt=dt_physics,
+            )
+        elif controller_type in {"smc", "slidingmode", "slidingmodecontrol"}:
+            smc = SlidingModeControl(
+                num_dof=self.num_dof,
+                lambda_gain=ctrl_params.get("lambda", 5.0),
+                K=ctrl_params.get("K", 5.0),
+                phi=ctrl_params.get("phi", 0.1),
+            )
 
         def _run_steps(executor):
-            nonlocal current_time, q, dq
+            nonlocal current_time, q, dq, tau_prev
             for i in range(steps_visual):
                 for _ in range(substeps):
                     current_time += dt_physics
@@ -420,16 +500,29 @@ class RobotSimulator:
 
                     e_pid = self._wrap_to_pi(q_d - q)
                     e_dot = dq_d - dq
-                    u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
-                    tau = M @ u + C + G
 
-                    ddq = np.linalg.solve(M, tau - C - G)
+                    if ladrc is not None:
+                        ladrc.update_eso(q, tau_prev)
+                        u_control = ladrc.compute_control(q_d, dq_d, ddq_d)
+                    elif smc is not None:
+                        u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d)
+                    else:
+                        u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
+                        u_control = M @ u + C + G
+
+                    tau_disturbance = np.zeros(self.num_dof)
+                    if disturbance_torque is not None and self.num_dof >= 2:
+                        tau_disturbance[1] = disturbance_torque
+                    tau_applied = u_control + tau_disturbance
+                    tau_prev = tau_applied
+
+                    ddq = np.linalg.solve(M, tau_applied - C - G)
                     q += dq * dt_physics
                     dq += ddq * dt_physics
                     q = self._wrap_to_pi(q) # Wrap essencial
 
                 res_q[i,:] = e_pid
-                res_tau[i,:] = tau
+                res_tau[i,:] = tau_applied
 
                 # FK para animação
                 links_pose = [[0,0,0]]
