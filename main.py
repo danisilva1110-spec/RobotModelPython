@@ -272,6 +272,26 @@ class App(ctk.CTk):
         self.entry_b0.insert(0, "1.0")
         self.entry_b0.pack(fill="x", pady=(0, 5))
 
+        ctk.CTkLabel(self.adrc_frame, text="Limite z (ESO):").pack(anchor="w")
+        self.entry_z_limit = ctk.CTkEntry(self.adrc_frame)
+        self.entry_z_limit.insert(0, "100.0")
+        self.entry_z_limit.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="Limite τ (Nm):").pack(anchor="w")
+        self.entry_tau_limit = ctk.CTkEntry(self.adrc_frame)
+        self.entry_tau_limit.insert(0, "50.0")
+        self.entry_tau_limit.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="Máx ωo·dt:").pack(anchor="w")
+        self.entry_max_wo_dt = ctk.CTkEntry(self.adrc_frame)
+        self.entry_max_wo_dt.insert(0, "0.05")
+        self.entry_max_wo_dt.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="Filtro τ (0-1):").pack(anchor="w")
+        self.entry_tau_filter_alpha = ctk.CTkEntry(self.adrc_frame)
+        self.entry_tau_filter_alpha.insert(0, "0.3")
+        self.entry_tau_filter_alpha.pack(fill="x", pady=(0, 5))
+
         self.smc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
         ctk.CTkLabel(self.smc_frame, text="Lambda (λ):").pack(anchor="w")
         self.entry_lambda = ctk.CTkEntry(self.smc_frame)
@@ -506,8 +526,18 @@ class App(ctk.CTk):
                 omega_c = float(self.entry_omega_c.get())
                 omega_o = float(self.entry_omega_o.get())
                 b0 = float(self.entry_b0.get())
+                z_limit = float(self.entry_z_limit.get())
+                tau_limit = float(self.entry_tau_limit.get())
+                max_wo_dt = float(self.entry_max_wo_dt.get())
+                tau_filter_alpha = float(self.entry_tau_filter_alpha.get())
                 if omega_c <= 0 or omega_o <= 0 or b0 <= 0:
                     self.log("❌ omega_c, omega_o e b0 devem ser maiores que zero.")
+                    return
+                if z_limit <= 0 or tau_limit <= 0 or max_wo_dt <= 0:
+                    self.log("❌ z_limit, tau_limit e max_wo_dt devem ser maiores que zero.")
+                    return
+                if tau_filter_alpha <= 0 or tau_filter_alpha > 1:
+                    self.log("❌ tau_filter_alpha deve estar entre 0 e 1.")
                     return
                 kp = omega_c ** 2
                 zeta = 1.0
@@ -519,6 +549,10 @@ class App(ctk.CTk):
                         "kp": kp,
                         "kd": 2 * omega_c,
                         "wo": omega_o,
+                        "z_limit": z_limit,
+                        "tau_limit": tau_limit,
+                        "max_wo_dt": max_wo_dt,
+                        "tau_filter_alpha": tau_filter_alpha,
                         "type": "ADRC",
                     }
                 )
