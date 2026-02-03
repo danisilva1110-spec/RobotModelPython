@@ -487,8 +487,8 @@ class RobotSimulator:
                 kp=ctrl_params.get("kp", Kp_val),
                 kd=ctrl_params.get("kd", 2 * zeta * np.sqrt(Kp_val)),
                 dt=dt_physics,
-                z_limit=ctrl_params.get("z_limit", 1e3),
-                tau_limit=ctrl_params.get("tau_limit", 200.0),
+                z_limit=ctrl_params.get("z_limit", 100.0),
+                tau_limit=ctrl_params.get("tau_limit", 50.0),
                 max_wo_dt=max_wo_dt,
             )
             ladrc.reset_state(q, dq)
@@ -545,6 +545,9 @@ class RobotSimulator:
                     if ladrc is not None:
                         ladrc.update_eso(q, tau_prev)
                         u_control = ladrc.compute_control(q_d, dq_d, ddq_d)
+                        tau_filter_alpha = ctrl_params.get("tau_filter_alpha", 1.0)
+                        tau_filter_alpha = np.clip(tau_filter_alpha, 0.0, 1.0)
+                        u_control = tau_prev + tau_filter_alpha * (u_control - tau_prev)
                     elif smc is not None:
                         u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d)
                     else:
@@ -572,6 +575,10 @@ class RobotSimulator:
                 args_vis = self._build_args(q, dq)
                 for f_fk in self.funcs_fk_all_links:
                     pos = np.array(f_fk(*args_vis)).flatten()
+                    if not np.isfinite(pos).all():
+                        raise FloatingPointError(
+                            "FK produziu valores não finitos durante a simulação."
+                        )
                     links_pose.append(list(pos))
                 anim_data.append(links_pose)
 
