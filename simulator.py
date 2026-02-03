@@ -10,21 +10,48 @@ _WORKER_FUNCS = {}
 class Decentralized_LADRC:
     """LADRC descentralizado para múltiplas juntas (2ª ordem)."""
 
-    def __init__(self, num_dof, b0, wo, kp, kd, dt):
+    def __init__(self, num_dof, b0, wo, kp, kd, dt, z_limit=None, tau_limit=None, max_wo_dt=0.1):
         self.num_dof = num_dof
         self.b0 = np.full(num_dof, b0, dtype=float) if np.isscalar(b0) else np.array(b0, dtype=float)
         self.wo = np.full(num_dof, wo, dtype=float) if np.isscalar(wo) else np.array(wo, dtype=float)
         self.kp = np.full(num_dof, kp, dtype=float) if np.isscalar(kp) else np.array(kp, dtype=float)
         self.kd = np.full(num_dof, kd, dtype=float) if np.isscalar(kd) else np.array(kd, dtype=float)
         self.dt = dt
+        self.z_limit = z_limit
+        self.tau_limit = tau_limit
+        self.max_wo_dt = max_wo_dt
 
-        self.beta1 = 3.0 * self.wo
-        self.beta2 = 3.0 * (self.wo ** 2)
-        self.beta3 = self.wo ** 3
+        self._refresh_gains()
 
         self.z1 = np.zeros(num_dof, dtype=float)
         self.z2 = np.zeros(num_dof, dtype=float)
         self.z3 = np.zeros(num_dof, dtype=float)
+
+    def _refresh_gains(self):
+        if self.max_wo_dt is not None:
+            wo_dt = self.wo * self.dt
+            limit_mask = wo_dt > self.max_wo_dt
+            if np.any(limit_mask):
+                self.wo = np.where(limit_mask, self.max_wo_dt / self.dt, self.wo)
+        self.beta1 = 3.0 * self.wo
+        self.beta2 = 3.0 * (self.wo ** 2)
+        self.beta3 = self.wo ** 3
+
+    def reset_state(self, q, dq, z3=None):
+        self.z1 = np.array(q, dtype=float).copy()
+        self.z2 = np.array(dq, dtype=float).copy()
+        if z3 is None:
+            self.z3 = np.zeros(self.num_dof, dtype=float)
+        else:
+            self.z3 = np.full(self.num_dof, z3, dtype=float) if np.isscalar(z3) else np.array(z3, dtype=float)
+        self._clip_states()
+
+    def _clip_states(self):
+        if self.z_limit is None:
+            return
+        self.z1 = np.clip(self.z1, -self.z_limit, self.z_limit)
+        self.z2 = np.clip(self.z2, -self.z_limit, self.z_limit)
+        self.z3 = np.clip(self.z3, -self.z_limit, self.z_limit)
 
     def update_eso(self, q, tau_prev):
         error = self.z1 - q
@@ -35,10 +62,15 @@ class Decentralized_LADRC:
         self.z1 += z1_dot * self.dt
         self.z2 += z2_dot * self.dt
         self.z3 += z3_dot * self.dt
+        self._clip_states()
 
     def compute_control(self, q_d, dq_d, ddq_d):
         u0 = ddq_d + self.kp * (q_d - self.z1) + self.kd * (dq_d - self.z2)
-        return (u0 - self.z3) / self.b0
+        b0_safe = np.where(self.b0 == 0.0, 1e-6, self.b0)
+        u = (u0 - self.z3) / b0_safe
+        if self.tau_limit is not None:
+            u = np.clip(u, -self.tau_limit, self.tau_limit)
+        return u
 
 
 class SlidingModeControl:
@@ -443,14 +475,23 @@ class RobotSimulator:
         smc = None
         tau_prev = np.zeros(self.num_dof)
         if controller_type in {"adrc", "ladrc"}:
+            wo = ctrl_params.get("wo", 20.0)
+            max_wo_dt = ctrl_params.get("max_wo_dt", 0.1)
+            if max_wo_dt is not None and wo * dt_physics > max_wo_dt:
+                wo = max_wo_dt / dt_physics
+                print("⚠️ wo ajustado para manter estabilidade numérica do ESO.")
             ladrc = Decentralized_LADRC(
                 num_dof=self.num_dof,
                 b0=ctrl_params.get("b0", 1.0),
-                wo=ctrl_params.get("wo", 20.0),
+                wo=wo,
                 kp=ctrl_params.get("kp", Kp_val),
                 kd=ctrl_params.get("kd", 2 * zeta * np.sqrt(Kp_val)),
                 dt=dt_physics,
+                z_limit=ctrl_params.get("z_limit", 1e3),
+                tau_limit=ctrl_params.get("tau_limit", 200.0),
+                max_wo_dt=max_wo_dt,
             )
+            ladrc.reset_state(q, dq)
         elif controller_type in {"smc", "slidingmode", "slidingmodecontrol"}:
             smc = SlidingModeControl(
                 num_dof=self.num_dof,
@@ -520,6 +561,8 @@ class RobotSimulator:
                     q += dq * dt_physics
                     dq += ddq * dt_physics
                     q = self._wrap_to_pi(q) # Wrap essencial
+                    if not (np.isfinite(q).all() and np.isfinite(dq).all()):
+                        raise FloatingPointError("Estado não finito detectado durante a simulação.")
 
                 res_q[i,:] = e_pid
                 res_tau[i,:] = tau_applied
