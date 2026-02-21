@@ -126,6 +126,12 @@ class App(ctk.CTk):
         else:
             self.mode_switch.configure(selected_color="#2E8B57", selected_hover_color="#228B22")
 
+    def _on_auto_b0_toggle(self):
+        if self.auto_b0_var.get():
+            self.entry_b0.configure(state="disabled")
+        else:
+            self.entry_b0.configure(state="normal")
+
     def log(self, msg):
         self.status_bar.insert("end", str(msg) + "\n")
         self.status_bar.see("end")
@@ -262,15 +268,25 @@ class App(ctk.CTk):
         self.entry_omega_c.insert(0, "8.0")
         self.entry_omega_c.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="ωo (rad/s):").pack(anchor="w")
+        ctk.CTkLabel(self.adrc_frame, text="ωo (rad/s)  [≥ 5·ωc]:").pack(anchor="w")
         self.entry_omega_o = ctk.CTkEntry(self.adrc_frame)
-        self.entry_omega_o.insert(0, "20.0")
+        self.entry_omega_o.insert(0, "40.0")
         self.entry_omega_o.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="b0:").pack(anchor="w")
+        self.auto_b0_var = ctk.BooleanVar(value=True)
+        self.chk_auto_b0 = ctk.CTkCheckBox(
+            self.adrc_frame,
+            text="Auto b0  (1/M_ii)",
+            variable=self.auto_b0_var,
+            command=self._on_auto_b0_toggle,
+        )
+        self.chk_auto_b0.pack(anchor="w", pady=(0, 3))
+
+        ctk.CTkLabel(self.adrc_frame, text="b0  [≈ 1/M_ii]:").pack(anchor="w")
         self.entry_b0 = ctk.CTkEntry(self.adrc_frame)
         self.entry_b0.insert(0, "1.0")
         self.entry_b0.pack(fill="x", pady=(0, 5))
+        self.entry_b0.configure(state="disabled")
 
         ctk.CTkLabel(self.adrc_frame, text="Limite z (ESO):").pack(anchor="w")
         self.entry_z_limit = ctk.CTkEntry(self.adrc_frame)
@@ -284,13 +300,18 @@ class App(ctk.CTk):
 
         ctk.CTkLabel(self.adrc_frame, text="Máx ωo·dt:").pack(anchor="w")
         self.entry_max_wo_dt = ctk.CTkEntry(self.adrc_frame)
-        self.entry_max_wo_dt.insert(0, "0.05")
+        self.entry_max_wo_dt.insert(0, "0.1")
         self.entry_max_wo_dt.pack(fill="x", pady=(0, 5))
 
         ctk.CTkLabel(self.adrc_frame, text="Filtro τ (0-1):").pack(anchor="w")
         self.entry_tau_filter_alpha = ctk.CTkEntry(self.adrc_frame)
-        self.entry_tau_filter_alpha.insert(0, "0.3")
+        self.entry_tau_filter_alpha.insert(0, "0.8")
         self.entry_tau_filter_alpha.pack(fill="x", pady=(0, 5))
+
+        ctk.CTkLabel(self.adrc_frame, text="Filtro z3 (0-1):").pack(anchor="w")
+        self.entry_z3_filter_alpha = ctk.CTkEntry(self.adrc_frame)
+        self.entry_z3_filter_alpha.insert(0, "0.2")
+        self.entry_z3_filter_alpha.pack(fill="x", pady=(0, 5))
 
         self.smc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
         ctk.CTkLabel(self.smc_frame, text="Lambda (λ):").pack(anchor="w")
@@ -525,11 +546,13 @@ class App(ctk.CTk):
             if ctrl_mode == "ADRC (Robust)":
                 omega_c = float(self.entry_omega_c.get())
                 omega_o = float(self.entry_omega_o.get())
-                b0 = float(self.entry_b0.get())
+                auto_b0 = self.auto_b0_var.get()
+                b0 = float(self.entry_b0.get()) if not auto_b0 else 1.0
                 z_limit = float(self.entry_z_limit.get())
                 tau_limit = float(self.entry_tau_limit.get())
                 max_wo_dt = float(self.entry_max_wo_dt.get())
                 tau_filter_alpha = float(self.entry_tau_filter_alpha.get())
+                z3_filter_alpha = float(self.entry_z3_filter_alpha.get())
                 if omega_c <= 0 or omega_o <= 0 or b0 <= 0:
                     self.log("❌ omega_c, omega_o e b0 devem ser maiores que zero.")
                     return
@@ -539,6 +562,15 @@ class App(ctk.CTk):
                 if tau_filter_alpha <= 0 or tau_filter_alpha > 1:
                     self.log("❌ tau_filter_alpha deve estar entre 0 e 1.")
                     return
+                if not (0.0 < z3_filter_alpha <= 1.0):
+                    self.log("❌ z3_filter_alpha deve estar entre 0 (exclusive) e 1.")
+                    return
+                if omega_o < 3 * omega_c:
+                    self.log(f"⚠️ ωo ({omega_o}) < 3·ωc ({3*omega_c:.1f}). Recomendado ωo ≥ 5·ωc para ESO convergir antes do controlador.")
+                elif omega_o < 5 * omega_c:
+                    self.log(f"⚠️ ωo/ωc = {omega_o/omega_c:.1f} (recomendado ≥ 5). Rastreamento do ESO pode ser lento.")
+                if auto_b0:
+                    self.log("ℹ️ b0 será estimado automaticamente como 1/M_ii na postura inicial.")
                 kp = omega_c ** 2
                 zeta = 1.0
                 ctrl_params.update(
@@ -546,6 +578,7 @@ class App(ctk.CTk):
                         "omega_c": omega_c,
                         "omega_o": omega_o,
                         "b0": b0,
+                        "auto_b0": auto_b0,
                         "kp": kp,
                         "kd": 2 * omega_c,
                         "wo": omega_o,
@@ -553,6 +586,7 @@ class App(ctk.CTk):
                         "tau_limit": tau_limit,
                         "max_wo_dt": max_wo_dt,
                         "tau_filter_alpha": tau_filter_alpha,
+                        "z3_filter_alpha": z3_filter_alpha,
                         "type": "ADRC",
                     }
                 )

@@ -10,7 +10,8 @@ _WORKER_FUNCS = {}
 class Decentralized_LADRC:
     """LADRC descentralizado para múltiplas juntas (2ª ordem)."""
 
-    def __init__(self, num_dof, b0, wo, kp, kd, dt, z_limit=None, tau_limit=None, max_wo_dt=0.1):
+    def __init__(self, num_dof, b0, wo, kp, kd, dt, z_limit=None, tau_limit=None,
+                 max_wo_dt=0.1, z3_filter_alpha=1.0):
         self.num_dof = num_dof
         self.b0 = np.full(num_dof, b0, dtype=float) if np.isscalar(b0) else np.array(b0, dtype=float)
         self.wo = np.full(num_dof, wo, dtype=float) if np.isscalar(wo) else np.array(wo, dtype=float)
@@ -20,6 +21,11 @@ class Decentralized_LADRC:
         self.z_limit = z_limit
         self.tau_limit = tau_limit
         self.max_wo_dt = max_wo_dt
+        # Filtro IIR de 1ª ordem na estimativa de distúrbio z3.
+        # Reduz conteúdo de alta frequência que a lei de controle amplificaria.
+        # 1.0 = sem filtro; valores próximos de 0 = filtro mais agressivo.
+        self.z3_filter_alpha = float(np.clip(z3_filter_alpha, 0.0, 1.0))
+        self.z3_filtered = None  # inicializado em reset_state
 
         self._refresh_gains()
 
@@ -44,6 +50,7 @@ class Decentralized_LADRC:
             self.z3 = np.zeros(self.num_dof, dtype=float)
         else:
             self.z3 = np.full(self.num_dof, z3, dtype=float) if np.isscalar(z3) else np.array(z3, dtype=float)
+        self.z3_filtered = self.z3.copy()
         self._clip_states()
 
     def _clip_states(self):
@@ -64,10 +71,32 @@ class Decentralized_LADRC:
         self.z3 += z3_dot * self.dt
         self._clip_states()
 
-    def compute_control(self, q_d, dq_d, ddq_d):
-        u0 = ddq_d + self.kp * (q_d - self.z1) + self.kd * (dq_d - self.z2)
+        # Filtro IIR em z3: atenua conteúdo de alta frequência na estimativa
+        # de distúrbio antes de ela chegar à lei de controle.
+        if self.z3_filtered is None:
+            self.z3_filtered = self.z3.copy()
+        else:
+            a = self.z3_filter_alpha
+            self.z3_filtered = a * self.z3 + (1.0 - a) * self.z3_filtered
+
+    def compute_control(self, q_d, dq_d, ddq_d, q_meas=None, dq_meas=None):
+        """Calcula o torque de controle.
+
+        Quando q_meas/dq_meas são fornecidos, o PD usa as medições reais
+        (mais limpo) e o ESO contribui apenas com z3 (cancelamento de
+        distúrbio). Isso desacopla o ruído interno de z2 do sinal de controle.
+        """
+        if q_meas is not None and dq_meas is not None:
+            q_fb  = q_meas
+            dq_fb = dq_meas
+        else:
+            q_fb  = self.z1
+            dq_fb = self.z2
+
+        z3_use = self.z3_filtered if self.z3_filtered is not None else self.z3
+        u0 = ddq_d + self.kp * (q_d - q_fb) + self.kd * (dq_d - dq_fb)
         b0_safe = np.where(self.b0 == 0.0, 1e-6, self.b0)
-        u = (u0 - self.z3) / b0_safe
+        u = (u0 - z3_use) / b0_safe
         if self.tau_limit is not None:
             u = np.clip(u, -self.tau_limit, self.tau_limit)
         return u
@@ -474,15 +503,36 @@ class RobotSimulator:
         ladrc = None
         smc = None
         tau_prev = np.zeros(self.num_dof)
+        # Histórico apenas da saída do controlador (sem perturbação externa),
+        # usado exclusivamente para atualizar o ESO do ADRC.
+        tau_ctrl_prev = np.zeros(self.num_dof)
         if controller_type in {"adrc", "ladrc"}:
             wo = ctrl_params.get("wo", 20.0)
             max_wo_dt = ctrl_params.get("max_wo_dt", 0.1)
             if max_wo_dt is not None and wo * dt_physics > max_wo_dt:
                 wo = max_wo_dt / dt_physics
                 print("⚠️ wo ajustado para manter estabilidade numérica do ESO.")
+
+            # Calcula M na postura inicial — reutilizado para b0 e z3_init.
+            _args0 = self._build_args(q, np.zeros(self.num_dof))
+            _M0 = np.array(self.func_M(*_args0)).astype(np.float64)
+            _G0 = np.array(self.func_G(*_args0)).flatten().astype(np.float64)
+
+            # Estimativa automática de b0 a partir da diagonal de M.
+            # b0_i ≈ 1/M_ii é o ganho real de torque→aceleração por junta.
+            # Um b0 errado injeta oscilações em z2 via "z2_dot += b0*tau"
+            # e causa chattering quando |tau| satura.
+            auto_b0 = ctrl_params.get("auto_b0", False)
+            if auto_b0:
+                M_diag = np.diag(_M0)
+                b0_val = 1.0 / np.maximum(M_diag, 1e-4)
+                print(f"[ADRC] b0 auto-estimado (1/M_ii): {np.round(b0_val, 4)}")
+            else:
+                b0_val = ctrl_params.get("b0", 1.0)
+
             ladrc = Decentralized_LADRC(
                 num_dof=self.num_dof,
-                b0=ctrl_params.get("b0", 1.0),
+                b0=b0_val,
                 wo=wo,
                 kp=ctrl_params.get("kp", Kp_val),
                 kd=ctrl_params.get("kd", 2 * zeta * np.sqrt(Kp_val)),
@@ -490,8 +540,11 @@ class RobotSimulator:
                 z_limit=ctrl_params.get("z_limit", 100.0),
                 tau_limit=ctrl_params.get("tau_limit", 50.0),
                 max_wo_dt=max_wo_dt,
+                z3_filter_alpha=ctrl_params.get("z3_filter_alpha", 0.2),
             )
-            ladrc.reset_state(q, dq)
+            # Inicializa z₃ ≈ -M⁻¹G (rad/s²) para evitar transiente de gravidade.
+            z3_init = -np.linalg.solve(_M0, _G0)
+            ladrc.reset_state(q, dq, z3=z3_init)
         elif controller_type in {"smc", "slidingmode", "slidingmodecontrol"}:
             smc = SlidingModeControl(
                 num_dof=self.num_dof,
@@ -501,7 +554,7 @@ class RobotSimulator:
             )
 
         def _run_steps(executor):
-            nonlocal current_time, q, dq, tau_prev
+            nonlocal current_time, q, dq, tau_prev, tau_ctrl_prev
             for i in range(steps_visual):
                 for _ in range(substeps):
                     current_time += dt_physics
@@ -543,11 +596,18 @@ class RobotSimulator:
                     e_dot = dq_d - dq
 
                     if ladrc is not None:
-                        ladrc.update_eso(q, tau_prev)
-                        u_control = ladrc.compute_control(q_d, dq_d, ddq_d)
+                        # ESO recebe apenas a saída do controlador (não inclui
+                        # perturbação externa), para que z₃ estime corretamente
+                        # o distúrbio total sem confundi-lo com entrada conhecida.
+                        ladrc.update_eso(q, tau_ctrl_prev)
+                        # PD usa medições reais (q, dq) em vez de z1/z2 do ESO.
+                        # Isso desacopla o ruído interno de z2 do sinal de controle.
+                        # O ESO contribui apenas com z3 (cancelamento de distúrbio).
+                        u_control = ladrc.compute_control(q_d, dq_d, ddq_d,
+                                                          q_meas=q, dq_meas=dq)
                         tau_filter_alpha = ctrl_params.get("tau_filter_alpha", 1.0)
                         tau_filter_alpha = np.clip(tau_filter_alpha, 0.0, 1.0)
-                        u_control = tau_prev + tau_filter_alpha * (u_control - tau_prev)
+                        u_control = tau_ctrl_prev + tau_filter_alpha * (u_control - tau_ctrl_prev)
                     elif smc is not None:
                         u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d)
                     else:
@@ -558,6 +618,7 @@ class RobotSimulator:
                     if disturbance_torque is not None and self.num_dof >= 2:
                         tau_disturbance[1] = disturbance_torque
                     tau_applied = u_control + tau_disturbance
+                    tau_ctrl_prev = u_control   # salva só o controle, sem perturbação
                     tau_prev = tau_applied
 
                     ddq = np.linalg.solve(M, tau_applied - C - G)
