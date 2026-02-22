@@ -148,6 +148,11 @@ class RobotSimulator:
         self.q_home = np.zeros(self.num_dof)
         self.last_converged_q = None
         self.J_prev = None
+        # Executor persistente: inicializado uma vez após a compilação e
+        # reutilizado em todos os runs subsequentes, eliminando o custo de
+        # respawn de processos e re-lambdify a cada simulação.
+        self._executor = None
+        self._executor_workers = 0
 
         print(f"[{mode}] Compilando equações (Isso pode demorar um pouco)...")
         
@@ -183,6 +188,29 @@ class RobotSimulator:
             self.funcs_fk_all_links.append(f_fk)
 
         print("Compilação concluída!")
+
+    def close(self):
+        """Encerra o executor paralelo (chamar ao descartar o simulador)."""
+        if self._executor is not None:
+            self._executor.shutdown(wait=False)
+            self._executor = None
+            self._executor_workers = 0
+
+    def warm_up_workers(self, max_workers=None):
+        """Pré-inicializa o executor paralelo em background logo após a
+        compilação do modelo, para que o primeiro run() não pague o custo
+        de spawn + lambdify nas workers.
+        """
+        worker_count = max_workers or max(1, min(3, os.cpu_count() or 1))
+        if self._executor is None or self._executor_workers != worker_count:
+            self.close()
+            self._executor = ProcessPoolExecutor(
+                max_workers=worker_count,
+                initializer=_init_worker,
+                initargs=(self.sym_vars, self.expr_M, self.expr_C, self.expr_G),
+            )
+            self._executor_workers = worker_count
+            print(f"[Parallel] Workers pré-aquecidos ({worker_count} processos).")
 
     def set_parameters(self, user_values_dict):
         self.params_values = user_values_dict
@@ -428,7 +456,7 @@ class RobotSimulator:
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
-            dq_limit=3.0, use_feedforward_vel=True, use_parallel=True, max_workers=None,
+            dq_limit=3.0, use_feedforward_vel=True, use_parallel=False, max_workers=None,
             ctrl_params=None, disturbance_torque=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
@@ -542,8 +570,15 @@ class RobotSimulator:
                 max_wo_dt=max_wo_dt,
                 z3_filter_alpha=ctrl_params.get("z3_filter_alpha", 0.2),
             )
-            # Inicializa z₃ ≈ -M⁻¹G (rad/s²) para evitar transiente de gravidade.
-            z3_init = -np.linalg.solve(_M0, _G0)
+            # Com G feedforward ativo, z₃ só precisa estimar o distúrbio
+            # residual (Coriolis + erros de modelo), que começa em zero.
+            # Sem G feedforward (água com empuxo ≈ peso), inicializar z₃ com
+            # -M⁻¹G ajuda a evitar o transitório de gravidade residual.
+            use_gravity_ff = ctrl_params.get("gravity_ff", True)
+            if use_gravity_ff:
+                z3_init = np.zeros(self.num_dof)
+            else:
+                z3_init = -np.linalg.solve(_M0, _G0)
             ladrc.reset_state(q, dq, z3=z3_init)
         elif controller_type in {"smc", "slidingmode", "slidingmodecontrol"}:
             smc = SlidingModeControl(
@@ -596,18 +631,31 @@ class RobotSimulator:
                     e_dot = dq_d - dq
 
                     if ladrc is not None:
-                        # ESO recebe apenas a saída do controlador (não inclui
-                        # perturbação externa), para que z₃ estime corretamente
-                        # o distúrbio total sem confundi-lo com entrada conhecida.
+                        # ESO recebe apenas a saída do controlador ADRC (sem G
+                        # feedforward nem perturbação externa) para que z₃ estime
+                        # apenas o distúrbio residual (Coriolis + erros de modelo).
                         ladrc.update_eso(q, tau_ctrl_prev)
-                        # PD usa medições reais (q, dq) em vez de z1/z2 do ESO.
-                        # Isso desacopla o ruído interno de z2 do sinal de controle.
-                        # O ESO contribui apenas com z3 (cancelamento de distúrbio).
-                        u_control = ladrc.compute_control(q_d, dq_d, ddq_d,
-                                                          q_meas=q, dq_meas=dq)
+                        # PD usa medições reais (q, dq); ESO contribui com z3.
+                        u_adrc = ladrc.compute_control(q_d, dq_d, ddq_d,
+                                                       q_meas=q, dq_meas=dq)
                         tau_filter_alpha = ctrl_params.get("tau_filter_alpha", 1.0)
                         tau_filter_alpha = np.clip(tau_filter_alpha, 0.0, 1.0)
-                        u_control = tau_ctrl_prev + tau_filter_alpha * (u_control - tau_ctrl_prev)
+                        u_adrc = tau_ctrl_prev + tau_filter_alpha * (u_adrc - tau_ctrl_prev)
+
+                        # Feedforward explícito de G(q) e C(q,dq): remove os
+                        # termos conhecidos da dinâmica do que z₃ precisa estimar.
+                        # → G(q):    crítico no ar (gravity ≠ 0); inócuo na água (G≈0)
+                        # → C(q,dq): elimina a oscilação crescente no início da
+                        #            trajetória, pois C ∝ dq² acompanha o perfil de
+                        #            velocidade cúbico. Sem este FF, z₃ persegue C em
+                        #            crescimento com modos discretos oscilatórios.
+                        # Com ambos ativos, z₃ só estima distúrbios externos e erros
+                        # de modelo — sinais pequenos e quase constantes.
+                        use_gravity_ff   = ctrl_params.get("gravity_ff",   True)
+                        use_coriolis_ff  = ctrl_params.get("coriolis_ff",  True)
+                        u_control = (u_adrc
+                                     + (G if use_gravity_ff  else 0.0)
+                                     + (C if use_coriolis_ff else 0.0))
                     elif smc is not None:
                         u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d)
                     else:
@@ -618,7 +666,10 @@ class RobotSimulator:
                     if disturbance_torque is not None and self.num_dof >= 2:
                         tau_disturbance[1] = disturbance_torque
                     tau_applied = u_control + tau_disturbance
-                    tau_ctrl_prev = u_control   # salva só o controle, sem perturbação
+                    # ESO recebe somente a saída ADRC pura (u_adrc), sem G
+                    # feedforward nem perturbação, para que z₃ estime apenas
+                    # os distúrbios residuais que o controlador não conhece.
+                    tau_ctrl_prev = u_adrc if ladrc is not None else u_control
                     tau_prev = tau_applied
 
                     ddq = np.linalg.solve(M, tau_applied - C - G)
@@ -644,15 +695,20 @@ class RobotSimulator:
                 anim_data.append(links_pose)
 
         if use_parallel:
-            worker_count = max_workers
-            if worker_count is None:
-                worker_count = max(1, min(3, os.cpu_count() or 1))
-            with ProcessPoolExecutor(
-                max_workers=worker_count,
-                initializer=_init_worker,
-                initargs=(self.sym_vars, self.expr_M, self.expr_C, self.expr_G),
-            ) as executor:
-                _run_steps(executor)
+            worker_count = max_workers or max(1, min(3, os.cpu_count() or 1))
+            # Reutiliza o executor se já existir com o mesmo número de workers.
+            # Isso elimina: respawn de processos + re-lambdify nas workers
+            # a cada run (custo era de 2–8 s por simulação).
+            if self._executor is None or self._executor_workers != worker_count:
+                self.close()  # derruba executor anterior, se houver
+                self._executor = ProcessPoolExecutor(
+                    max_workers=worker_count,
+                    initializer=_init_worker,
+                    initargs=(self.sym_vars, self.expr_M, self.expr_C, self.expr_G),
+                )
+                self._executor_workers = worker_count
+                print(f"[Parallel] Executor inicializado com {worker_count} workers.")
+            _run_steps(self._executor)
         else:
             _run_steps(None)
 

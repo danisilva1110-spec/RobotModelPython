@@ -1,11 +1,14 @@
 import customtkinter as ctk
+import tkinter as tk
+from tkinter import filedialog, messagebox
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
 from sympy.printing.octave import octave_code
 import os
+import pickle
 import threading
 import sys
-import numpy as np # <--- ADICIONADO: Faltava isso aqui!
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
@@ -28,10 +31,14 @@ class App(ctk.CTk):
         # Variáveis de Estado
         self.active_bot = None       
         self.active_sim = None       
-        self.joint_rows = []         
+        self.joint_rows = []
+        self.last_sim_results = None  # (t, err, tau, anim_data, dt_visual)
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
+
+        # --- MENU ---
+        self._create_menu()
 
         # --- ABAS ---
         self.tabview = ctk.CTkTabview(self)
@@ -43,9 +50,12 @@ class App(ctk.CTk):
         self.setup_modeling_tab()
         self.setup_simulation_tab()
         self.toggle_sim_tab(False)
+        self._update_menu_state()
 
     def on_closing(self):
         """ Encerra threads e destrói a janela corretamente """
+        if self.active_sim is not None:
+            self.active_sim.close()
         self.quit()
         self.destroy()
         sys.exit()
@@ -162,6 +172,10 @@ class App(ctk.CTk):
 
             results = self.active_bot.run_full_process()
             
+            # Encerra o executor do modelo anterior antes de criar o novo
+            if self.active_sim is not None:
+                self.active_sim.close()
+
             self.log("Compilando equações para o Simulador Numérico...")
             sim_mode = "Hydro" if modo == "Água (UVMS)" else "Air"
             self.active_sim = RobotSimulator(self.active_bot, mode=sim_mode)
@@ -175,9 +189,11 @@ class App(ctk.CTk):
             self.after(0, lambda: self.btn_calc.configure(state="normal", text="GERAR MODELO 🚀"))
 
     def finish_modeling_success(self):
+        self.last_sim_results = None
         self.generate_sim_inputs()
         self.toggle_sim_tab(True)
         self.tabview.set("Simulação")
+        self._update_menu_state()
         self.log("✅ Modelagem e Compilação concluídas com sucesso!")
         self.btn_calc.configure(state="normal", text="GERAR MODELO 🚀")
 
@@ -272,6 +288,20 @@ class App(ctk.CTk):
         self.entry_omega_o = ctk.CTkEntry(self.adrc_frame)
         self.entry_omega_o.insert(0, "40.0")
         self.entry_omega_o.pack(fill="x", pady=(0, 5))
+
+        self.gravity_ff_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            self.adrc_frame,
+            text="FF de gravidade  G(q)",
+            variable=self.gravity_ff_var,
+        ).pack(anchor="w", pady=(0, 3))
+
+        self.coriolis_ff_var = ctk.BooleanVar(value=True)
+        ctk.CTkCheckBox(
+            self.adrc_frame,
+            text="FF de Coriolis  C(q,dq)",
+            variable=self.coriolis_ff_var,
+        ).pack(anchor="w", pady=(0, 3))
 
         self.auto_b0_var = ctk.BooleanVar(value=True)
         self.chk_auto_b0 = ctk.CTkCheckBox(
@@ -569,8 +599,14 @@ class App(ctk.CTk):
                     self.log(f"⚠️ ωo ({omega_o}) < 3·ωc ({3*omega_c:.1f}). Recomendado ωo ≥ 5·ωc para ESO convergir antes do controlador.")
                 elif omega_o < 5 * omega_c:
                     self.log(f"⚠️ ωo/ωc = {omega_o/omega_c:.1f} (recomendado ≥ 5). Rastreamento do ESO pode ser lento.")
+                gravity_ff  = self.gravity_ff_var.get()
+                coriolis_ff = self.coriolis_ff_var.get()
                 if auto_b0:
                     self.log("ℹ️ b0 será estimado automaticamente como 1/M_ii na postura inicial.")
+                if gravity_ff and coriolis_ff:
+                    self.log("ℹ️ FF G(q)+C(q,dq) ativo: z₃ estimará apenas distúrbios externos.")
+                elif gravity_ff:
+                    self.log("ℹ️ FF G(q) ativo: z₃ estimará Coriolis + distúrbios externos.")
                 kp = omega_c ** 2
                 zeta = 1.0
                 ctrl_params.update(
@@ -579,6 +615,8 @@ class App(ctk.CTk):
                         "omega_o": omega_o,
                         "b0": b0,
                         "auto_b0": auto_b0,
+                        "gravity_ff":  gravity_ff,
+                        "coriolis_ff": coriolis_ff,
                         "kp": kp,
                         "kd": 2 * omega_c,
                         "wo": omega_o,
@@ -686,7 +724,9 @@ class App(ctk.CTk):
             
             self.last_anim_data = anim_data
             self.last_dt_visual = getattr(self.active_sim, "last_dt_visual", dt_visual)
+            self.last_sim_results = (t, err, tau, anim_data, self.last_dt_visual)
             self.plot_results(t, err, tau)
+            self._update_menu_state()
             self.log("✅ Simulação finalizada.")
             self.btn_anim3d.configure(state="normal")
             
@@ -771,8 +811,165 @@ class App(ctk.CTk):
         ani = animation.FuncAnimation(fig, update, frames=range(0, steps, 1), interval=50, blit=False)
         plt.show()
 
-    def save_json(self): pass
-    def load_json(self): pass
+    # ==========================================================================
+    # MENU DE ARQUIVO
+    # ==========================================================================
+    def _create_menu(self):
+        menubar = tk.Menu(self)
+        self.file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Arquivo", menu=self.file_menu)
+        self.file_menu.add_command(label="Salvar Modelo...",     command=self.save_model)
+        self.file_menu.add_command(label="Carregar Modelo...",   command=self.load_model)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Salvar Simulação...",  command=self.save_simulation)
+        self.file_menu.add_command(label="Carregar Simulação...", command=self.load_simulation)
+        self.file_menu.add_separator()
+        self.file_menu.add_command(label="Sair",                 command=self.on_closing)
+        self.config(menu=menubar)
+
+    def _update_menu_state(self):
+        model_state = "normal" if self.active_sim is not None else "disabled"
+        sim_state   = "normal" if self.last_sim_results is not None else "disabled"
+        self.file_menu.entryconfig(0, state=model_state)   # Salvar Modelo
+        self.file_menu.entryconfig(3, state=sim_state)     # Salvar Simulação
+
+    # ==========================================================================
+    # SALVAR / CARREGAR MODELO (.hmodel)
+    # ==========================================================================
+    def save_model(self):
+        if not self.active_bot:
+            return
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".hmodel",
+            filetypes=[("Modelo Hephaestus", "*.hmodel"), ("Todos os arquivos", "*.*")],
+            title="Salvar Modelo"
+        )
+        if not filepath:
+            return
+        try:
+            data = {
+                "type":  "hmodel",
+                "bot":   self.active_bot,
+                "mode":  self.mode_var.get(),
+            }
+            with open(filepath, "wb") as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            self.log(f"✅ Modelo salvo em: {filepath}")
+        except Exception as e:
+            messagebox.showerror("Erro ao salvar modelo", str(e))
+            self.log(f"❌ Erro ao salvar modelo: {e}")
+
+    def load_model(self):
+        filepath = filedialog.askopenfilename(
+            filetypes=[("Modelo Hephaestus", "*.hmodel"), ("Todos os arquivos", "*.*")],
+            title="Carregar Modelo"
+        )
+        if not filepath:
+            return
+        self.log(f"Carregando modelo de: {filepath} ...")
+        threading.Thread(target=self._load_model_thread, args=(filepath, False), daemon=True).start()
+
+    def _load_model_thread(self, filepath, has_sim_results):
+        try:
+            with open(filepath, "rb") as f:
+                data = pickle.load(f)
+
+            bot  = data["bot"]
+            mode = data["mode"]
+
+            if self.active_sim is not None:
+                self.active_sim.close()
+
+            self.active_bot = bot
+            self.log("Compilando equações (lambdify)...")
+            sim_mode = "Hydro" if mode == "Água (UVMS)" else "Air"
+            self.active_sim = RobotSimulator(self.active_bot, mode=sim_mode)
+
+            sim_results = data.get("sim_results") if has_sim_results else None
+            self.after(0, lambda: self._finish_load_model(mode, sim_results))
+
+        except Exception as e:
+            self.log(f"❌ Erro ao carregar arquivo: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _finish_load_model(self, mode, sim_results=None):
+        self.mode_var.set(mode)
+        self.update_mode_color(mode)
+
+        for row_data in self.joint_rows:
+            row_data["frame"].destroy()
+        self.joint_rows.clear()
+
+        bot = self.active_bot
+        for j_type, l_vec in zip(bot.joint_config, bot.link_vectors_mask):
+            self.add_joint()
+            row = self.joint_rows[-1]
+            row["dd"].set(j_type)
+            if int(l_vec[0]): row["cx"].select()
+            else:              row["cx"].deselect()
+            if int(l_vec[1]): row["cy"].select()
+            else:              row["cy"].deselect()
+            if int(l_vec[2]): row["cz"].select()
+            else:              row["cz"].deselect()
+
+        self.last_sim_results = None
+        self.generate_sim_inputs()
+        self.toggle_sim_tab(True)
+        self.tabview.set("Simulação")
+
+        if sim_results is not None:
+            t, err, tau, anim_data, dt_visual = sim_results
+            self.last_sim_results  = sim_results
+            self.last_anim_data    = anim_data
+            self.last_dt_visual    = dt_visual
+            self.plot_results(t, err, tau)
+            self.btn_anim3d.configure(state="normal")
+            self.log(f"✅ Simulação restaurada ({len(t)} pontos).")
+        else:
+            self.btn_anim3d.configure(state="disabled")
+
+        self._update_menu_state()
+        self.log(f"✅ Modelo carregado com sucesso! ({len(bot.joint_config)} juntas)")
+
+    # ==========================================================================
+    # SALVAR / CARREGAR SIMULAÇÃO (.hsim)
+    # ==========================================================================
+    def save_simulation(self):
+        if not self.active_bot or self.last_sim_results is None:
+            return
+        filepath = filedialog.asksaveasfilename(
+            defaultextension=".hsim",
+            filetypes=[("Simulação Hephaestus", "*.hsim"), ("Todos os arquivos", "*.*")],
+            title="Salvar Simulação"
+        )
+        if not filepath:
+            return
+        try:
+            data = {
+                "type":        "hsim",
+                "bot":         self.active_bot,
+                "mode":        self.mode_var.get(),
+                "sim_results": self.last_sim_results,
+            }
+            with open(filepath, "wb") as f:
+                pickle.dump(data, f, protocol=pickle.HIGHEST_PROTOCOL)
+            self.log(f"✅ Simulação salva em: {filepath}")
+        except Exception as e:
+            messagebox.showerror("Erro ao salvar simulação", str(e))
+            self.log(f"❌ Erro ao salvar simulação: {e}")
+
+    def load_simulation(self):
+        filepath = filedialog.askopenfilename(
+            filetypes=[("Simulação Hephaestus", "*.hsim"),
+                       ("Modelo Hephaestus",    "*.hmodel"),
+                       ("Todos os arquivos",    "*.*")],
+            title="Carregar Simulação"
+        )
+        if not filepath:
+            return
+        self.log(f"Carregando simulação de: {filepath} ...")
+        threading.Thread(target=self._load_model_thread, args=(filepath, True), daemon=True).start()
 
 if __name__ == "__main__":
     app = App()

@@ -41,11 +41,20 @@ class RobotMathEngine:
         self.com_positions_global, self.angular_velocities = [], []
         self.masses = []
 
-        # --- CORREÇÃO FUNDAMENTAL AQUI ---
         # Adiciona a gravidade na lista de parâmetros para o Lambdify reconhecê-la
         self.params_list.append(self.g) 
 
         self.M, self.G_vec, self.C_total, self.Jacobian = None, None, None, None
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['log'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        if self.log is None:
+            self.log = print
 
     def _rot_matrix_local(self, axis, angle):
         c, s = sp.cos(angle), sp.sin(angle)
