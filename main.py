@@ -24,6 +24,7 @@ class App(ctk.CTk):
         super().__init__()
         self.title("Hephaestus v4.0 - Integrated Environment")
         self.geometry("1200x850")
+        self.after(10, lambda: self.state("zoomed"))
         
         # Encerramento seguro
         self.protocol("WM_DELETE_WINDOW", self.on_closing)
@@ -207,53 +208,79 @@ class App(ctk.CTk):
 
         self.sim_left = ctk.CTkScrollableFrame(self.tab_sim, label_text="Parâmetros")
         self.sim_left.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
-        
+
+        # --- Posição e Tempo (parâmetros essenciais) ---
         ctk.CTkLabel(self.sim_left, text="Posição Inicial (x, y, z):").pack(anchor="w")
         self.entry_start = ctk.CTkEntry(self.sim_left)
         self.entry_start.insert(0, "0.5, 0.0, 0.0")
         self.entry_start.pack(fill="x", pady=(0, 5))
-        
+
         self.init_at_start_var = ctk.BooleanVar(value=True)
         self.init_at_start_check = ctk.CTkCheckBox(
             self.sim_left,
             text="Iniciar já na posição inicial",
             variable=self.init_at_start_var
         )
-        self.init_at_start_check.pack(anchor="w", pady=(0, 10))
-
-        ctk.CTkLabel(self.sim_left, text="q_init (rad, opcional):").pack(anchor="w")
-        self.entry_q_init = ctk.CTkEntry(self.sim_left)
-        self.entry_q_init.insert(0, "")
-        self.entry_q_init.pack(fill="x", pady=(0, 5))
-
-        self.use_last_q_var = ctk.BooleanVar(value=True)
-        self.use_last_q_check = ctk.CTkCheckBox(
-            self.sim_left,
-            text="Usar último q convergente",
-            variable=self.use_last_q_var
-        )
-        self.use_last_q_check.pack(anchor="w", pady=(0, 10))
+        self.init_at_start_check.pack(anchor="w", pady=(0, 5))
 
         ctk.CTkLabel(self.sim_left, text="Posição Final (x, y, z):").pack(anchor="w")
         self.entry_end = ctk.CTkEntry(self.sim_left)
         self.entry_end.insert(0, "0.5, 0.5, 0.2")
         self.entry_end.pack(fill="x", pady=(0, 5))
-        
+
         ctk.CTkLabel(self.sim_left, text="Tempo Total (s):").pack(anchor="w")
         self.entry_time = ctk.CTkEntry(self.sim_left)
         self.entry_time.insert(0, "5.0")
-        self.entry_time.pack(fill="x", pady=(0, 5))
+        self.entry_time.pack(fill="x", pady=(0, 8))
 
-        ctk.CTkLabel(self.sim_left, text="Passo de Física dt (s):").pack(anchor="w")
-        self.entry_dt_physics = ctk.CTkEntry(self.sim_left)
+        # --- Seção Avançada (parâmetros técnicos, oculta por padrão) ---
+        self._adv_basic_open = False
+        self._btn_adv_basic = ctk.CTkButton(
+            self.sim_left, text="▶  Avançado",
+            fg_color="gray30", hover_color="gray40", height=28,
+            command=self._toggle_adv_basic
+        )
+        self._btn_adv_basic.pack(fill="x", pady=(0, 8))
+
+        self._adv_basic_frame = ctk.CTkFrame(self.sim_left, fg_color="transparent")
+
+        ctk.CTkLabel(self._adv_basic_frame, text="Passo de Física dt (s):").pack(anchor="w")
+        self.entry_dt_physics = ctk.CTkEntry(self._adv_basic_frame)
         self.entry_dt_physics.insert(0, "0.001")
         self.entry_dt_physics.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.sim_left, text="Passo Visual dt (s):").pack(anchor="w")
-        self.entry_dt_visual = ctk.CTkEntry(self.sim_left)
+        ctk.CTkLabel(self._adv_basic_frame, text="Passo Visual dt (s):").pack(anchor="w")
+        self.entry_dt_visual = ctk.CTkEntry(self._adv_basic_frame)
         self.entry_dt_visual.insert(0, "0.05")
         self.entry_dt_visual.pack(fill="x", pady=(0, 5))
-        
+
+        ctk.CTkLabel(self._adv_basic_frame, text="q_init (rad, opcional):").pack(anchor="w")
+        self.entry_q_init = ctk.CTkEntry(self._adv_basic_frame)
+        self.entry_q_init.insert(0, "")
+        self.entry_q_init.pack(fill="x", pady=(0, 5))
+
+        self.use_last_q_var = ctk.BooleanVar(value=True)
+        self.use_last_q_check = ctk.CTkCheckBox(
+            self._adv_basic_frame,
+            text="Usar último q convergente",
+            variable=self.use_last_q_var
+        )
+        self.use_last_q_check.pack(anchor="w", pady=(0, 5))
+
+        ctk.CTkLabel(self._adv_basic_frame, text="Limite suave dq (rad/s):").pack(anchor="w")
+        self.entry_dq_limit = ctk.CTkEntry(self._adv_basic_frame)
+        self.entry_dq_limit.insert(0, "3.0")
+        self.entry_dq_limit.pack(fill="x", pady=(0, 5))
+
+        self.use_feedforward_vel_var = ctk.BooleanVar(value=True)
+        self.use_feedforward_vel_check = ctk.CTkCheckBox(
+            self._adv_basic_frame,
+            text="Usar feedforward de velocidade",
+            variable=self.use_feedforward_vel_var
+        )
+        self.use_feedforward_vel_check.pack(anchor="w", pady=(0, 8))
+
+        # --- Controle ---
         ctk.CTkLabel(self.sim_left, text="--- Controle ---", font=("Arial", 12, "bold")).pack(pady=5)
         self.ctrl_mode_var = ctk.StringVar(value="Torque Computado")
         self.ctrl_mode_dd = ctk.CTkOptionMenu(
@@ -267,17 +294,18 @@ class App(ctk.CTk):
         self.ctrl_inputs_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
         self.ctrl_inputs_container.pack(fill="x", pady=(0, 10))
 
+        # CTC
         self.ctc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
         ctk.CTkLabel(self.ctc_frame, text="Ganho Kp (ωn²):").pack(anchor="w")
         self.entry_kp = ctk.CTkEntry(self.ctc_frame)
         self.entry_kp.insert(0, "50.0")
         self.entry_kp.pack(fill="x", pady=(0, 5))
-
         ctk.CTkLabel(self.ctc_frame, text="Fator de amortecimento ζ:").pack(anchor="w")
         self.entry_zeta = ctk.CTkEntry(self.ctc_frame)
         self.entry_zeta.insert(0, "1.0")
         self.entry_zeta.pack(fill="x", pady=(0, 5))
 
+        # ADRC
         self.adrc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
         ctk.CTkLabel(self.adrc_frame, text="ωc (rad/s):").pack(anchor="w")
         self.entry_omega_c = ctk.CTkEntry(self.adrc_frame)
@@ -291,22 +319,19 @@ class App(ctk.CTk):
 
         self.gravity_ff_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(
-            self.adrc_frame,
-            text="FF de gravidade  G(q)",
+            self.adrc_frame, text="FF de gravidade  G(q)",
             variable=self.gravity_ff_var,
         ).pack(anchor="w", pady=(0, 3))
 
         self.coriolis_ff_var = ctk.BooleanVar(value=True)
         ctk.CTkCheckBox(
-            self.adrc_frame,
-            text="FF de Coriolis  C(q,dq)",
+            self.adrc_frame, text="FF de Coriolis  C(q,dq)",
             variable=self.coriolis_ff_var,
         ).pack(anchor="w", pady=(0, 3))
 
         self.auto_b0_var = ctk.BooleanVar(value=True)
         self.chk_auto_b0 = ctk.CTkCheckBox(
-            self.adrc_frame,
-            text="Auto b0  (1/M_ii)",
+            self.adrc_frame, text="Auto b0  (1/M_ii)",
             variable=self.auto_b0_var,
             command=self._on_auto_b0_toggle,
         )
@@ -318,42 +343,52 @@ class App(ctk.CTk):
         self.entry_b0.pack(fill="x", pady=(0, 5))
         self.entry_b0.configure(state="disabled")
 
-        ctk.CTkLabel(self.adrc_frame, text="Limite z (ESO):").pack(anchor="w")
-        self.entry_z_limit = ctk.CTkEntry(self.adrc_frame)
+        # ADRC avançado (colapsável)
+        self._adrc_adv_open = False
+        self._btn_adrc_adv = ctk.CTkButton(
+            self.adrc_frame, text="▶  Avançado",
+            fg_color="gray30", hover_color="gray40", height=26,
+            command=self._toggle_adrc_adv
+        )
+        self._btn_adrc_adv.pack(fill="x", pady=(4, 2))
+
+        self._adrc_adv_frame = ctk.CTkFrame(self.adrc_frame, fg_color="transparent")
+
+        ctk.CTkLabel(self._adrc_adv_frame, text="Limite z (ESO):").pack(anchor="w")
+        self.entry_z_limit = ctk.CTkEntry(self._adrc_adv_frame)
         self.entry_z_limit.insert(0, "100.0")
         self.entry_z_limit.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="Limite τ (Nm):").pack(anchor="w")
-        self.entry_tau_limit = ctk.CTkEntry(self.adrc_frame)
+        ctk.CTkLabel(self._adrc_adv_frame, text="Limite τ (Nm):").pack(anchor="w")
+        self.entry_tau_limit = ctk.CTkEntry(self._adrc_adv_frame)
         self.entry_tau_limit.insert(0, "50.0")
         self.entry_tau_limit.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="Máx ωo·dt:").pack(anchor="w")
-        self.entry_max_wo_dt = ctk.CTkEntry(self.adrc_frame)
+        ctk.CTkLabel(self._adrc_adv_frame, text="Máx ωo·dt:").pack(anchor="w")
+        self.entry_max_wo_dt = ctk.CTkEntry(self._adrc_adv_frame)
         self.entry_max_wo_dt.insert(0, "0.1")
         self.entry_max_wo_dt.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="Filtro τ (0-1):").pack(anchor="w")
-        self.entry_tau_filter_alpha = ctk.CTkEntry(self.adrc_frame)
+        ctk.CTkLabel(self._adrc_adv_frame, text="Filtro τ (0-1):").pack(anchor="w")
+        self.entry_tau_filter_alpha = ctk.CTkEntry(self._adrc_adv_frame)
         self.entry_tau_filter_alpha.insert(0, "0.8")
         self.entry_tau_filter_alpha.pack(fill="x", pady=(0, 5))
 
-        ctk.CTkLabel(self.adrc_frame, text="Filtro z3 (0-1):").pack(anchor="w")
-        self.entry_z3_filter_alpha = ctk.CTkEntry(self.adrc_frame)
+        ctk.CTkLabel(self._adrc_adv_frame, text="Filtro z3 (0-1):").pack(anchor="w")
+        self.entry_z3_filter_alpha = ctk.CTkEntry(self._adrc_adv_frame)
         self.entry_z3_filter_alpha.insert(0, "0.2")
         self.entry_z3_filter_alpha.pack(fill="x", pady=(0, 5))
 
+        # SMC
         self.smc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
         ctk.CTkLabel(self.smc_frame, text="Lambda (λ):").pack(anchor="w")
         self.entry_lambda = ctk.CTkEntry(self.smc_frame)
         self.entry_lambda.insert(0, "5.0")
         self.entry_lambda.pack(fill="x", pady=(0, 5))
-
         ctk.CTkLabel(self.smc_frame, text="Ganho K:").pack(anchor="w")
         self.entry_smc_k = ctk.CTkEntry(self.smc_frame)
         self.entry_smc_k.insert(0, "5.0")
         self.entry_smc_k.pack(fill="x", pady=(0, 5))
-
         ctk.CTkLabel(self.smc_frame, text="Camada limite ϕ:").pack(anchor="w")
         self.entry_phi = ctk.CTkEntry(self.smc_frame)
         self.entry_phi.insert(0, "0.1")
@@ -361,86 +396,98 @@ class App(ctk.CTk):
 
         self.update_ctrl_inputs(self.ctrl_mode_var.get())
 
-        ctk.CTkLabel(self.sim_left, text="Limite suave dq (rad/s):").pack(anchor="w")
-        self.entry_dq_limit = ctk.CTkEntry(self.sim_left)
-        self.entry_dq_limit.insert(0, "3.0")
-        self.entry_dq_limit.pack(fill="x", pady=(0, 5))
-
-        self.use_feedforward_vel_var = ctk.BooleanVar(value=True)
-        self.use_feedforward_vel_check = ctk.CTkCheckBox(
-            self.sim_left,
-            text="Usar feedforward de velocidade",
-            variable=self.use_feedforward_vel_var
-        )
-        self.use_feedforward_vel_check.pack(anchor="w", pady=(0, 10))
-
+        # --- Perturbação ---
         ctk.CTkLabel(self.sim_left, text="Perturbação (Nm):").pack(anchor="w")
         self.disturbance_value_label = ctk.CTkLabel(self.sim_left, text="0.0 Nm")
         self.disturbance_value_label.pack(anchor="w")
         self.disturbance_slider = ctk.CTkSlider(
-            self.sim_left,
-            from_=-20,
-            to=20,
+            self.sim_left, from_=-20, to=20,
             command=self.update_disturbance_label
         )
         self.disturbance_slider.set(0.0)
-        self.disturbance_slider.pack(fill="x", pady=(0, 20))
+        self.disturbance_slider.pack(fill="x", pady=(0, 10))
 
-        # === NOVA SEÇÃO: PLANEJAMENTO ===
+        # --- Trajetória ---
         ctk.CTkLabel(self.sim_left, text="--- Trajetória ---", font=("Arial", 12, "bold")).pack(pady=5)
-        
-        # Dropdown Reta/Círculo
+
         self.traj_type_var = ctk.StringVar(value="Reta")
-        self.traj_dd = ctk.CTkOptionMenu(self.sim_left, values=["Reta", "Círculo"], 
-                                         variable=self.traj_type_var, command=self.update_traj_inputs)
+        self.traj_dd = ctk.CTkOptionMenu(
+            self.sim_left, values=["Reta", "Círculo"],
+            variable=self.traj_type_var, command=self.update_traj_inputs
+        )
         self.traj_dd.pack(fill="x", pady=5)
 
-        # Frame para Inputs Específicos do Círculo (Oculto inicialmente)
         self.circle_frame = ctk.CTkFrame(self.sim_left)
-        
+
         ctk.CTkLabel(self.circle_frame, text="Raio (m):").pack(anchor="w")
         self.entry_radius = ctk.CTkEntry(self.circle_frame)
         self.entry_radius.insert(0, "0.3")
         self.entry_radius.pack(fill="x")
-        
+
         ctk.CTkLabel(self.circle_frame, text="Normal (x,y,z):").pack(anchor="w")
         self.entry_normal = ctk.CTkEntry(self.circle_frame)
-        self.entry_normal.insert(0, "1, 0, 0") # Plano YZ
+        self.entry_normal.insert(0, "1, 0, 0")
         self.entry_normal.pack(fill="x")
 
         ctk.CTkLabel(self.circle_frame, text="Sentido (+/-):").pack(anchor="w")
         self.switch_dir_var = ctk.StringVar(value="Anti-Horário (+1)")
-        self.switch_dir = ctk.CTkSwitch(self.circle_frame, text="Anti-Horário", variable=self.switch_dir_var, 
-                                        onvalue="Anti-Horário (+1)", offvalue="Horário (-1)")
+        self.switch_dir = ctk.CTkSwitch(
+            self.circle_frame, text="Anti-Horário",
+            variable=self.switch_dir_var,
+            onvalue="Anti-Horário (+1)", offvalue="Horário (-1)"
+        )
         self.switch_dir.pack(pady=5)
 
-        ctk.CTkLabel(self.sim_left, text="--- Constantes Físicas ---", font=("Arial", 12, "bold")).pack(pady=5)
+        # --- Parâmetros Físicos por Elo ---
+        ctk.CTkLabel(self.sim_left, text="--- Parâmetros Físicos ---", font=("Arial", 12, "bold")).pack(pady=5)
         self.params_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
         self.params_container.pack(fill="both", expand=True)
         self.dynamic_entries = {}
         self.dynamic_defaults = {}
 
         self.btn_restore_defaults = ctk.CTkButton(
-            self.sim_left,
-            text="Restaurar padrões",
+            self.sim_left, text="Restaurar padrões",
             fg_color="#6c757d",
             command=self.restore_sim_defaults
         )
         self.btn_restore_defaults.pack(pady=(10, 5), fill="x")
 
-        self.btn_run_sim = ctk.CTkButton(self.sim_left, text="RODAR SIMULAÇÃO ▶", fg_color="red", command=self.run_simulation_logic)
+        self.btn_run_sim = ctk.CTkButton(
+            self.sim_left, text="RODAR SIMULAÇÃO ▶",
+            fg_color="red", command=self.run_simulation_logic
+        )
         self.btn_run_sim.pack(pady=20, side="bottom", fill="x")
 
-        # Container da direita para Gráficos e Animação
+        # Painel direito
         self.sim_right = ctk.CTkFrame(self.tab_sim)
         self.sim_right.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
-        
+
         self.plot_frame = ctk.CTkFrame(self.sim_right, fg_color="white")
         self.plot_frame.pack(fill="both", expand=True, padx=5, pady=5)
-        
-        # Botão para ver Animação 3D (aparece após simular)
-        self.btn_anim3d = ctk.CTkButton(self.sim_right, text="VER ANIMAÇÃO 3D 🎥", command=self.play_animation, state="disabled")
+
+        self.btn_anim3d = ctk.CTkButton(
+            self.sim_right, text="VER ANIMAÇÃO 3D 🎥",
+            command=self.play_animation, state="disabled"
+        )
         self.btn_anim3d.pack(pady=10)
+
+    def _toggle_adv_basic(self):
+        self._adv_basic_open = not self._adv_basic_open
+        if self._adv_basic_open:
+            self._adv_basic_frame.pack(fill="x", pady=(0, 8), after=self._btn_adv_basic)
+            self._btn_adv_basic.configure(text="▼  Avançado")
+        else:
+            self._adv_basic_frame.pack_forget()
+            self._btn_adv_basic.configure(text="▶  Avançado")
+
+    def _toggle_adrc_adv(self):
+        self._adrc_adv_open = not self._adrc_adv_open
+        if self._adrc_adv_open:
+            self._adrc_adv_frame.pack(fill="x", pady=(0, 5), after=self._btn_adrc_adv)
+            self._btn_adrc_adv.configure(text="▼  Avançado")
+        else:
+            self._adrc_adv_frame.pack_forget()
+            self._btn_adrc_adv.configure(text="▶  Avançado")
 
     # Método auxiliar para mostrar/ocultar inputs do Círculo
     def update_traj_inputs(self, choice):
@@ -468,61 +515,174 @@ class App(ctk.CTk):
         self.dynamic_entries = {}
         self.dynamic_defaults = {}
 
-        if not self.active_sim: return
-        ignore_list = set(self.active_bot.q + self.active_bot.dq)
+        if not self.active_sim:
+            return
 
-        prefix_configs = [
-            {"prefix": "m", "title": "Massas", "unit": "kg", "default": "2.0", "placeholder": "Ex.: 2.0 (kg)"},
-            {"prefix": "L", "title": "Comprimentos", "unit": "m", "default": "0.5", "placeholder": "Ex.: 0.5 (m)"},
-            {"prefix": "I", "title": "Inércias", "unit": "kg·m²", "default": "0.01", "placeholder": "Ex.: 0.01 (kg·m²)"},
-            {"prefix": "rho", "title": "Densidades", "unit": "kg/m³", "default": "1000", "placeholder": "Ex.: 1000 (kg/m³)"},
-            {"prefix": "vol", "title": "Volumes", "unit": "m³", "default": "0.005", "placeholder": "Ex.: 0.005 (m³)"},
-        ]
+        sym_names = {str(s) for s in self.active_sim.sym_vars}
+        n = len(self.active_bot.joint_config)
 
-        def get_config(sym_name):
-            for cfg in prefix_configs:
-                if sym_name.startswith(cfg["prefix"]):
-                    return cfg
-            return {"prefix": "", "title": "Outros", "unit": "", "default": "0.1", "placeholder": "Ex.: 0.1"}
+        # ---------- helper para criar um entry bloqueado (off-diagonal / eixo inativo) ----------
+        def _locked_entry(parent, value="0"):
+            e = ctk.CTkEntry(parent, width=62)
+            e.insert(0, value)
+            e.configure(state="disabled")
+            return e
 
-        sections = {}
-        for sym in self.active_sim.sym_vars:
-            if sym in ignore_list: continue
-            if str(sym) in ['t', 'g']: continue
+        # ---------- helper para criar um entry editável e registrá-lo ----------
+        def _reg_entry(parent, key, default):
+            e = ctk.CTkEntry(parent, width=62)
+            e.insert(0, default)
+            self.dynamic_entries[key] = e
+            self.dynamic_defaults[key] = default
+            return e
 
-            sym_name = str(sym)
-            cfg = get_config(sym_name)
-            if cfg["title"] not in sections:
-                section_frame = ctk.CTkFrame(self.params_container, fg_color="transparent")
-                section_frame.pack(fill="x", pady=(0, 8))
+        # ====================================================================
+        # Seções por elo
+        # ====================================================================
+        for i in range(n):
+            link_num = i + 1
+            mask = self.active_bot.link_vectors_mask[i]   # e.g. [0, 0, 1]
+
+            section = ctk.CTkFrame(self.params_container, border_width=1)
+            section.pack(fill="x", pady=(0, 8), padx=2)
+            ctk.CTkLabel(
+                section, text=f"Elo {link_num}",
+                font=("Arial", 12, "bold")
+            ).pack(anchor="w", padx=8, pady=(6, 4))
+
+            inner = ctk.CTkFrame(section, fg_color="transparent")
+            inner.pack(fill="x", padx=8, pady=(0, 8))
+
+            # --- Massa ---
+            mass_key = f"m{link_num}"
+            if mass_key in sym_names:
+                row = ctk.CTkFrame(inner, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="Massa (kg):", width=160, anchor="w").pack(side="left")
+                _reg_entry(row, mass_key, "2.0").pack(side="left")
+
+            # --- Comprimento como vetor [Lx, Ly, Lz] ---
+            L_key = f"L{link_num}"
+            if L_key in sym_names:
+                row = ctk.CTkFrame(inner, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="Comprimento (m):", width=160, anchor="w").pack(side="left")
+                axis_labels = ["x", "y", "z"]
+                active_assigned = False
+                for j, ax in enumerate(axis_labels):
+                    ctk.CTkLabel(row, text=ax, width=14, anchor="e").pack(side="left")
+                    if int(mask[j]) and not active_assigned:
+                        _reg_entry(row, L_key, "0.5").pack(side="left", padx=(0, 6))
+                        active_assigned = True
+                    else:
+                        _locked_entry(row).pack(side="left", padx=(0, 6))
+                # fallback: se mask for todo zero, registra mesmo assim
+                if not active_assigned and L_key not in self.dynamic_entries:
+                    _reg_entry(row, L_key, "0.5").pack(side="left", padx=(0, 6))
+
+            # --- Centro de massa como vetor [cx, cy, cz] ---
+            cx_key = f"cx{link_num}"
+            if cx_key in sym_names:
+                row = ctk.CTkFrame(inner, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="Centro de massa (m):", width=160, anchor="w").pack(side="left")
+                for sym_key, ax in [
+                    (f"cx{link_num}", "x"),
+                    (f"cy{link_num}", "y"),
+                    (f"cz{link_num}", "z"),
+                ]:
+                    ctk.CTkLabel(row, text=ax, width=14, anchor="e").pack(side="left")
+                    _reg_entry(row, sym_key, "0.0").pack(side="left", padx=(0, 6))
+
+            # --- Tensor de inércia como matriz 3×3 ---
+            Ixx_key = f"Ixx{link_num}"
+            if Ixx_key in sym_names:
                 ctk.CTkLabel(
-                    section_frame,
-                    text=cfg["title"],
-                    font=("Arial", 12, "bold")
-                ).pack(anchor="w", pady=(0, 4))
-                entries_frame = ctk.CTkFrame(section_frame, fg_color="transparent")
-                entries_frame.pack(fill="x")
-                sections[cfg["title"]] = entries_frame
+                    inner, text="Tensor de inércia (kg·m²):", anchor="w"
+                ).pack(anchor="w", pady=(6, 2))
 
-            entry_container = sections[cfg["title"]]
-            row = ctk.CTkFrame(entry_container)
-            row.pack(fill="x", pady=2)
-            label_text = f"{sym_name} ({cfg['unit']})" if cfg["unit"] else sym_name
-            lbl = ctk.CTkLabel(row, text=label_text, width=120, anchor="w")
-            lbl.pack(side="left")
-            entry = ctk.CTkEntry(row, placeholder_text=cfg["placeholder"])
-            entry.pack(side="right", expand=True, fill="x")
-            entry.insert(0, cfg["default"])
+                diag_keys = [f"Ixx{link_num}", f"Iyy{link_num}", f"Izz{link_num}"]
+                diag_labels = ["Ixx", "Iyy", "Izz"]
 
-            self.dynamic_entries[sym_name] = entry
-            self.dynamic_defaults[sym_name] = cfg["default"]
+                mat_frame = ctk.CTkFrame(inner, fg_color="transparent")
+                mat_frame.pack(anchor="w")
+
+                # Cabeçalho de colunas
+                header = ctk.CTkFrame(mat_frame, fg_color="transparent")
+                header.pack()
+                ctk.CTkLabel(header, text="", width=18).pack(side="left")
+                for ax in ["x", "y", "z"]:
+                    ctk.CTkLabel(header, text=ax, width=68, anchor="center").pack(side="left", padx=2)
+
+                for r in range(3):
+                    mat_row = ctk.CTkFrame(mat_frame, fg_color="transparent")
+                    mat_row.pack()
+                    ctk.CTkLabel(mat_row, text=diag_labels[r][1], width=18, anchor="e").pack(side="left")
+                    for c in range(3):
+                        if r == c:
+                            _reg_entry(mat_row, diag_keys[r], "0.01").pack(side="left", padx=2, pady=1)
+                        else:
+                            _locked_entry(mat_row).pack(side="left", padx=2, pady=1)
+
+            # --- Volume (modo Hidro) ---
+            vol_key = f"vol{link_num}"
+            if vol_key in sym_names:
+                row = ctk.CTkFrame(inner, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="Volume (m³):", width=160, anchor="w").pack(side="left")
+                _reg_entry(row, vol_key, "0.005").pack(side="left")
+
+            # --- Massas adicionadas (modo Hidro) ---
+            ma_u_key = f"ma_u{link_num}"
+            if ma_u_key in sym_names:
+                ctk.CTkLabel(
+                    inner, text="Massa adicionada (kg / kg·m²):", anchor="w"
+                ).pack(anchor="w", pady=(6, 2))
+                ma_linear  = [f"ma_u{link_num}", f"ma_v{link_num}", f"ma_w{link_num}"]
+                ma_angular = [f"ma_p{link_num}", f"ma_q{link_num}", f"ma_r{link_num}"]
+                for group, axes, default in [
+                    (ma_linear,  ["u", "v", "w"], "5.0"),
+                    (ma_angular, ["p", "q", "r"], "0.1"),
+                ]:
+                    row = ctk.CTkFrame(inner, fg_color="transparent")
+                    row.pack(fill="x", pady=1)
+                    for sym_key, ax in zip(group, axes):
+                        if sym_key in sym_names:
+                            ctk.CTkLabel(row, text=ax, width=14, anchor="e").pack(side="left")
+                            _reg_entry(row, sym_key, default).pack(side="left", padx=(0, 6))
+
+        # ====================================================================
+        # Parâmetros globais (rho para modo Hidro)
+        # ====================================================================
+        global_params = {"rho": ("Densidade do fluido (kg/m³):", "1000")}
+        has_globals = any(k in sym_names for k in global_params)
+        if has_globals:
+            section = ctk.CTkFrame(self.params_container, border_width=1)
+            section.pack(fill="x", pady=(0, 8), padx=2)
+            ctk.CTkLabel(
+                section, text="Ambiente",
+                font=("Arial", 12, "bold")
+            ).pack(anchor="w", padx=8, pady=(6, 4))
+            inner = ctk.CTkFrame(section, fg_color="transparent")
+            inner.pack(fill="x", padx=8, pady=(0, 8))
+            for k, (label, default) in global_params.items():
+                if k in sym_names:
+                    row = ctk.CTkFrame(inner, fg_color="transparent")
+                    row.pack(fill="x", pady=2)
+                    ctk.CTkLabel(row, text=label, width=200, anchor="w").pack(side="left")
+                    _reg_entry(row, k, default).pack(side="left")
 
     def restore_sim_defaults(self):
         for name, entry in self.dynamic_entries.items():
             default_value = self.dynamic_defaults.get(name, "")
+            was_disabled = str(entry.cget("state")) == "disabled"
+            if was_disabled:
+                entry.configure(state="normal")
             entry.delete(0, "end")
             if default_value:
                 entry.insert(0, default_value)
+            if was_disabled:
+                entry.configure(state="disabled")
 
     def toggle_sim_tab(self, enable):
         if not enable: self.tabview.set("Modelagem")
