@@ -15,6 +15,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 # --- IMPORTAÇÕES DOS SEUS MÓDULOS ---
 from engine import RobotMathEngine, RobotMathHydro
 from simulator import RobotSimulator
+from tooltip_utils import RichTooltip, TOOLTIP_CONTENT, phys_tooltip_blocks
 
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
@@ -33,7 +34,7 @@ class App(ctk.CTk):
         self.active_bot = None       
         self.active_sim = None       
         self.joint_rows = []
-        self.last_sim_results = None  # (t, err, tau, anim_data, dt_visual)
+        self.last_sim_results = None  # dict com arrays de resultados + ui_params
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -89,17 +90,19 @@ class App(ctk.CTk):
 
         ctrl_joints_frame = ctk.CTkFrame(left_frame, fg_color="transparent")
         ctrl_joints_frame.pack(fill="x", padx=10, pady=5)
-        btn_add = ctk.CTkButton(ctrl_joints_frame, text="+ Adicionar Junta", command=self.add_joint)
-        btn_add.pack(side="left", expand=True, padx=2)
-        btn_rem = ctk.CTkButton(ctrl_joints_frame, text="- Remover Última", command=self.remove_joint, fg_color="firebrick")
-        btn_rem.pack(side="left", expand=True, padx=2)
+        self.btn_add = ctk.CTkButton(ctrl_joints_frame, text="+ Adicionar Junta", command=self.add_joint)
+        self.btn_add.pack(side="left", expand=True, padx=2)
+        self.btn_rem = ctk.CTkButton(ctrl_joints_frame, text="- Remover Última", command=self.remove_joint, fg_color="firebrick")
+        self.btn_rem.pack(side="left", expand=True, padx=2)
 
         action_frame = ctk.CTkFrame(left_frame)
         action_frame.pack(fill="x", padx=10, pady=10)
         self.btn_calc = ctk.CTkButton(action_frame, text="GERAR MODELO 🚀", command=self.run_modeling, 
                                       height=40, font=ctk.CTkFont(weight="bold"), fg_color="green")
         self.btn_calc.pack(fill="x", padx=10, pady=(10, 5))
-        
+
+        self._attach_modeling_tooltips()
+
         # Direita (Log)
         right_frame = ctk.CTkFrame(self.tab_model)
         right_frame.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
@@ -318,16 +321,18 @@ class App(ctk.CTk):
         self.entry_omega_o.pack(fill="x", pady=(0, 5))
 
         self.gravity_ff_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(
+        self.chk_gravity_ff = ctk.CTkCheckBox(
             self.adrc_frame, text="FF de gravidade  G(q)",
             variable=self.gravity_ff_var,
-        ).pack(anchor="w", pady=(0, 3))
+        )
+        self.chk_gravity_ff.pack(anchor="w", pady=(0, 3))
 
         self.coriolis_ff_var = ctk.BooleanVar(value=True)
-        ctk.CTkCheckBox(
+        self.chk_coriolis_ff = ctk.CTkCheckBox(
             self.adrc_frame, text="FF de Coriolis  C(q,dq)",
             variable=self.coriolis_ff_var,
-        ).pack(anchor="w", pady=(0, 3))
+        )
+        self.chk_coriolis_ff.pack(anchor="w", pady=(0, 3))
 
         self.auto_b0_var = ctk.BooleanVar(value=True)
         self.chk_auto_b0 = ctk.CTkCheckBox(
@@ -470,6 +475,77 @@ class App(ctk.CTk):
             command=self.play_animation, state="disabled"
         )
         self.btn_anim3d.pack(pady=10)
+
+        self._attach_sim_tooltips()
+
+    # ------------------------------------------------------------------
+    def _attach_modeling_tooltips(self):
+        """Attach rich tooltips to all modeling-tab widgets."""
+        TC = TOOLTIP_CONTENT
+        pairs = [
+            (self.mode_switch,  TC["mode_switch"]),
+            (self.btn_add,      TC["btn_add_joint"]),
+            (self.btn_rem,      TC["btn_rem_joint"]),
+            (self.btn_calc,     TC["btn_calc"]),
+        ]
+        for widget, blocks in pairs:
+            RichTooltip(widget, blocks)
+
+    # ------------------------------------------------------------------
+    def _attach_sim_tooltips(self):
+        """Attach rich tooltips to all simulation-tab widgets."""
+        TC = TOOLTIP_CONTENT
+        pairs = [
+            # Posição / tempo
+            (self.entry_start,               TC["start_pos"]),
+            (self.entry_end,                 TC["end_pos"]),
+            (self.init_at_start_check,       TC["init_at_start"]),
+            (self.entry_time,                TC["total_time"]),
+            # Botão avançado (física)
+            (self._btn_adv_basic,            TC["adv_basic_toggle"]),
+            # Avançado – física
+            (self.entry_dt_physics,          TC["dt_physics"]),
+            (self.entry_dt_visual,           TC["dt_visual"]),
+            (self.entry_q_init,              TC["q_init"]),
+            (self.use_last_q_check,          TC["use_last_q"]),
+            (self.entry_dq_limit,            TC["dq_limit"]),
+            (self.use_feedforward_vel_check, TC["feedforward_vel"]),
+            # Controle – dropdown
+            (self.ctrl_mode_dd,              TC["ctrl_mode"]),
+            # CTC
+            (self.entry_kp,                  TC["kp"]),
+            (self.entry_zeta,                TC["zeta"]),
+            # ADRC
+            (self.entry_omega_c,             TC["omega_c"]),
+            (self.entry_omega_o,             TC["omega_o"]),
+            (self.chk_gravity_ff,            TC["gravity_ff"]),
+            (self.chk_coriolis_ff,           TC["coriolis_ff"]),
+            (self.chk_auto_b0,               TC["auto_b0"]),
+            (self.entry_b0,                  TC["b0"]),
+            (self._btn_adrc_adv,             TC["adrc_adv_toggle"]),
+            (self.entry_z_limit,             TC["z_limit"]),
+            (self.entry_tau_limit,           TC["tau_limit"]),
+            (self.entry_max_wo_dt,           TC["max_wo_dt"]),
+            (self.entry_tau_filter_alpha,    TC["tau_filter_alpha"]),
+            (self.entry_z3_filter_alpha,     TC["z3_filter_alpha"]),
+            # SMC
+            (self.entry_lambda,              TC["smc_lambda"]),
+            (self.entry_smc_k,               TC["smc_k"]),
+            (self.entry_phi,                 TC["smc_phi"]),
+            # Perturbação
+            (self.disturbance_slider,        TC["disturbance"]),
+            # Trajetória
+            (self.traj_dd,                   TC["traj_type"]),
+            (self.entry_radius,              TC["radius"]),
+            (self.entry_normal,              TC["normal"]),
+            (self.switch_dir,                TC["direction"]),
+            # Botões de ação
+            (self.btn_restore_defaults,      TC["btn_restore_defaults"]),
+            (self.btn_run_sim,               TC["btn_run_sim"]),
+            (self.btn_anim3d,                TC["btn_anim3d"]),
+        ]
+        for widget, blocks in pairs:
+            RichTooltip(widget, blocks)
 
     def _toggle_adv_basic(self):
         self._adv_basic_open = not self._adv_basic_open
@@ -671,6 +747,12 @@ class App(ctk.CTk):
                     row.pack(fill="x", pady=2)
                     ctk.CTkLabel(row, text=label, width=200, anchor="w").pack(side="left")
                     _reg_entry(row, k, default).pack(side="left")
+
+        # Attach tooltips to all dynamically created physical-parameter entries
+        for key, entry in self.dynamic_entries.items():
+            blocks = phys_tooltip_blocks(key)
+            if blocks:
+                RichTooltip(entry, blocks)
 
     def restore_sim_defaults(self):
         for name, entry in self.dynamic_entries.items():
@@ -884,7 +966,14 @@ class App(ctk.CTk):
             
             self.last_anim_data = anim_data
             self.last_dt_visual = getattr(self.active_sim, "last_dt_visual", dt_visual)
-            self.last_sim_results = (t, err, tau, anim_data, self.last_dt_visual)
+            self.last_sim_results = {
+                "t":         t,
+                "err":       err,
+                "tau":       tau,
+                "anim_data": anim_data,
+                "dt_visual": self.last_dt_visual,
+                "ui_params": self._collect_ui_params(),
+            }
             self.plot_results(t, err, tau)
             self._update_menu_state()
             self.log("✅ Simulação finalizada.")
@@ -970,6 +1059,119 @@ class App(ctk.CTk):
 
         ani = animation.FuncAnimation(fig, update, frames=range(0, steps, 1), interval=50, blit=False)
         plt.show()
+
+    # ==========================================================================
+    # CAPTURA / RESTAURAÇÃO DE PARÂMETROS DA UI
+    # ==========================================================================
+    def _collect_ui_params(self):
+        """Lê todos os widgets da aba Simulação e retorna um dict serializável."""
+        return {
+            # Posições e tempo
+            "start":             self.entry_start.get(),
+            "end":               self.entry_end.get(),
+            "q_init":            self.entry_q_init.get(),
+            "init_at_start":     self.init_at_start_var.get(),
+            "use_last_q":        self.use_last_q_var.get(),
+            "time":              self.entry_time.get(),
+            "dt_physics":        self.entry_dt_physics.get(),
+            "dt_visual":         self.entry_dt_visual.get(),
+            # Controle
+            "ctrl_mode":         self.ctrl_mode_var.get(),
+            "kp":                self.entry_kp.get(),
+            "zeta":              self.entry_zeta.get(),
+            # ADRC
+            "omega_c":           self.entry_omega_c.get(),
+            "omega_o":           self.entry_omega_o.get(),
+            "auto_b0":           self.auto_b0_var.get(),
+            "b0":                self.entry_b0.get(),
+            "gravity_ff":        self.gravity_ff_var.get(),
+            "coriolis_ff":       self.coriolis_ff_var.get(),
+            "z_limit":           self.entry_z_limit.get(),
+            "tau_limit":         self.entry_tau_limit.get(),
+            "max_wo_dt":         self.entry_max_wo_dt.get(),
+            "tau_filter_alpha":  self.entry_tau_filter_alpha.get(),
+            "z3_filter_alpha":   self.entry_z3_filter_alpha.get(),
+            # SMC
+            "smc_lambda":        self.entry_lambda.get(),
+            "smc_k":             self.entry_smc_k.get(),
+            "smc_phi":           self.entry_phi.get(),
+            # Misc
+            "dq_limit":          self.entry_dq_limit.get(),
+            "use_feedforward_vel": self.use_feedforward_vel_var.get(),
+            "disturbance":       float(self.disturbance_slider.get()),
+            # Trajetória
+            "traj_type":         self.traj_type_var.get(),
+            "radius":            self.entry_radius.get(),
+            "normal":            self.entry_normal.get(),
+            "direction":         self.switch_dir_var.get(),
+            # Parâmetros físicos dinâmicos (massas, comprimentos, inércias, etc.)
+            "dynamic_params":    {k: e.get() for k, e in self.dynamic_entries.items()},
+            # Estado das seções expansíveis
+            "adv_basic_open":    self._adv_basic_open,
+            "adrc_adv_open":     self._adrc_adv_open,
+        }
+
+    def _restore_ui_params(self, params):
+        """Restaura os widgets da aba Simulação a partir de um dict salvo."""
+        def _set(entry, val):
+            entry.delete(0, "end")
+            entry.insert(0, str(val))
+
+        if "start"             in params: _set(self.entry_start,            params["start"])
+        if "end"               in params: _set(self.entry_end,              params["end"])
+        if "q_init"            in params: _set(self.entry_q_init,           params["q_init"])
+        if "init_at_start"     in params: self.init_at_start_var.set(       params["init_at_start"])
+        if "use_last_q"        in params: self.use_last_q_var.set(          params["use_last_q"])
+        if "time"              in params: _set(self.entry_time,             params["time"])
+        if "dt_physics"        in params: _set(self.entry_dt_physics,       params["dt_physics"])
+        if "dt_visual"         in params: _set(self.entry_dt_visual,        params["dt_visual"])
+
+        if "ctrl_mode" in params:
+            self.ctrl_mode_var.set(params["ctrl_mode"])
+            self.update_ctrl_inputs(params["ctrl_mode"])
+
+        if "kp"                in params: _set(self.entry_kp,               params["kp"])
+        if "zeta"              in params: _set(self.entry_zeta,             params["zeta"])
+        if "omega_c"           in params: _set(self.entry_omega_c,          params["omega_c"])
+        if "omega_o"           in params: _set(self.entry_omega_o,          params["omega_o"])
+        if "auto_b0"           in params:
+            self.auto_b0_var.set(params["auto_b0"])
+            self._on_auto_b0_toggle()
+        if "b0"                in params: _set(self.entry_b0,               params["b0"])
+        if "gravity_ff"        in params: self.gravity_ff_var.set(          params["gravity_ff"])
+        if "coriolis_ff"       in params: self.coriolis_ff_var.set(         params["coriolis_ff"])
+        if "z_limit"           in params: _set(self.entry_z_limit,          params["z_limit"])
+        if "tau_limit"         in params: _set(self.entry_tau_limit,        params["tau_limit"])
+        if "max_wo_dt"         in params: _set(self.entry_max_wo_dt,        params["max_wo_dt"])
+        if "tau_filter_alpha"  in params: _set(self.entry_tau_filter_alpha, params["tau_filter_alpha"])
+        if "z3_filter_alpha"   in params: _set(self.entry_z3_filter_alpha,  params["z3_filter_alpha"])
+        if "smc_lambda"        in params: _set(self.entry_lambda,           params["smc_lambda"])
+        if "smc_k"             in params: _set(self.entry_smc_k,            params["smc_k"])
+        if "smc_phi"           in params: _set(self.entry_phi,              params["smc_phi"])
+        if "dq_limit"          in params: _set(self.entry_dq_limit,         params["dq_limit"])
+        if "use_feedforward_vel" in params: self.use_feedforward_vel_var.set(params["use_feedforward_vel"])
+        if "disturbance" in params:
+            self.disturbance_slider.set(params["disturbance"])
+            self.update_disturbance_label(params["disturbance"])
+        if "traj_type" in params:
+            self.traj_type_var.set(params["traj_type"])
+            self.update_traj_inputs(params["traj_type"])
+        if "radius"    in params: _set(self.entry_radius, params["radius"])
+        if "normal"    in params: _set(self.entry_normal, params["normal"])
+        if "direction" in params: self.switch_dir_var.set(params["direction"])
+
+        if "dynamic_params" in params:
+            for k, v in params["dynamic_params"].items():
+                if k in self.dynamic_entries:
+                    _set(self.dynamic_entries[k], v)
+
+        # Seções expansíveis: abre/fecha apenas se o estado salvo difere do atual
+        if "adv_basic_open" in params:
+            if params["adv_basic_open"] != self._adv_basic_open:
+                self._toggle_adv_basic()
+        if "adrc_adv_open" in params:
+            if params["adrc_adv_open"] != self._adrc_adv_open:
+                self._toggle_adrc_adv()
 
     # ==========================================================================
     # MENU DE ARQUIVO
@@ -1079,10 +1281,16 @@ class App(ctk.CTk):
         self.tabview.set("Simulação")
 
         if sim_results is not None:
-            t, err, tau, anim_data, dt_visual = sim_results
-            self.last_sim_results  = sim_results
-            self.last_anim_data    = anim_data
-            self.last_dt_visual    = dt_visual
+            t         = sim_results["t"]
+            err       = sim_results["err"]
+            tau       = sim_results["tau"]
+            anim_data = sim_results["anim_data"]
+            dt_visual = sim_results["dt_visual"]
+            self.last_sim_results = sim_results
+            self.last_anim_data   = anim_data
+            self.last_dt_visual   = dt_visual
+            if "ui_params" in sim_results:
+                self._restore_ui_params(sim_results["ui_params"])
             self.plot_results(t, err, tau)
             self.btn_anim3d.configure(state="normal")
             self.log(f"✅ Simulação restaurada ({len(t)} pontos).")
