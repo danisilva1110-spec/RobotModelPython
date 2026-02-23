@@ -187,6 +187,27 @@ class RobotSimulator:
             f_fk = sp.lambdify(self.sym_vars, pos_expr, modules='numpy')
             self.funcs_fk_all_links.append(f_fk)
 
+        # Compila a matriz de rotação do frame final (para visualização de orientação)
+        R_last_expr = self.bot.frames[-1][:3, :3]
+        self.func_R_last = sp.lambdify(self.sym_vars, R_last_expr, modules='numpy')
+
+        # Detecta fronteira veículo/braço: conta juntas iniciais sem elo (link vector nulo)
+        self.vehicle_dof = 0
+        for vec in self.bot.link_vectors_mask:
+            try:
+                if sum(int(vec[j]) for j in range(3)) == 0:
+                    self.vehicle_dof += 1
+                else:
+                    break
+            except Exception:
+                break
+
+        # Se for UVMS (veículo + braço), compila também a rotação do frame do veículo
+        self.func_R_vehicle = None
+        if 0 < self.vehicle_dof < self.num_dof:
+            R_veh_expr = self.bot.frames[self.vehicle_dof - 1][:3, :3]
+            self.func_R_vehicle = sp.lambdify(self.sym_vars, R_veh_expr, modules='numpy')
+
         print("Compilação concluída!")
 
     def close(self):
@@ -692,7 +713,12 @@ class RobotSimulator:
                             "FK produziu valores não finitos durante a simulação."
                         )
                     links_pose.append(list(pos))
-                anim_data.append(links_pose)
+                R_mat  = np.array(self.func_R_last(*args_vis), dtype=float).reshape(3, 3)
+                frame_entry = {"links": links_pose, "R": R_mat.tolist()}
+                if self.func_R_vehicle is not None:
+                    R_veh = np.array(self.func_R_vehicle(*args_vis), dtype=float).reshape(3, 3)
+                    frame_entry["R_vehicle"] = R_veh.tolist()
+                anim_data.append(frame_entry)
 
         if use_parallel:
             worker_count = max_workers or max(1, min(3, os.cpu_count() or 1))

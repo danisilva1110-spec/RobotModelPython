@@ -1010,54 +1010,480 @@ class App(ctk.CTk):
         canvas.draw()
         canvas.get_tk_widget().pack(fill="both", expand=True)
 
+    def _is_free_floating(self):
+        """Retorna True se o robô não tem comprimento de elo (drone/corpo livre)."""
+        if self.active_bot is None:
+            return False
+        try:
+            total = sum(
+                int(self.active_bot.link_vectors_mask[i][j])
+                for i in range(len(self.active_bot.link_vectors_mask))
+                for j in range(3)
+            )
+            return total == 0
+        except Exception:
+            return False
+
+    @staticmethod
+    def _build_auv_geometry(size):
+        """Pré-computa toda a geometria do AUV no frame local (X=frente, Z=cima).
+        Retorna dict de arrays (N×3) prontos para transformação."""
+        L   = size * 1.4   # semi-comprimento do casco
+        r   = size * 0.28  # raio máximo do casco
+        NaN = np.full((1, 3), np.nan)
+
+        # --- Perfil do casco (curva torpedo) ---
+        n = 60
+        s = np.linspace(0, 1, n)
+        x = (s - 0.5) * 2 * L
+
+        def r_at(sv):
+            if sv < 0.12:  return r * (sv / 0.12) ** 0.55
+            elif sv > 0.80: return r * ((1 - sv) / 0.20) ** 0.40
+            else:           return r
+
+        rv = np.array([r_at(si) for si in s])
+
+        top_prof  = np.column_stack([x,  np.zeros(n),  rv])
+        bot_prof  = np.column_stack([x,  np.zeros(n), -rv])
+        port_prof = np.column_stack([x,  rv, np.zeros(n)])
+        stbd_prof = np.column_stack([x, -rv, np.zeros(n)])
+
+        # --- Anéis transversais (3: ré, meio, vante) ---
+        th = np.linspace(0, 2 * np.pi, 25)
+        def ring(xv, rv2):
+            return np.column_stack([np.full(25, xv), rv2 * np.cos(th), rv2 * np.sin(th)])
+
+        rings = np.vstack([
+            ring(-0.55 * L, r_at(0.23)),  NaN,
+            ring( 0.0,       r),           NaN,
+            ring( 0.55 * L, r_at(0.78)),
+        ])
+
+        # --- Torre de comando (casco de torpedo não tem; usamos janela/dome) ---
+        # Viewport: semi-anel na proa
+        th_vp  = np.linspace(-np.pi / 2, np.pi / 2, 18)
+        rv_vp  = r_at(0.90)
+        xv_bow = 0.80 * L
+        vp_h   = np.column_stack([np.full(18, xv_bow),
+                                   rv_vp * np.cos(th_vp),
+                                   rv_vp * np.sin(th_vp)])
+        vp_v   = np.column_stack([np.full(18, xv_bow),
+                                   rv_vp * np.sin(th_vp),   # rotacionado 90°
+                                   rv_vp * np.cos(th_vp)])
+        viewport = np.vstack([vp_h, NaN, vp_v])
+
+        # --- Superfícies de controle na popa (X em forma de cruz) ---
+        fin_xr  = -0.70 * L   # raiz da aleta
+        fin_xt  = -0.92 * L   # ponta da aleta
+        fin_zr  =  r * 0.88   # raiz (sobre o casco)
+        fin_zt  =  r * 1.55   # ponta
+        # Sweep: ponta mais para trás
+        fins_list = []
+        for sign_y, sign_z in [(0, 1), (0, -1), (1, 0), (-1, 0)]:
+            yr = sign_y * fin_zr;  yt = sign_y * fin_zt
+            zr = sign_z * fin_zr;  zt = sign_z * fin_zt
+            # Triângulo da aleta (raiz–ponta–base sweep)
+            fins_list.append(np.array([
+                [fin_xr, yr, zr],
+                [fin_xt, yt, zt],
+                [fin_xt, yt * 0.5, zt * 0.5],
+                [fin_xr, yr, zr],
+            ]))
+        fins = np.vstack([f if i == 0 else np.vstack([NaN, f])
+                          for i, f in enumerate(fins_list)])
+
+        # --- Hélice na popa ---
+        th_p   = np.linspace(0, 2 * np.pi, 28)
+        r_prop = r * 0.65
+        x_prop = -L * 1.02
+        prop_ring = np.column_stack([np.full(28, x_prop),
+                                     r_prop * np.cos(th_p),
+                                     r_prop * np.sin(th_p)])
+        # 3 pás
+        blade_angles = [0, np.pi * 2 / 3, np.pi * 4 / 3]
+        blades_list  = [
+            np.array([[x_prop, 0, 0],
+                       [x_prop, r_prop * np.cos(a), r_prop * np.sin(a)]])
+            for a in blade_angles
+        ]
+        blades = np.vstack([b if i == 0 else np.vstack([NaN, b])
+                            for i, b in enumerate(blades_list)])
+        propeller = np.vstack([prop_ring, NaN, blades])
+
+        return {
+            "top":      top_prof,
+            "bot":      bot_prof,
+            "port":     port_prof,
+            "stbd":     stbd_prof,
+            "rings":    rings,
+            "viewport": viewport,
+            "fins":     fins,
+            "prop":     propeller,
+        }
+
     def play_animation(self):
-        """ Abre janela 3D """
-        if not hasattr(self, 'last_anim_data'): return
-        
+        """Abre janela 3D — modo AUV/Submarino, Drone ou Braço conforme configuração."""
+        if not hasattr(self, 'last_anim_data'):
+            return
+
         import matplotlib.animation as animation
-        
+
         data = self.last_anim_data
         if not data or len(data) == 0:
             self.log("❌ Sem dados de animação.")
             return
 
-        steps = len(data)
-        fig = plt.figure("Animação 3D", figsize=(8, 6))
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Calcula limites
-        all_points = []
-        for frame in data:
-            for p in frame: all_points.append(p)
-        all_points = np.array(all_points)
-        
-        if len(all_points) > 0:
-            max_val = np.max(np.abs(all_points)) * 1.2 + 0.1
-            ax.set_xlim(-max_val, max_val)
-            ax.set_ylim(-max_val, max_val)
-            ax.set_zlim(-max_val, max_val)
-        
-        line, = ax.plot([], [], [], 'o-', lw=3, markersize=6, color='blue')
-        trace, = ax.plot([], [], [], '-', lw=1, color='red', alpha=0.5)
-        trace_x, trace_y, trace_z = [], [], []
+        is_new_format  = isinstance(data[0], dict)
+        is_free        = self._is_free_floating()
+        is_underwater  = (self.mode_var.get() == "Água (UVMS)")
+        steps          = len(data)
+        dt_visual      = getattr(self, "last_dt_visual", 0.05)
 
-        def update(frame_idx):
-            pose = np.array(data[frame_idx])
-            xs, ys, zs = pose[:, 0], pose[:, 1], pose[:, 2]
-            
-            line.set_data(xs, ys)
-            line.set_3d_properties(zs)
-            
-            trace_x.append(xs[-1])
-            trace_y.append(ys[-1])
-            trace_z.append(zs[-1])
-            trace.set_data(trace_x, trace_y)
-            trace.set_3d_properties(trace_z)
-            dt_visual = getattr(self, "last_dt_visual", 0.05)
-            ax.set_title(f"T = {frame_idx*dt_visual:.2f}s")
-            return line, trace
+        # Detecta UVMS: veículo (DOFs sem elo) + braço (DOFs com elo)
+        vehicle_dof = getattr(self.active_sim, 'vehicle_dof', 0) if self.active_sim else 0
+        total_dof   = len(self.active_bot.joint_config) if self.active_bot else 0
+        is_uvms     = (is_new_format and is_underwater
+                       and 0 < vehicle_dof < total_dof
+                       and "R_vehicle" in data[0])
 
-        ani = animation.FuncAnimation(fig, update, frames=range(0, steps, 1), interval=50, blit=False)
+        fig = plt.figure("Animação 3D", figsize=(9, 7))
+        ax  = fig.add_subplot(111, projection='3d')
+        ax.set_xlabel("X (m)"); ax.set_ylabel("Y (m)"); ax.set_zlabel("Z (m)")
+
+        # Helper interno reutilizado por AUV e UVMS
+        def _apply_tf(pts_local, R, pos):
+            mask  = np.any(np.isnan(pts_local), axis=1)
+            out   = pts_local.copy()
+            valid = ~mask
+            out[valid] = (R @ pts_local[valid].T).T + pos
+            return out
+
+        def _set_line(line_obj, pts):
+            line_obj.set_data(pts[:, 0], pts[:, 1])
+            line_obj.set_3d_properties(pts[:, 2])
+
+        def _setup_underwater(ax_ref, fig_ref):
+            ax_ref.set_facecolor('#0a1628')
+            fig_ref.patch.set_facecolor('#0a1628')
+            ax_ref.tick_params(colors='#8ab4d8')
+            for lbl in (ax_ref.xaxis.label, ax_ref.yaxis.label, ax_ref.zaxis.label):
+                lbl.set_color('#8ab4d8')
+
+        # ------------------------------------------------------------------ #
+        #  MODO UVMS  (AUV + braço acoplado, ambiente água)                  #
+        # ------------------------------------------------------------------ #
+        if is_uvms:
+            # Posições do veículo e do end-effector
+            veh_pts = np.array([np.array(f["links"][vehicle_dof], dtype=float) for f in data])
+            ee_pts  = np.array([np.array(f["links"][-1],          dtype=float) for f in data])
+            all_pts = np.vstack([veh_pts, ee_pts])
+            c       = all_pts.mean(axis=0)
+            spread  = max(np.max(np.abs(all_pts - c)) * 1.8 + 0.05, 0.3)
+            ax.set_xlim(c[0]-spread, c[0]+spread)
+            ax.set_ylim(c[1]-spread, c[1]+spread)
+            ax.set_zlim(c[2]-spread, c[2]+spread)
+            _setup_underwater(ax, fig)
+
+            size      = spread * 0.16
+            TRAIL_LEN = 120
+            geom      = self._build_auv_geometry(size)
+
+            C_HULL  = '#4a90c4';  C_RING  = '#2d6a9f';  C_FIN   = '#5ba3d9'
+            C_PROP  = '#f0a500';  C_TRAIL = '#00e5ff';  C_ARM   = '#f39c12'
+            C_JOINT = '#e74c3c';  C_AX_X  = '#ff4d4d';  C_AX_Y  = '#66ff66'
+            C_AX_Z  = '#4db8ff'
+
+            def _mk(color, lw, alpha=1.0):
+                return ax.plot([], [], [], '-', lw=lw, color=color, alpha=alpha)[0]
+
+            # AUV body lines
+            hull_top   = _mk(C_HULL,   1.8)
+            hull_bot   = _mk(C_HULL,   1.8)
+            hull_port  = _mk(C_HULL,   1.1, 0.65)
+            hull_stbd  = _mk(C_HULL,   1.1, 0.65)
+            rings_line = _mk(C_RING,   0.9, 0.60)
+            vp_line    = _mk('#a8d8f0', 1.3, 0.85)
+            fins_line  = _mk(C_FIN,    1.5)
+            prop_line  = _mk(C_PROP,   1.4, 0.85)
+            # Arm lines
+            arm_line,  = ax.plot([], [], [], 'o-', lw=2.5, color=C_ARM,   ms=7,
+                                 markerfacecolor=C_JOINT, markeredgecolor='white',
+                                 markeredgewidth=0.8)
+            trail_line = _mk(C_TRAIL, 1.4, 0.50)
+            # Orientation axes at end-effector
+            axis_x = _mk(C_AX_X, 1.8)
+            axis_y = _mk(C_AX_Y, 1.8)
+            axis_z = _mk(C_AX_Z, 1.8)
+
+            ax.scatter(*veh_pts[0],  c='#00e676', s=50, zorder=5,
+                       label='Início (veículo)', depthshade=False)
+            ax.scatter(*ee_pts[-1],  c='#ff1744', s=55, zorder=5, marker='*',
+                       label='Alvo (efetuador)', depthshade=False)
+            ax.legend(loc='upper left', fontsize=8, facecolor='#0a1628',
+                      labelcolor='#8ab4d8', edgecolor='#2d6a9f')
+
+            trail_x, trail_y, trail_z = [], [], []
+
+            def _update_uvms(fi):
+                frame   = data[fi]
+                links   = [np.array(p, dtype=float) for p in frame["links"]]
+                veh_pos = links[vehicle_dof]
+                ee_pos  = links[-1]
+                R_veh   = np.array(frame["R_vehicle"], dtype=float).reshape(3, 3)
+                R_end   = np.array(frame["R"],         dtype=float).reshape(3, 3)
+
+                # AUV body (submarino no frame do veículo)
+                _set_line(hull_top,   _apply_tf(geom["top"],      R_veh, veh_pos))
+                _set_line(hull_bot,   _apply_tf(geom["bot"],      R_veh, veh_pos))
+                _set_line(hull_port,  _apply_tf(geom["port"],     R_veh, veh_pos))
+                _set_line(hull_stbd,  _apply_tf(geom["stbd"],     R_veh, veh_pos))
+                _set_line(rings_line, _apply_tf(geom["rings"],    R_veh, veh_pos))
+                _set_line(vp_line,    _apply_tf(geom["viewport"], R_veh, veh_pos))
+                _set_line(fins_line,  _apply_tf(geom["fins"],     R_veh, veh_pos))
+                _set_line(prop_line,  _apply_tf(geom["prop"],     R_veh, veh_pos))
+
+                # Braço: cadeia do veículo ao end-effector
+                arm_pts = np.array(links[vehicle_dof:])
+                arm_line.set_data(arm_pts[:, 0], arm_pts[:, 1])
+                arm_line.set_3d_properties(arm_pts[:, 2])
+
+                # Trilha do end-effector
+                trail_x.append(ee_pos[0])
+                trail_y.append(ee_pos[1])
+                trail_z.append(ee_pos[2])
+                trail_line.set_data(trail_x[-TRAIL_LEN:], trail_y[-TRAIL_LEN:])
+                trail_line.set_3d_properties(trail_z[-TRAIL_LEN:])
+
+                # Eixos de orientação do efetuador final
+                ax_len = size * 0.9
+                for ln, col in [(axis_x, 0), (axis_y, 1), (axis_z, 2)]:
+                    tip = ee_pos + R_end[:, col] * ax_len
+                    ln.set_data([ee_pos[0], tip[0]], [ee_pos[1], tip[1]])
+                    ln.set_3d_properties([ee_pos[2], tip[2]])
+
+                ax.set_title(f"UVMS  —  T = {fi * dt_visual:.2f}s",
+                             fontsize=11, color='#8ab4d8')
+                return (hull_top, hull_bot, hull_port, hull_stbd,
+                        rings_line, vp_line, fins_line, prop_line,
+                        arm_line, trail_line, axis_x, axis_y, axis_z)
+
+            ani = animation.FuncAnimation(
+                fig, _update_uvms, frames=range(steps), interval=50, blit=False
+            )
+
+        # ------------------------------------------------------------------ #
+        #  MODO AUV / SUBMARINO  (sem elos + ambiente água, sem braço)       #
+        # ------------------------------------------------------------------ #
+        elif is_free and is_new_format and is_underwater:
+            ee_pts = np.array([np.array(f["links"][-1], dtype=float) for f in data])
+            c      = ee_pts.mean(axis=0)
+            spread = max(np.max(np.abs(ee_pts - c)) * 1.7 + 0.05, 0.3)
+            ax.set_xlim(c[0]-spread, c[0]+spread)
+            ax.set_ylim(c[1]-spread, c[1]+spread)
+            ax.set_zlim(c[2]-spread, c[2]+spread)
+            ax.set_facecolor('#0a1628')
+            fig.patch.set_facecolor('#0a1628')
+            ax.tick_params(colors='#8ab4d8')
+            ax.xaxis.label.set_color('#8ab4d8')
+            ax.yaxis.label.set_color('#8ab4d8')
+            ax.zaxis.label.set_color('#8ab4d8')
+
+            size   = spread * 0.18
+            TRAIL_LEN = 120
+            geom   = self._build_auv_geometry(size)
+
+            # Paleta submarina
+            C_HULL  = '#4a90c4'
+            C_RING  = '#2d6a9f'
+            C_FIN   = '#5ba3d9'
+            C_PROP  = '#f0a500'
+            C_TRAIL = '#00e5ff'
+            C_AX_X  = '#ff4d4d'
+            C_AX_Y  = '#66ff66'
+            C_AX_Z  = '#4db8ff'
+
+            def _make(color, lw, alpha=1.0, style='-'):
+                return ax.plot([], [], [], style, lw=lw, color=color, alpha=alpha)[0]
+
+            trail_line = _make(C_TRAIL,  1.4, 0.50)
+            hull_top   = _make(C_HULL,   1.8)
+            hull_bot   = _make(C_HULL,   1.8)
+            hull_port  = _make(C_HULL,   1.2, 0.70)
+            hull_stbd  = _make(C_HULL,   1.2, 0.70)
+            rings_line = _make(C_RING,   1.0, 0.65)
+            vp_line    = _make('#a8d8f0', 1.4, 0.90)
+            fins_line  = _make(C_FIN,    1.6)
+            prop_line  = _make(C_PROP,   1.5, 0.90)
+            axis_x     = _make(C_AX_X,   2.0)
+            axis_y     = _make(C_AX_Y,   2.0)
+            axis_z     = _make(C_AX_Z,   2.0)
+
+            ax.scatter(*ee_pts[0],  c='#00e676', s=60, zorder=5, label='Início',
+                       depthshade=False)
+            ax.scatter(*ee_pts[-1], c='#ff1744', s=60, zorder=5, marker='*',
+                       label='Alvo', depthshade=False)
+            ax.legend(loc='upper left', fontsize=8, facecolor='#0a1628',
+                      labelcolor='#8ab4d8', edgecolor='#2d6a9f')
+
+            trail_x, trail_y, trail_z = [], [], []
+
+            def _update_auv(fi):
+                frame = data[fi]
+                pos   = np.array(frame["links"][-1], dtype=float)
+                R     = np.array(frame["R"], dtype=float).reshape(3, 3)
+
+                trail_x.append(pos[0])
+                trail_y.append(pos[1])
+                trail_z.append(pos[2])
+                trail_line.set_data(trail_x[-TRAIL_LEN:], trail_y[-TRAIL_LEN:])
+                trail_line.set_3d_properties(trail_z[-TRAIL_LEN:])
+
+                _set_line(hull_top,   _apply_tf(geom["top"],      R, pos))
+                _set_line(hull_bot,   _apply_tf(geom["bot"],      R, pos))
+                _set_line(hull_port,  _apply_tf(geom["port"],     R, pos))
+                _set_line(hull_stbd,  _apply_tf(geom["stbd"],     R, pos))
+                _set_line(rings_line, _apply_tf(geom["rings"],    R, pos))
+                _set_line(vp_line,    _apply_tf(geom["viewport"], R, pos))
+                _set_line(fins_line,  _apply_tf(geom["fins"],     R, pos))
+                _set_line(prop_line,  _apply_tf(geom["prop"],     R, pos))
+
+                ax_len = size * 1.1
+                for line_obj, col in [(axis_x, 0), (axis_y, 1), (axis_z, 2)]:
+                    tip = pos + R[:, col] * ax_len
+                    line_obj.set_data([pos[0], tip[0]], [pos[1], tip[1]])
+                    line_obj.set_3d_properties([pos[2], tip[2]])
+
+                ax.set_title(f"T = {fi * dt_visual:.2f}s", fontsize=11,
+                             color='#8ab4d8')
+                return (trail_line, hull_top, hull_bot, hull_port, hull_stbd,
+                        rings_line, vp_line, fins_line, prop_line,
+                        axis_x, axis_y, axis_z)
+
+            ani = animation.FuncAnimation(
+                fig, _update_auv, frames=range(steps), interval=50, blit=False
+            )
+
+        # ------------------------------------------------------------------ #
+        #  MODO DRONE  (sem elos + ar)                                        #
+        # ------------------------------------------------------------------ #
+        elif is_free and is_new_format:
+            # Posições do end-effector em todos os frames
+            ee_pts = np.array([np.array(f["links"][-1], dtype=float) for f in data])
+            c      = ee_pts.mean(axis=0)
+            spread = max(np.max(np.abs(ee_pts - c)) * 1.6 + 0.05, 0.3)
+            ax.set_xlim(c[0]-spread, c[0]+spread)
+            ax.set_ylim(c[1]-spread, c[1]+spread)
+            ax.set_zlim(c[2]-spread, c[2]+spread)
+
+            arm_len   = spread * 0.12
+            rotor_r   = arm_len * 0.45
+            TRAIL_LEN = 100
+
+            # --- objetos gráficos persistentes ---
+            trail_line,  = ax.plot([], [], [], '-',  lw=1.5, color='deepskyblue',  alpha=0.55)
+            body_line,   = ax.plot([], [], [], 'o-', lw=2.5, color='#2c3e50',      ms=4)
+            axis_x_line, = ax.plot([], [], [], '-',  lw=2,   color='red')
+            axis_y_line, = ax.plot([], [], [], '-',  lw=2,   color='limegreen')
+            axis_z_line, = ax.plot([], [], [], '-',  lw=2,   color='dodgerblue')
+            rotor_lines  = [ax.plot([], [], [], '-', lw=1.2, color='#7f8c8d', alpha=0.9)[0]
+                            for _ in range(4)]
+
+            # Marcadores de início e alvo
+            ax.scatter(*ee_pts[0],  c='limegreen', s=70, zorder=5, label='Início')
+            ax.scatter(*ee_pts[-1], c='tomato',    s=70, zorder=5, marker='*', label='Alvo')
+            ax.legend(loc='upper left', fontsize=8)
+
+            theta_r = np.linspace(0, 2 * np.pi, 24)
+            trail_x, trail_y, trail_z = [], [], []
+
+            # Direções locais dos 4 braços (em ângulos de 45 °)
+            ARM_DIRS = np.array([
+                [ 1,  1, 0],
+                [-1,  1, 0],
+                [-1, -1, 0],
+                [ 1, -1, 0],
+            ], dtype=float)
+            ARM_DIRS /= np.linalg.norm(ARM_DIRS[0])
+
+            def _update_drone(fi):
+                frame = data[fi]
+                pos   = np.array(frame["links"][-1], dtype=float)
+                R     = np.array(frame["R"],         dtype=float).reshape(3, 3)
+
+                # Trilha
+                trail_x.append(pos[0]); trail_y.append(pos[1]); trail_z.append(pos[2])
+                tx = trail_x[-TRAIL_LEN:]; ty = trail_y[-TRAIL_LEN:]; tz = trail_z[-TRAIL_LEN:]
+                trail_line.set_data(tx, ty); trail_line.set_3d_properties(tz)
+
+                # Corpo — dois segmentos cruzados (arm0↔arm2, arm1↔arm3)
+                tips = (R @ (ARM_DIRS * arm_len).T).T + pos
+                bx = [tips[0,0], pos[0], tips[2,0], np.nan,
+                      tips[1,0], pos[0], tips[3,0]]
+                by = [tips[0,1], pos[1], tips[2,1], np.nan,
+                      tips[1,1], pos[1], tips[3,1]]
+                bz = [tips[0,2], pos[2], tips[2,2], np.nan,
+                      tips[1,2], pos[2], tips[3,2]]
+                body_line.set_data(bx, by); body_line.set_3d_properties(bz)
+
+                # Hélices (discos circulares no plano XY do drone)
+                for k, tip in enumerate(tips):
+                    circ_local  = np.array([rotor_r * np.cos(theta_r),
+                                            rotor_r * np.sin(theta_r),
+                                            np.zeros_like(theta_r)])
+                    circ_global = (R @ circ_local).T + tip
+                    rotor_lines[k].set_data(circ_global[:, 0], circ_global[:, 1])
+                    rotor_lines[k].set_3d_properties(circ_global[:, 2])
+
+                # Eixos de orientação (X=vermelho, Y=verde, Z=azul)
+                for line_obj, col in [(axis_x_line, 0),
+                                      (axis_y_line, 1),
+                                      (axis_z_line, 2)]:
+                    tip_a = pos + R[:, col] * arm_len * 1.2
+                    line_obj.set_data([pos[0], tip_a[0]], [pos[1], tip_a[1]])
+                    line_obj.set_3d_properties([pos[2], tip_a[2]])
+
+                ax.set_title(f"T = {fi * dt_visual:.2f}s", fontsize=11)
+                return (trail_line, body_line, axis_x_line, axis_y_line, axis_z_line,
+                        *rotor_lines)
+
+            ani = animation.FuncAnimation(
+                fig, _update_drone, frames=range(steps), interval=50, blit=False
+            )
+
+        # ------------------------------------------------------------------ #
+        #  MODO BRAÇO  (há elos → mostrar cadeia cinemática completa)        #
+        # ------------------------------------------------------------------ #
+        else:
+            all_pts = []
+            for frame in data:
+                links = frame["links"] if is_new_format else frame
+                all_pts.extend(links)
+            all_pts = np.array(all_pts)
+            if len(all_pts) > 0:
+                mv = np.max(np.abs(all_pts)) * 1.2 + 0.1
+                ax.set_xlim(-mv, mv); ax.set_ylim(-mv, mv); ax.set_zlim(-mv, mv)
+
+            line,  = ax.plot([], [], [], 'o-', lw=3, markersize=6, color='blue')
+            trace, = ax.plot([], [], [], '-',  lw=1, color='red',   alpha=0.5)
+            trace_x, trace_y, trace_z = [], [], []
+
+            def _update_arm(fi):
+                frame = data[fi]
+                links = frame["links"] if is_new_format else frame
+                pose  = np.array(links)
+                xs, ys, zs = pose[:, 0], pose[:, 1], pose[:, 2]
+                line.set_data(xs, ys); line.set_3d_properties(zs)
+                trace_x.append(xs[-1]); trace_y.append(ys[-1]); trace_z.append(zs[-1])
+                trace.set_data(trace_x, trace_y); trace.set_3d_properties(trace_z)
+                ax.set_title(f"T = {fi * dt_visual:.2f}s")
+                return line, trace
+
+            ani = animation.FuncAnimation(
+                fig, _update_arm, frames=range(steps), interval=50, blit=False
+            )
+
+        plt.tight_layout()
         plt.show()
 
     # ==========================================================================
