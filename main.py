@@ -471,6 +471,63 @@ class App(ctk.CTk):
         )
         self.switch_dir.pack(pady=5)
 
+        # --- Orientação ---
+        ctk.CTkLabel(self.sim_left, text="--- Orientação ---", font=("Arial", 12, "bold")).pack(pady=5)
+
+        self.orient_mode_var = ctk.StringVar(value="Livre")
+        self.orient_mode_dd = ctk.CTkOptionMenu(
+            self.sim_left,
+            values=[
+                "Livre",
+                "Fixa",
+                "Tangente à Trajetória",
+                "Apontar para o Alvo",
+                "SLERP",
+                "Normal à Superfície",
+            ],
+            variable=self.orient_mode_var,
+            command=self._on_orient_mode_change,
+        )
+        self.orient_mode_dd.pack(fill="x", pady=(0, 5))
+
+        # SLERP — final orientation as Euler angles (deg, intrinsic XYZ)
+        self.slerp_frame = ctk.CTkFrame(self.sim_left)
+        ctk.CTkLabel(
+            self.slerp_frame,
+            text="Orientação Final Rf  (graus, XYZ):",
+            anchor="w",
+        ).pack(anchor="w", pady=(4, 2))
+        for label_text, attr in [("Roll (°):", "entry_slerp_roll"),
+                                  ("Pitch (°):", "entry_slerp_pitch"),
+                                  ("Yaw (°):", "entry_slerp_yaw")]:
+            row = ctk.CTkFrame(self.slerp_frame, fg_color="transparent")
+            row.pack(fill="x", pady=1)
+            ctk.CTkLabel(row, text=label_text, width=80, anchor="w").pack(side="left")
+            e = ctk.CTkEntry(row)
+            e.insert(0, "0.0")
+            e.pack(side="left", fill="x", expand=True)
+            setattr(self, attr, e)
+
+        # Normal à Superfície — surface normal vector
+        self.normal_orient_frame = ctk.CTkFrame(self.sim_left)
+        ctk.CTkLabel(
+            self.normal_orient_frame,
+            text="Normal à Superfície (nx, ny, nz):",
+            anchor="w",
+        ).pack(anchor="w", pady=(4, 2))
+        self.entry_orient_normal = ctk.CTkEntry(self.normal_orient_frame)
+        self.entry_orient_normal.insert(0, "0, 0, 1")
+        self.entry_orient_normal.pack(fill="x", pady=(0, 4))
+
+        # Shared orientation gain (visible for all non-Livre modes)
+        self.orient_gain_frame = ctk.CTkFrame(self.sim_left, fg_color="transparent")
+        row_gain = ctk.CTkFrame(self.orient_gain_frame, fg_color="transparent")
+        row_gain.pack(fill="x")
+        ctk.CTkLabel(row_gain, text="Kp Orient.:", width=90, anchor="w").pack(side="left")
+        self.entry_kp_orient = ctk.CTkEntry(row_gain)
+        self.entry_kp_orient.insert(0, "5.0")
+        self.entry_kp_orient.pack(side="left", fill="x", expand=True)
+
         # --- Parâmetros Físicos por Elo ---
         ctk.CTkLabel(self.sim_left, text="--- Parâmetros Físicos ---", font=("Arial", 12, "bold")).pack(pady=5)
         self.params_container = ctk.CTkFrame(self.sim_left, fg_color="transparent")
@@ -602,6 +659,24 @@ class App(ctk.CTk):
             self.circle_frame.pack(fill="x", pady=5, after=self.traj_dd)
         else:
             self.circle_frame.pack_forget()
+
+    def _on_orient_mode_change(self, choice):
+        """Show/hide orientation auxiliary inputs based on selected mode."""
+        self.slerp_frame.pack_forget()
+        self.normal_orient_frame.pack_forget()
+        self.orient_gain_frame.pack_forget()
+
+        if choice == "Livre":
+            return
+
+        # Anchor: pack the gain row directly after the dropdown, then insert
+        # mode-specific frames before it so they appear between dd and gain.
+        self.orient_gain_frame.pack(fill="x", pady=(0, 8), after=self.orient_mode_dd)
+
+        if choice == "SLERP":
+            self.slerp_frame.pack(fill="x", pady=(0, 4), after=self.orient_mode_dd)
+        elif choice == "Normal à Superfície":
+            self.normal_orient_frame.pack(fill="x", pady=(0, 4), after=self.orient_mode_dd)
 
     def _update_smc_variant(self, choice):
         if choice == "CT-SMC":
@@ -972,15 +1047,10 @@ class App(ctk.CTk):
 
             if mode_str == "Círculo":
                 traj_mode = "Circle"
-                # Lê os campos específicos que aparecem quando "Círculo" é selecionado
                 try:
                     r_val = float(self.entry_radius.get())
                     n_vec = [float(x) for x in self.entry_normal.get().split(",")]
-                    
-                    # Verifica o Switch de sentido
-                    # Se o texto conter "Anti", é +1, senão é -1
                     dir_val = 1 if "Anti" in self.switch_dir_var.get() else -1
-                    
                     traj_params = {
                         'radius': r_val,
                         'normal': n_vec,
@@ -989,6 +1059,45 @@ class App(ctk.CTk):
                 except ValueError:
                     self.log("❌ Erro nos parâmetros do Círculo. Verifique números e vírgulas.")
                     return
+
+            # ---------------------------------------------------------
+            # 5. Orientação
+            # ---------------------------------------------------------
+            orient_mode_str = self.orient_mode_var.get()
+            orient_params = {}
+
+            if orient_mode_str == "SLERP":
+                try:
+                    roll_deg  = float(self.entry_slerp_roll.get())
+                    pitch_deg = float(self.entry_slerp_pitch.get())
+                    yaw_deg   = float(self.entry_slerp_yaw.get())
+                    roll, pitch, yaw = np.radians([roll_deg, pitch_deg, yaw_deg])
+                    cr, sr = np.cos(roll),  np.sin(roll)
+                    cp, sp = np.cos(pitch), np.sin(pitch)
+                    cy, sy = np.cos(yaw),   np.sin(yaw)
+                    Rx = np.array([[1, 0, 0], [0, cr, -sr], [0, sr, cr]])
+                    Ry = np.array([[cp, 0, sp], [0, 1, 0], [-sp, 0, cp]])
+                    Rz = np.array([[cy, -sy, 0], [sy, cy, 0], [0, 0, 1]])
+                    orient_params['Rf'] = Rz @ Ry @ Rx
+                except ValueError:
+                    self.log("❌ Ângulos SLERP inválidos. Use valores numéricos.")
+                    return
+
+            elif orient_mode_str == "Normal à Superfície":
+                try:
+                    n_vals = [float(x) for x in self.entry_orient_normal.get().split(",")]
+                    if len(n_vals) != 3:
+                        raise ValueError("Normal deve ter exatamente 3 componentes.")
+                    orient_params['normal'] = n_vals
+                except ValueError as e:
+                    self.log(f"❌ Vetor normal inválido: {e}")
+                    return
+
+            if orient_mode_str != "Livre":
+                try:
+                    orient_params['Kp_orient'] = float(self.entry_kp_orient.get())
+                except ValueError:
+                    orient_params['Kp_orient'] = 5.0
 
         except ValueError as ve:
             self.log(f"❌ Erro de formatação nos vetores: {ve}")
@@ -1002,7 +1111,8 @@ class App(ctk.CTk):
         ctrl_label = ctrl_params.get("type", ctrl_mode)
         self.log(
             "Iniciando Simulação "
-            f"(Modo: {mode_str}, Controle: {ctrl_label}, Perturbação: {dist_value:.1f} Nm)..."
+            f"(Trajetória: {mode_str}, Orientação: {orient_mode_str}, "
+            f"Controle: {ctrl_label}, Perturbação: {dist_value:.1f} Nm)..."
         )
         
         # ---------------------------------------------------------
@@ -1020,7 +1130,9 @@ class App(ctk.CTk):
                 use_feedforward_vel=use_feedforward_vel,
                 q_init=q_init,
                 ctrl_params=ctrl_params,
-                disturbance_torque=dist_value
+                disturbance_torque=dist_value,
+                orient_mode=orient_mode_str,
+                orient_params=orient_params,
             )
             
             self.last_anim_data = anim_data
@@ -1593,6 +1705,13 @@ class App(ctk.CTk):
             "radius":            self.entry_radius.get(),
             "normal":            self.entry_normal.get(),
             "direction":         self.switch_dir_var.get(),
+            # Orientação
+            "orient_mode":       self.orient_mode_var.get(),
+            "slerp_roll":        self.entry_slerp_roll.get(),
+            "slerp_pitch":       self.entry_slerp_pitch.get(),
+            "slerp_yaw":         self.entry_slerp_yaw.get(),
+            "orient_normal":     self.entry_orient_normal.get(),
+            "kp_orient":         self.entry_kp_orient.get(),
             # Parâmetros físicos dinâmicos (massas, comprimentos, inércias, etc.)
             "dynamic_params":    {k: e.get() for k, e in self.dynamic_entries.items()},
             # Estado das seções expansíveis
@@ -1654,6 +1773,15 @@ class App(ctk.CTk):
         if "radius"    in params: _set(self.entry_radius, params["radius"])
         if "normal"    in params: _set(self.entry_normal, params["normal"])
         if "direction" in params: self.switch_dir_var.set(params["direction"])
+
+        if "orient_mode" in params:
+            self.orient_mode_var.set(params["orient_mode"])
+            self._on_orient_mode_change(params["orient_mode"])
+        if "slerp_roll"    in params: _set(self.entry_slerp_roll,   params["slerp_roll"])
+        if "slerp_pitch"   in params: _set(self.entry_slerp_pitch,  params["slerp_pitch"])
+        if "slerp_yaw"     in params: _set(self.entry_slerp_yaw,    params["slerp_yaw"])
+        if "orient_normal" in params: _set(self.entry_orient_normal, params["orient_normal"])
+        if "kp_orient"     in params: _set(self.entry_kp_orient,     params["kp_orient"])
 
         if "dynamic_params" in params:
             for k, v in params["dynamic_params"].items():

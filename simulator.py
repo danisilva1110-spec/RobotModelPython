@@ -7,6 +7,74 @@ import sympy as sp
 _WORKER_FUNCS = {}
 
 
+# =============================================================================
+# Orientation helpers (module-level, used by RobotSimulator)
+# =============================================================================
+
+def _build_frame_from_z_axis(z_axis):
+    """Return a rotation matrix whose Z column aligns with z_axis (Gram-Schmidt).
+
+    The X/Y columns are derived consistently: when z is not near vertical
+    [0,0,1], the global up vector is used as the secondary reference; when z
+    IS near vertical, [0,1,0] is used to avoid a near-zero cross-product.
+    """
+    z = np.asarray(z_axis, dtype=float)
+    nz = np.linalg.norm(z)
+    if nz < 1e-9:
+        return np.eye(3)
+    z = z / nz
+    ref = np.array([0.0, 1.0, 0.0]) if abs(z[2]) >= 0.9 else np.array([0.0, 0.0, 1.0])
+    x = np.cross(ref, z)
+    x = x / np.linalg.norm(x)
+    y = np.cross(z, x)
+    y = y / np.linalg.norm(y)
+    return np.column_stack([x, y, z])
+
+
+def _rotation_error_vec(R_ref, R_curr):
+    """3-vector orientation error via the skew-symmetric formulation.
+
+    Returns e_R = vee(0.5 * (R_ref @ R_curr^T − R_curr @ R_ref^T)), which is
+    proportional to the axis-angle error for small misalignments.
+    """
+    skew = 0.5 * (R_ref @ R_curr.T - R_curr @ R_ref.T)
+    return np.array([skew[2, 1], skew[0, 2], skew[1, 0]])
+
+
+def _slerp_rotation(R0, Rf, s, sd):
+    """SLERP between R0 and Rf at scalar fraction s ∈ [0, 1].
+
+    Parameters
+    ----------
+    R0, Rf : (3,3) rotation matrices
+    s      : current interpolation fraction (0 = R0, 1 = Rf)
+    sd     : time-derivative of s (ds/dt)
+
+    Returns
+    -------
+    R_ref     : (3,3) interpolated rotation matrix
+    omega_ref : (3,) angular velocity in the world frame
+    """
+    dR = R0.T @ Rf
+    trace_val = np.clip((np.trace(dR) - 1.0) / 2.0, -1.0, 1.0)
+    theta_total = np.arccos(trace_val)
+    if abs(theta_total) < 1e-9:
+        return R0.copy(), np.zeros(3)
+    sin_t = np.sin(theta_total)
+    skew = (dR - dR.T) / (2.0 * sin_t)
+    axis_local = np.array([skew[2, 1], skew[0, 2], skew[1, 0]])
+    theta_s = s * theta_total
+    K = np.array([
+        [0.0,             -axis_local[2],  axis_local[1]],
+        [axis_local[2],    0.0,           -axis_local[0]],
+        [-axis_local[1],   axis_local[0],  0.0],
+    ])
+    dR_s = np.eye(3) + np.sin(theta_s) * K + (1.0 - np.cos(theta_s)) * (K @ K)
+    R_ref = R0 @ dR_s
+    omega_ref = (sd * theta_total) * (R0 @ axis_local)
+    return R_ref, omega_ref
+
+
 class Decentralized_LADRC:
     """LADRC descentralizado para múltiplas juntas (2ª ordem)."""
 
@@ -319,86 +387,134 @@ class RobotSimulator:
         wrapped = (error_vector + np.pi) % (2 * np.pi) - np.pi
         return np.where(self.is_rotational, wrapped, error_vector)
 
-    def trajectory_planning(self, t, t_total, Pi, Pf, mode="Line", params=None):
-        """ Implementação fiel do algoritmo MATLAB 'Planejamentos.txt' """
-        if t >= t_total: return Pf, np.zeros(3), np.zeros(3)
-        
-        # Polinômio Cúbico (s, sd, sdd) - Igual ao FCubica do MATLAB
+    def trajectory_planning(self, t, t_total, Pi, Pf, mode="Line", params=None,
+                             orient_mode="Livre", orient_params=None):
+        """Planejamento de trajetória com referência de orientação opcional.
+
+        Returns
+        -------
+        P_ref, V_ref, A_ref : Cartesian position/velocity/acceleration reference
+        R_ref               : (3,3) rotation matrix reference (None when orient_mode='Livre')
+        omega_ref           : (3,) reference angular velocity in world frame
+        """
+        orient_params = orient_params or {}
+
+        def _orient_ref(P_ref, V_ref, A_ref, s, sd):
+            """Compute (R_ref, omega_ref) for the current instant."""
+            if orient_mode == "Livre":
+                return None, np.zeros(3)
+
+            elif orient_mode == "Fixa":
+                return orient_params.get("R0", np.eye(3)).copy(), np.zeros(3)
+
+            elif orient_mode == "Tangente à Trajetória":
+                v_norm = np.linalg.norm(V_ref)
+                if v_norm < 1e-9:
+                    return orient_params.get("R0", np.eye(3)).copy(), np.zeros(3)
+                z_hat = V_ref / v_norm
+                # Angular velocity of the z-axis: omega = z × (dz/dt)
+                n_dot = (A_ref - np.dot(A_ref, z_hat) * z_hat) / v_norm
+                omega = np.cross(z_hat, n_dot)
+                return _build_frame_from_z_axis(z_hat), omega
+
+            elif orient_mode == "Apontar para o Alvo":
+                dir_vec = Pf - P_ref
+                d_norm = np.linalg.norm(dir_vec)
+                if d_norm < 1e-9:
+                    return orient_params.get("R0", np.eye(3)).copy(), np.zeros(3)
+                z_hat = dir_vec / d_norm
+                # d(Pf - P_ref)/dt = -V_ref (Pf is constant)
+                dir_dot = -V_ref
+                z_dot = (dir_dot - np.dot(dir_dot, z_hat) * z_hat) / d_norm
+                omega = np.cross(z_hat, z_dot)
+                return _build_frame_from_z_axis(z_hat), omega
+
+            elif orient_mode == "SLERP":
+                R0 = orient_params.get("R0", np.eye(3))
+                Rf = orient_params.get("Rf", np.eye(3))
+                return _slerp_rotation(R0, Rf, s, sd)
+
+            elif orient_mode == "Normal à Superfície":
+                n = np.asarray(orient_params.get("normal", [0.0, 0.0, 1.0]), dtype=float)
+                nn = np.linalg.norm(n)
+                if nn < 1e-9:
+                    return np.eye(3), np.zeros(3)
+                return _build_frame_from_z_axis(n / nn), np.zeros(3)
+
+            return None, np.zeros(3)
+
+        if t >= t_total:
+            R_ref, _ = _orient_ref(Pf, np.zeros(3), np.zeros(3), 1.0, 0.0)
+            return Pf, np.zeros(3), np.zeros(3), R_ref, np.zeros(3)
+
+        # Cubic polynomial (s, sd, sdd)
         tau = t / t_total
-        s = 3*(tau**2) - 2*(tau**3)
-        sd = (6*tau - 6*(tau**2)) / t_total
-        sdd = (6 - 12*tau) / (t_total**2)
+        s   = 3 * (tau ** 2) - 2 * (tau ** 3)
+        sd  = (6 * tau - 6 * (tau ** 2)) / t_total
+        sdd = (6 - 12 * tau) / (t_total ** 2)
 
         if mode == "Line":
             d = Pf - Pi
-            return (Pi + d*s), (d*sd), (d*sdd)
+            P_ref = Pi + d * s
+            V_ref = d * sd
+            A_ref = d * sdd
+            R_ref, omega_ref = _orient_ref(P_ref, V_ref, A_ref, s, sd)
+            return P_ref, V_ref, A_ref, R_ref, omega_ref
 
         elif mode == "Circle":
-            # Parâmetros vindos da Interface
             R = params.get('radius', 0.2)
-            normal = np.array(params.get('normal', [1,0,0]), dtype=float)
+            normal = np.array(params.get('normal', [1, 0, 0]), dtype=float)
             normal = normal / np.linalg.norm(normal)
-            sentido = params.get('direction', 1) # 1 ou -1
+            sentido = params.get('direction', 1)
 
-            # Lógica Vetorial (Tradução direta do seu .txt)
             v = Pf - Pi
             d_chord = np.linalg.norm(v)
-            
-            if d_chord > 2*R: R = d_chord/2 + 0.001 # Segurança
+            if d_chord > 2 * R:
+                R = d_chord / 2 + 0.001
 
             mi = (Pi + Pf) / 2
-            h = np.sqrt(max(0, R**2 - (d_chord/2)**2)) # max(0,...) evita erro numérico
+            h = np.sqrt(max(0, R ** 2 - (d_chord / 2) ** 2))
 
             v_perp = np.cross(v, normal)
-            if np.linalg.norm(v_perp) < 1e-6: # Proteção contra colinearidade
-                 return self.trajectory_planning(t, t_total, Pi, Pf, mode="Line")
-            
-            v_perp = v_perp / np.linalg.norm(v_perp)
+            if np.linalg.norm(v_perp) < 1e-6:
+                return self.trajectory_planning(
+                    t, t_total, Pi, Pf, mode="Line",
+                    orient_mode=orient_mode, orient_params=orient_params,
+                )
 
-            # Centro C
+            v_perp = v_perp / np.linalg.norm(v_perp)
             C = mi + h * v_perp if sentido > 0 else mi - h * v_perp
 
-            # Bases do Plano (e1, e2)
-            e1 = (Pi - C)
-            e1 = e1 / np.linalg.norm(e1)
-            
+            e1 = (Pi - C) / np.linalg.norm(Pi - C)
             e2 = np.cross(normal, e1)
             e2 = e2 / np.linalg.norm(e2)
+            if np.dot(e2, v) < 0:
+                e2 = -e2
 
-            # "Garanta que e2 aponta na direção de Pi->Pf" (Do seu código)
-            if np.dot(e2, v) < 0: e2 = -e2
-
-            # Ângulos (Theta relativo a e1, então start é sempre 0)
             theta_start = 0.0
             vec_Pf = Pf - C
             theta_end = np.arctan2(np.dot(vec_Pf, e2), np.dot(vec_Pf, e1))
-
-            # Ajuste de voltas (Unwrapping)
             if sentido > 0:
-                if theta_end < theta_start: theta_end += 2*np.pi
+                if theta_end < theta_start: theta_end += 2 * np.pi
             else:
-                if theta_end > theta_start: theta_end -= 2*np.pi
+                if theta_end > theta_start: theta_end -= 2 * np.pi
 
-            # Interpolação Angular
             theta_t = theta_start + (theta_end - theta_start) * s
             dtheta  = (theta_end - theta_start) * sd
             ddtheta = (theta_end - theta_start) * sdd
 
-            # Cinemática Direta do Arco
             cos_th, sin_th = np.cos(theta_t), np.sin(theta_t)
             P = C + R * (cos_th * e1 + sin_th * e2)
-            
-            # V = dP/dt
             V = R * dtheta * (-sin_th * e1 + cos_th * e2)
-            
-            # A = dV/dt (Regra da cadeia + produto)
-            tangent = (-sin_th * e1 + cos_th * e2)
-            normal_vec = (-cos_th * e1 - sin_th * e2)
-            A = R * (ddtheta * tangent + (dtheta**2) * normal_vec)
+            tangent    = -sin_th * e1 + cos_th * e2
+            normal_vec = -cos_th * e1 - sin_th * e2
+            A = R * (ddtheta * tangent + (dtheta ** 2) * normal_vec)
 
-            return P, V, A
+            R_ref, omega_ref = _orient_ref(P, V, A, s, sd)
+            return P, V, A, R_ref, omega_ref
 
-        return Pf, np.zeros(3), np.zeros(3)
+        R_ref, omega_ref = _orient_ref(Pf, np.zeros(3), np.zeros(3), 1.0, 0.0)
+        return Pf, np.zeros(3), np.zeros(3), R_ref, omega_ref
 
     def solve_ik_numerical(
         self,
@@ -412,72 +528,100 @@ class RobotSimulator:
         lambda_dls=0.1,
         dq_limit=3.0,
         use_feedforward_vel=True,
+        R_ref=None,
+        omega_ref=None,
+        orient_mode="Livre",
+        orient_params=None,
     ):
-        """ 
-        Cinemática Inversa Numérica com Feedforward de Aceleração CORRIGIDO.
-        Inclui compensação do termo de drift do Jacobiano (J_dot * dq).
+        """Cinemática Inversa Numérica com Feedforward de Aceleração e controle
+        opcional de orientação (6D task-space) via Jacobiano completo.
+
+        When orient_mode != 'Livre' and R_ref is not None the full 6×N
+        Jacobian is used, combining position error feedback (Kp_ik) with an
+        orientation error feedback (Kp_orient) derived from the skew-symmetric
+        rotation error.
         """
         f_end = self.funcs_fk_all_links[-1]
         args_0 = self._build_args(q_curr, np.zeros(self.num_dof))
         curr_pos = np.array(f_end(*args_0)).flatten()
-        
-        # Erro de Posição
+
         error = target_pos - curr_pos
-        
-        # Jacobiano Atual
+
         J_num = np.array(self.func_J(*args_0))
-        J_pos = J_num[:3, :] 
-        
-        # --- CORREÇÃO: CÁLCULO NUMÉRICO DE J_DOT ---
+        J_pos = J_num[:3, :]
+
+        # Numerical derivative of J (position rows only) for drift correction
         if self.J_prev is None:
             self.J_prev = J_pos.copy()
             J_dot = np.zeros_like(J_pos)
         else:
-            # Derivada numérica finita: (J_curr - J_prev) / dt
             J_dot = (J_pos - self.J_prev) / dt
             self.J_prev = J_pos.copy()
-            
-        # Termo de Drift (Coriolis Cinemático): J_dot * dq
-        # Isso diz: "Quanto a ponta se moveria só pela mudança da geometria?"
-        drift_acc = J_dot @ dq_curr
-        # -------------------------------------------
 
-        # Damped Least Squares
-        J_dls_pinv = J_pos.T @ np.linalg.inv(J_pos @ J_pos.T + lambda_dls**2 * np.eye(3))
-        
-        # Feedforward de Velocidade
+        drift_acc_pos = J_dot @ dq_curr
+
         vel_ff = target_vel if use_feedforward_vel else np.zeros_like(target_vel)
         acc_ff = target_acc if use_feedforward_vel else np.zeros_like(target_acc)
-        
-        v_command = vel_ff + (error * Kp_ik)
-        dq_task = J_dls_pinv @ v_command
 
-        v_curr = J_pos @ dq_curr
-        v_error = vel_ff - v_curr
-        Kd_ik = 2.0 * np.sqrt(Kp_ik)
-        
-        # Aceleração Comandada no Espaço Cartesiano
-        a_cartesian_target = acc_ff + (Kd_ik * v_error)
-        
-        # --- CORREÇÃO FINAL NA FÓRMULA DE ACELERAÇÃO ---
-        # ddq = pinv(J) * ( a_cartesian - J_dot*dq )
-        ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc)
-        
-        # Controle de Espaço Nulo
+        v_command_pos = vel_ff + error * Kp_ik  # 3-vector
+
+        use_orient = (orient_mode != "Livre") and (R_ref is not None)
+
         I = np.eye(self.num_dof)
-        q_target_null = self.q_home if hasattr(self, 'q_home') else np.zeros(self.num_dof)
+        q_target_null = self.q_home if hasattr(self, "q_home") else np.zeros(self.num_dof)
         q_err_null = self._wrap_to_pi(q_target_null - q_curr)
-        
-        Kp_null = 1.0 
-        null_projection = (I - J_dls_pinv @ J_pos)
-        dq_null = null_projection @ (Kp_null * q_err_null)
-        
+
+        if use_orient:
+            # --- 6D task-space IK (position + orientation) ---
+            orient_params = orient_params or {}
+            Kp_orient = orient_params.get("Kp_orient", 5.0)
+
+            R_curr = np.array(self.func_R_last(*args_0), dtype=float).reshape(3, 3)
+            e_orient = _rotation_error_vec(R_ref, R_curr)
+
+            omega_ff = omega_ref if omega_ref is not None else np.zeros(3)
+            omega_command = omega_ff + Kp_orient * e_orient  # 3-vector
+
+            task_vel = np.concatenate([v_command_pos, omega_command])  # 6-vector
+
+            J_full = J_num  # 6×N
+            J_dls_pinv = J_full.T @ np.linalg.inv(
+                J_full @ J_full.T + lambda_dls ** 2 * np.eye(6)
+            )
+            dq_task = J_dls_pinv @ task_vel
+
+            # Acceleration (position drift correction; angular drift ≈ 0)
+            v_curr_pos = J_pos @ dq_curr
+            v_error_pos = vel_ff - v_curr_pos
+            Kd_ik = 2.0 * np.sqrt(Kp_ik)
+            a_pos = acc_ff + Kd_ik * v_error_pos
+            drift_6 = np.concatenate([drift_acc_pos, np.zeros(3)])
+            a_task = np.concatenate([a_pos, np.zeros(3)])
+            ddq_task = J_dls_pinv @ (a_task - drift_6)
+
+            null_projection = I - J_dls_pinv @ J_full
+        else:
+            # --- 3D position-only IK (original behaviour) ---
+            J_dls_pinv = J_pos.T @ np.linalg.inv(
+                J_pos @ J_pos.T + lambda_dls ** 2 * np.eye(3)
+            )
+            dq_task = J_dls_pinv @ v_command_pos
+
+            v_curr = J_pos @ dq_curr
+            v_error = vel_ff - v_curr
+            Kd_ik = 2.0 * np.sqrt(Kp_ik)
+            a_cartesian_target = acc_ff + Kd_ik * v_error
+            ddq_task = J_dls_pinv @ (a_cartesian_target - drift_acc_pos)
+
+            null_projection = I - J_dls_pinv @ J_pos
+
+        dq_null = null_projection @ (1.0 * q_err_null)
+
         dq_total = dq_task + dq_null
         if dq_limit > 0:
             dq_total = dq_limit * np.tanh(dq_total / dq_limit)
-        
+
         q_next = q_curr + dq_total * dt
-        
         return q_next, dq_total, ddq_task
     def solve_ik_initial(
         self,
@@ -549,7 +693,8 @@ class RobotSimulator:
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
             dq_limit=3.0, use_feedforward_vel=True, use_parallel=False, max_workers=None,
-            ctrl_params=None, disturbance_torque=None):
+            ctrl_params=None, disturbance_torque=None,
+            orient_mode="Livre", orient_params=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -598,6 +743,13 @@ class RobotSimulator:
                 q = np.copy(q_home)
                 dq = np.zeros(self.num_dof)
         
+        # Capture initial end-effector orientation for orientation modes that need R0
+        orient_params_full = dict(orient_params or {})
+        if orient_mode != "Livre":
+            _args_r0 = self._build_args(q, np.zeros(self.num_dof))
+            R0_init = np.array(self.func_R_last(*_args_r0), dtype=float).reshape(3, 3)
+            orient_params_full.setdefault("R0", R0_init)
+
         if zeta <= 0:
             raise ValueError("zeta deve ser maior que zero.")
         self.zeta = zeta
@@ -695,14 +847,12 @@ class RobotSimulator:
                 for _ in range(substeps):
                     current_time += dt_physics
 
-                    # --- AQUI: CHAMADA DINÂMICA DO PLANEJADOR ---
-                    P_ref, V_ref, A_ref = self.trajectory_planning(
+                    P_ref, V_ref, A_ref, R_ref, omega_ref = self.trajectory_planning(
                         current_time, t_total, Pi, Pf,
-                        mode=traj_mode, params=traj_params
+                        mode=traj_mode, params=traj_params,
+                        orient_mode=orient_mode, orient_params=orient_params_full,
                     )
 
-                    # O Resto do loop físico continua IDÊNTICO ao que você já tinha...
-                    # (IK Numérica, Dinâmica M/C/G, PID, Integração, etc)
                     q_d, dq_d, ddq_d = self.solve_ik_numerical(
                         P_ref,
                         V_ref,
@@ -712,6 +862,10 @@ class RobotSimulator:
                         dt_physics,
                         dq_limit=dq_limit,
                         use_feedforward_vel=use_feedforward_vel,
+                        R_ref=R_ref,
+                        omega_ref=omega_ref,
+                        orient_mode=orient_mode,
+                        orient_params=orient_params_full,
                     )
                     args = self._build_args(q, dq)
                     if executor is None:
