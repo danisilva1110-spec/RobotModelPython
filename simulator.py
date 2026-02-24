@@ -103,9 +103,21 @@ class Decentralized_LADRC:
 
 
 class SlidingModeControl:
-    """Controlador SMC descentralizado com camada limite."""
+    """Controlador CT-SMC: Computed Torque + Sliding Mode com camada limite.
 
-    def __init__(self, num_dof, lambda_gain, K, phi):
+    A lei de controle é baseada em modelo completo (M, C, G):
+        q̈_d_f = α·q̈_d + (1-α)·q̈_d_f      (filtro passa-baixa em q̈_d)
+        v      = q̈_d_f - λ·ė - K·tanh(S/φ)
+        τ      = M(q)·v + C(q,q̇)·q̇ + G(q)
+    onde S = ė + λ·e é a superfície deslizante.
+
+    O filtro (α ∈ (0,1]) atenua picos de aceleração de referência oriundos
+    da IK numérica, evitando amplificação pelo termo -λ·ė.  α=1 desativa.
+
+    Referência: Slotine & Li, "Applied Nonlinear Control", cap. 7, Prentice Hall, 1991.
+    """
+
+    def __init__(self, num_dof, lambda_gain, K, phi, ddq_filter_alpha=1.0):
         self.num_dof = num_dof
         self.lambda_gain = (
             np.full(num_dof, lambda_gain, dtype=float)
@@ -115,14 +127,73 @@ class SlidingModeControl:
         self.K = np.full(num_dof, K, dtype=float) if np.isscalar(K) else np.array(K, dtype=float)
         self.phi = np.full(num_dof, phi, dtype=float) if np.isscalar(phi) else np.array(phi, dtype=float)
         self.phi = np.where(self.phi == 0, 1e-6, self.phi)
+        self.alpha = float(np.clip(ddq_filter_alpha, 1e-6, 1.0))
+        self._ddq_d_filt = None
 
-    def compute_tau(self, q, dq, q_d, dq_d, ddq_d):
+    def compute_tau(self, q, dq, q_d, dq_d, ddq_d, M, C, G, dt=0.0):
+        if self._ddq_d_filt is None:
+            self._ddq_d_filt = ddq_d.copy()
+        else:
+            self._ddq_d_filt = self.alpha * ddq_d + (1.0 - self.alpha) * self._ddq_d_filt
         e = q - q_d
         e_dot = dq - dq_d
         S = e_dot + self.lambda_gain * e
-        u_eq = ddq_d - self.lambda_gain * e_dot
-        u_sw = self.K * np.tanh(S / self.phi)
-        return u_eq - u_sw
+        v = self._ddq_d_filt - self.lambda_gain * e_dot - self.K * np.tanh(S / self.phi)
+        return M @ v + C + G
+
+
+class SuperTwistingSMC:
+    """Controlador Super-Twisting SMC (STA) baseado em modelo.
+
+    O algoritmo Super-Twisting é um modo deslizante de 2ª ordem contínuo:
+        q̈_d_f = α·q̈_d + (1-α)·q̈_d_f      (filtro passa-baixa em q̈_d)
+        v_sw   = -k1·|S|^(1/2)·sign(S) + z
+        ż      = -k2·sign(S)
+        τ      = M(q)·[q̈_d_f - λ·ė + v_sw] + C(q,q̇)·q̇ + G(q)
+
+    Propriedades:
+    - Convergência em tempo finito de S → 0 e Ṡ → 0.
+    - Sinal de controle contínuo (sem chattering).
+    - Rejeição de perturbações limitadas |d| ≤ δ com k2 > δ, k1 > 2√(k2·δ).
+
+    Referências:
+    - Levant, A., "Sliding order and sliding accuracy in sliding mode control",
+      Int. J. Control, 58(6), 1993.
+    - Moreno, J.A. & Osorio, M., "Strict Lyapunov Functions for the
+      Super-Twisting Algorithm", IEEE Trans. Autom. Control, 57(4), 2012.
+    - Utkin, V. et al., "Sliding Mode Control in Electro-Mechanical Systems",
+      CRC Press, 2009.
+    """
+
+    def __init__(self, num_dof, lambda_gain, k1, k2, ddq_filter_alpha=1.0):
+        self.num_dof = num_dof
+        self.lambda_gain = (
+            np.full(num_dof, lambda_gain, dtype=float)
+            if np.isscalar(lambda_gain)
+            else np.array(lambda_gain, dtype=float)
+        )
+        self.k1 = np.full(num_dof, k1, dtype=float) if np.isscalar(k1) else np.array(k1, dtype=float)
+        self.k2 = np.full(num_dof, k2, dtype=float) if np.isscalar(k2) else np.array(k2, dtype=float)
+        self.z = np.zeros(num_dof)
+        self.alpha = float(np.clip(ddq_filter_alpha, 1e-6, 1.0))
+        self._ddq_d_filt = None
+
+    def reset(self):
+        self.z[:] = 0.0
+        self._ddq_d_filt = None
+
+    def compute_tau(self, q, dq, q_d, dq_d, ddq_d, M, C, G, dt):
+        if self._ddq_d_filt is None:
+            self._ddq_d_filt = ddq_d.copy()
+        else:
+            self._ddq_d_filt = self.alpha * ddq_d + (1.0 - self.alpha) * self._ddq_d_filt
+        e = q - q_d
+        e_dot = dq - dq_d
+        S = e_dot + self.lambda_gain * e
+        v_sw = -self.k1 * np.abs(S) ** 0.5 * np.sign(S) + self.z
+        v = self._ddq_d_filt - self.lambda_gain * e_dot + v_sw
+        self.z -= self.k2 * np.sign(S) * dt
+        return M @ v + C + G
 
 
 def _init_worker(sym_vars, expr_M, expr_C, expr_G):
@@ -607,6 +678,15 @@ class RobotSimulator:
                 lambda_gain=ctrl_params.get("lambda", 5.0),
                 K=ctrl_params.get("K", 5.0),
                 phi=ctrl_params.get("phi", 0.1),
+                ddq_filter_alpha=ctrl_params.get("ddq_filter_alpha", 1.0),
+            )
+        elif controller_type in {"sta", "supertwisting", "super_twisting", "super-twisting"}:
+            smc = SuperTwistingSMC(
+                num_dof=self.num_dof,
+                lambda_gain=ctrl_params.get("lambda", 5.0),
+                k1=ctrl_params.get("k1", 5.0),
+                k2=ctrl_params.get("k2", 10.0),
+                ddq_filter_alpha=ctrl_params.get("ddq_filter_alpha", 1.0),
             )
 
         def _run_steps(executor):
@@ -678,7 +758,7 @@ class RobotSimulator:
                                      + (G if use_gravity_ff  else 0.0)
                                      + (C if use_coriolis_ff else 0.0))
                     elif smc is not None:
-                        u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d)
+                        u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d, M, C, G, dt_physics)
                     else:
                         u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
                         u_control = M @ u + C + G

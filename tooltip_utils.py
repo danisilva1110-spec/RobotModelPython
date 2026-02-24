@@ -500,6 +500,41 @@ TOOLTIP_CONTENT: dict[str, list[dict]] = {
         {"type": "ref",     "content": "Slotine & Li, Applied Nonlinear Control, Prentice-Hall (1991)"},
     ],
 
+    "smc_ddq_filter_alpha": [
+        {"type": "title",   "content": "Filtro q̈_d — Suavização da Aceleração de Referência (SMC)"},
+        {"type": "text",    "content": "Filtro passa-baixa de primeira ordem aplicado a q̈_d antes "
+                                       "de entrar no controlador. Elimina picos pontiagudos causados "
+                                       "por descontinuidades da IK numérica, que seriam amplificados "
+                                       "pelo termo -λ·ė do SMC."},
+        {"type": "math",    "formula": r"$\ddot{q}_{d,f}[k] = \alpha\,\ddot{q}_d[k] + (1-\alpha)\,\ddot{q}_{d,f}[k-1]$"},
+        {"type": "text",    "content": "α = 1.0 → sem filtro (comportamento padrão).\n"
+                                       "α = 0.1–0.3 → filtragem forte, elimina picos.\n"
+                                       "Valores muito pequenos introduzem atraso de fase."},
+    ],
+
+    "smc_sta_k1": [
+        {"type": "title",   "content": "Ganho k₁ — Magnitude Super-Twisting (STA)"},
+        {"type": "text",    "content": "Controla a magnitude do termo de chaveamento contínuo. "
+                                       "O algoritmo Super-Twisting produz modo deslizante de 2ª ordem: "
+                                       "tanto s quanto ṡ convergem a zero em tempo finito."},
+        {"type": "math",    "formula": r"$u = -k_1|s|^{1/2}\,\mathrm{sgn}(s) + z$"},
+        {"type": "text",    "content": "Para rejeitar perturbação limitada por δ (em espaço de aceleração), "
+                                       "use k₁ > 2√(k₂·δ).  Valores típicos: 3–10."},
+        {"type": "ref",     "content": "Moreno & Osorio, IEEE Trans. Autom. Control, 57(4), 2012"},
+        {"type": "ref",     "content": "Levant, Int. J. Control, 58(6), 1993"},
+    ],
+
+    "smc_sta_k2": [
+        {"type": "title",   "content": "Ganho k₂ — Integral Super-Twisting (STA)"},
+        {"type": "text",    "content": "Taxa de crescimento do termo integral interno. "
+                                       "Determina a velocidade de convergência e a capacidade de "
+                                       "rejeição de perturbações persistentes."},
+        {"type": "math",    "formula": r"$\dot{z} = -k_2\,\mathrm{sgn}(s)$"},
+        {"type": "text",    "content": "Para perturbação limitada por δ, use k₂ > δ. "
+                                       "Valores típicos: 5–20 (k₂ ≈ 2·k₁ é boa heurística)."},
+        {"type": "ref",     "content": "Moreno & Osorio, IEEE Trans. Autom. Control, 57(4), 2012"},
+    ],
+
     # -----------------------------------------------------------------------
     # Perturbação
     # -----------------------------------------------------------------------

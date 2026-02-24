@@ -386,18 +386,46 @@ class App(ctk.CTk):
 
         # SMC
         self.smc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
+        ctk.CTkLabel(self.smc_frame, text="Variante SMC:").pack(anchor="w")
+        self.smc_variant_var = ctk.StringVar(value="CT-SMC")
+        self.smc_variant_dd = ctk.CTkOptionMenu(
+            self.smc_frame,
+            values=["CT-SMC", "Super-Twisting (STA)"],
+            variable=self.smc_variant_var,
+            command=self._update_smc_variant,
+        )
+        self.smc_variant_dd.pack(fill="x", pady=(0, 5))
         ctk.CTkLabel(self.smc_frame, text="Lambda (λ):").pack(anchor="w")
         self.entry_lambda = ctk.CTkEntry(self.smc_frame)
         self.entry_lambda.insert(0, "5.0")
         self.entry_lambda.pack(fill="x", pady=(0, 5))
-        ctk.CTkLabel(self.smc_frame, text="Ganho K:").pack(anchor="w")
-        self.entry_smc_k = ctk.CTkEntry(self.smc_frame)
+        ctk.CTkLabel(self.smc_frame, text="Filtro q̈_d (α, 0-1):").pack(anchor="w")
+        self.entry_ddq_filter_alpha = ctk.CTkEntry(self.smc_frame)
+        self.entry_ddq_filter_alpha.insert(0, "1.0")
+        self.entry_ddq_filter_alpha.pack(fill="x", pady=(0, 5))
+
+        # Parâmetros exclusivos CT-SMC
+        self.smc_ctsmc_frame = ctk.CTkFrame(self.smc_frame, fg_color="transparent")
+        ctk.CTkLabel(self.smc_ctsmc_frame, text="Ganho K:").pack(anchor="w")
+        self.entry_smc_k = ctk.CTkEntry(self.smc_ctsmc_frame)
         self.entry_smc_k.insert(0, "5.0")
         self.entry_smc_k.pack(fill="x", pady=(0, 5))
-        ctk.CTkLabel(self.smc_frame, text="Camada limite ϕ:").pack(anchor="w")
-        self.entry_phi = ctk.CTkEntry(self.smc_frame)
+        ctk.CTkLabel(self.smc_ctsmc_frame, text="Camada limite ϕ:").pack(anchor="w")
+        self.entry_phi = ctk.CTkEntry(self.smc_ctsmc_frame)
         self.entry_phi.insert(0, "0.1")
         self.entry_phi.pack(fill="x", pady=(0, 5))
+        self.smc_ctsmc_frame.pack(fill="x")
+
+        # Parâmetros exclusivos Super-Twisting
+        self.smc_sta_frame = ctk.CTkFrame(self.smc_frame, fg_color="transparent")
+        ctk.CTkLabel(self.smc_sta_frame, text="Ganho k₁ (magnitude):").pack(anchor="w")
+        self.entry_sta_k1 = ctk.CTkEntry(self.smc_sta_frame)
+        self.entry_sta_k1.insert(0, "5.0")
+        self.entry_sta_k1.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(self.smc_sta_frame, text="Ganho k₂ (integral):").pack(anchor="w")
+        self.entry_sta_k2 = ctk.CTkEntry(self.smc_sta_frame)
+        self.entry_sta_k2.insert(0, "10.0")
+        self.entry_sta_k2.pack(fill="x", pady=(0, 5))
 
         self.update_ctrl_inputs(self.ctrl_mode_var.get())
 
@@ -530,8 +558,11 @@ class App(ctk.CTk):
             (self.entry_z3_filter_alpha,     TC["z3_filter_alpha"]),
             # SMC
             (self.entry_lambda,              TC["smc_lambda"]),
+            (self.entry_ddq_filter_alpha,    TC["smc_ddq_filter_alpha"]),
             (self.entry_smc_k,               TC["smc_k"]),
             (self.entry_phi,                 TC["smc_phi"]),
+            (self.entry_sta_k1,              TC["smc_sta_k1"]),
+            (self.entry_sta_k2,              TC["smc_sta_k2"]),
             # Perturbação
             (self.disturbance_slider,        TC["disturbance"]),
             # Trajetória
@@ -571,6 +602,14 @@ class App(ctk.CTk):
             self.circle_frame.pack(fill="x", pady=5, after=self.traj_dd)
         else:
             self.circle_frame.pack_forget()
+
+    def _update_smc_variant(self, choice):
+        if choice == "CT-SMC":
+            self.smc_sta_frame.pack_forget()
+            self.smc_ctsmc_frame.pack(fill="x")
+        else:
+            self.smc_ctsmc_frame.pack_forget()
+            self.smc_sta_frame.pack(fill="x")
 
     def update_ctrl_inputs(self, choice):
         for frame in (self.ctc_frame, self.adrc_frame, self.smc_frame):
@@ -872,19 +911,39 @@ class App(ctk.CTk):
                 )
             elif ctrl_mode == "Sliding Mode (SMC)":
                 lambda_gain = float(self.entry_lambda.get())
-                smc_k = float(self.entry_smc_k.get())
-                phi = float(self.entry_phi.get())
-                if lambda_gain <= 0 or smc_k <= 0:
-                    self.log("❌ lambda e K devem ser maiores que zero.")
-                    return
-                ctrl_params.update(
-                    {
-                        "lambda": lambda_gain,
-                        "K": smc_k,
-                        "phi": phi,
-                        "type": "SMC",
-                    }
-                )
+                ddq_alpha = float(self.entry_ddq_filter_alpha.get())
+                ddq_alpha = max(1e-6, min(1.0, ddq_alpha))
+                smc_variant = self.smc_variant_var.get()
+                if smc_variant == "Super-Twisting (STA)":
+                    sta_k1 = float(self.entry_sta_k1.get())
+                    sta_k2 = float(self.entry_sta_k2.get())
+                    if lambda_gain <= 0 or sta_k1 <= 0 or sta_k2 <= 0:
+                        self.log("❌ lambda, k1 e k2 devem ser maiores que zero.")
+                        return
+                    ctrl_params.update(
+                        {
+                            "lambda": lambda_gain,
+                            "k1": sta_k1,
+                            "k2": sta_k2,
+                            "ddq_filter_alpha": ddq_alpha,
+                            "type": "STA",
+                        }
+                    )
+                else:
+                    smc_k = float(self.entry_smc_k.get())
+                    phi = float(self.entry_phi.get())
+                    if lambda_gain <= 0 or smc_k <= 0:
+                        self.log("❌ lambda e K devem ser maiores que zero.")
+                        return
+                    ctrl_params.update(
+                        {
+                            "lambda": lambda_gain,
+                            "K": smc_k,
+                            "phi": phi,
+                            "ddq_filter_alpha": ddq_alpha,
+                            "type": "SMC",
+                        }
+                    )
 
             if dt_physics <= 0 or dt_visual <= 0:
                 self.log("❌ dt_physics e dt_visual devem ser maiores que zero.")
@@ -1518,9 +1577,13 @@ class App(ctk.CTk):
             "tau_filter_alpha":  self.entry_tau_filter_alpha.get(),
             "z3_filter_alpha":   self.entry_z3_filter_alpha.get(),
             # SMC
-            "smc_lambda":        self.entry_lambda.get(),
-            "smc_k":             self.entry_smc_k.get(),
-            "smc_phi":           self.entry_phi.get(),
+            "smc_variant":            self.smc_variant_var.get(),
+            "smc_lambda":             self.entry_lambda.get(),
+            "smc_k":                  self.entry_smc_k.get(),
+            "smc_phi":                self.entry_phi.get(),
+            "smc_ddq_filter_alpha":   self.entry_ddq_filter_alpha.get(),
+            "smc_sta_k1":             self.entry_sta_k1.get(),
+            "smc_sta_k2":             self.entry_sta_k2.get(),
             # Misc
             "dq_limit":          self.entry_dq_limit.get(),
             "use_feedforward_vel": self.use_feedforward_vel_var.get(),
@@ -1571,9 +1634,15 @@ class App(ctk.CTk):
         if "max_wo_dt"         in params: _set(self.entry_max_wo_dt,        params["max_wo_dt"])
         if "tau_filter_alpha"  in params: _set(self.entry_tau_filter_alpha, params["tau_filter_alpha"])
         if "z3_filter_alpha"   in params: _set(self.entry_z3_filter_alpha,  params["z3_filter_alpha"])
-        if "smc_lambda"        in params: _set(self.entry_lambda,           params["smc_lambda"])
-        if "smc_k"             in params: _set(self.entry_smc_k,            params["smc_k"])
-        if "smc_phi"           in params: _set(self.entry_phi,              params["smc_phi"])
+        if "smc_variant" in params:
+            self.smc_variant_var.set(params["smc_variant"])
+            self._update_smc_variant(params["smc_variant"])
+        if "smc_lambda"           in params: _set(self.entry_lambda,              params["smc_lambda"])
+        if "smc_k"                in params: _set(self.entry_smc_k,               params["smc_k"])
+        if "smc_phi"              in params: _set(self.entry_phi,                 params["smc_phi"])
+        if "smc_ddq_filter_alpha" in params: _set(self.entry_ddq_filter_alpha,    params["smc_ddq_filter_alpha"])
+        if "smc_sta_k1"           in params: _set(self.entry_sta_k1,              params["smc_sta_k1"])
+        if "smc_sta_k2"           in params: _set(self.entry_sta_k2,              params["smc_sta_k2"])
         if "dq_limit"          in params: _set(self.entry_dq_limit,         params["dq_limit"])
         if "use_feedforward_vel" in params: self.use_feedforward_vel_var.set(params["use_feedforward_vel"])
         if "disturbance" in params:
