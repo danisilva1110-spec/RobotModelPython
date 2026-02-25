@@ -1,6 +1,7 @@
 from concurrent.futures import ProcessPoolExecutor
 from itertools import repeat
 import os
+import time
 
 import sympy as sp
 from sympy.physics.mechanics import dynamicsymbols
@@ -9,9 +10,19 @@ from sympy.printing.octave import octave_code
 # ==============================================================================
 # 1. ENGINE MATEMÁTICA - STANDARD (AR / SECO)
 # ==============================================================================
+
+def _diff_M_col(args):
+    """Diferencia a matriz M em relação a uma variável simbólica qk.
+    Executado em processo separado para paralelizar o cálculo de dM/dq.
+    """
+    M_list, n, qk = args
+    M = sp.Matrix(n, n, M_list)
+    return list(M.diff(qk))
+
+
 def _calc_coriolis_row(i, q, dq, dM_dq):
     n = len(q)
-    termo_linha = 0
+    termo_linha = sp.Integer(0)
     for j in range(n):
         for k in range(j, n):
             dM_ij_dk = dM_dq[k][i, j]
@@ -23,7 +34,9 @@ def _calc_coriolis_row(i, q, dq, dM_dq):
                 if k != j:
                     termo *= 2
                 termo_linha += termo
-    return sp.collect(termo_linha, dq)
+    # Não usar sp.collect aqui: expande a expressão desnecessariamente tornando-a
+    # maior. O cse=True no lambdify posterior cuida da compactação sem custo.
+    return termo_linha
 
 
 class RobotMathEngine:
@@ -137,6 +150,7 @@ class RobotMathEngine:
 
     def step_2_jacobian_M_G(self):
         self.log("2. (AR) Dinâmica M e G (Steiner + Tensores)...")
+        _t0 = time.perf_counter()
         n = len(self.q)
         self.M = sp.zeros(n, n)
         V_tot = 0
@@ -151,30 +165,45 @@ class RobotMathEngine:
             # Inércias
             Ixx, Iyy, Izz = sp.symbols(f'Ixx{i+1} Iyy{i+1} Izz{i+1}')
             self.params_list.extend([Ixx, Iyy, Izz])
-            
+
             I_local = sp.Matrix([[Ixx, 0, 0], [0, Iyy, 0], [0, 0, Izz]])
             I_global = R_global * I_local * R_global.T
 
             self.M += m * J_v.T * J_v + J_w.T * I_global * J_w
-            
+
             # Energia Potencial (Usa self.g)
             V_tot += m * self.g * pos_cm[2]
+            self.log(f"  M/G: elo {i+1}/{n} concluído")
 
         self.G_vec = sp.Matrix([V_tot]).jacobian(self.q).T
         J_lin = self.frames[-1][0:3, 3].jacobian(self.q)
         J_ang = self.angular_velocities[-1].jacobian(self.dq)
         self.Jacobian = J_lin.col_join(J_ang)
+        self.log(f"  M/G/J: concluído em {time.perf_counter()-_t0:.1f}s")
 
     def step_3_coriolis_combined(self):
         self.log("3. Calculando Coriolis...")
         n = len(self.q)
         self.C_total = sp.zeros(n, 1)
-        dM_dq = [self.M.diff(qk) for qk in self.q]
         cpu_total = os.cpu_count() or 1
         workers = self.num_workers if self.num_workers is not None else cpu_total
         self.log(f"Usando {workers} de {cpu_total} CPUs")
 
-        with ProcessPoolExecutor(max_workers=self.num_workers) as executor:
+        # --- Passo 3a: dM/dq paralelizado ---
+        # Serializa M como lista plana para enviar aos workers sem overhead de pickle
+        # em objetos Matrix grandes.
+        self.log("  dM/dq: diferenciando M em paralelo...")
+        _t0 = time.perf_counter()
+        M_list = list(self.M)  # lista plana de n*n elementos simbólicos
+        tasks = [(M_list, n, qk) for qk in self.q]
+        with ProcessPoolExecutor(max_workers=workers) as executor:
+            dM_dq_flat = list(executor.map(_diff_M_col, tasks))
+        # Reconstrói lista de matrizes n×n a partir das listas planas retornadas
+        dM_dq = [sp.Matrix(n, n, flat) for flat in dM_dq_flat]
+        self.log(f"  dM/dq: concluído em {time.perf_counter()-_t0:.1f}s")
+
+        # --- Passo 3b: Símbolos de Christoffel → linhas de C(q, dq) ---
+        with ProcessPoolExecutor(max_workers=workers) as executor:
             for i, row in enumerate(
                 executor.map(
                     _calc_coriolis_row,
@@ -186,7 +215,7 @@ class RobotMathEngine:
                 start=1,
             ):
                 self.C_total[i - 1] = row
-                self.log(f"Coriolis: linha {i}/{n} concluída")
+                self.log(f"  Coriolis: linha {i}/{n} concluída")
 
     def step_4_prepare_export(self):
         self.log("4. Otimizando equações...")
@@ -230,6 +259,7 @@ class RobotMathHydro(RobotMathEngine):
 
     def step_2_jacobian_M_G(self):
         self.log("2. (ÁGUA) Dinâmica: M (Inércia + Added Mass) e G (Peso - Empuxo)...")
+        _t0 = time.perf_counter()
         n = len(self.q)
         self.M = sp.zeros(n, n)
         V_tot = 0
@@ -247,7 +277,7 @@ class RobotMathHydro(RobotMathEngine):
             self.params_list.extend([Ixx, Iyy, Izz])
             I_local_RB = sp.Matrix([[Ixx, 0, 0], [0, Iyy, 0], [0, 0, Izz]])
             I_global_RB = R_global * I_local_RB * R_global.T
-            
+
             ma_u, ma_v, ma_w = sp.symbols(f'ma_u{i+1} ma_v{i+1} ma_w{i+1}')
             ma_p, ma_q, ma_r = sp.symbols(f'ma_p{i+1} ma_q{i+1} ma_r{i+1}')
             self.params_list.extend([ma_u, ma_v, ma_w, ma_p, ma_q, ma_r])
@@ -264,11 +294,13 @@ class RobotMathHydro(RobotMathEngine):
             # Potencial (W - B) - Usa self.g
             peso_aparente = (m - self.rho * vol) * self.g
             V_tot += peso_aparente * pos_cm[2]
+            self.log(f"  M/G: elo {i+1}/{n} concluído")
 
         self.G_vec = sp.Matrix([V_tot]).jacobian(self.q).T
         J_lin = self.frames[-1][0:3, 3].jacobian(self.q)
         J_ang = self.angular_velocities[-1].jacobian(self.dq)
         self.Jacobian = J_lin.col_join(J_ang)
+        self.log(f"  M/G/J: concluído em {time.perf_counter()-_t0:.1f}s")
 
     def step_4_prepare_export(self):
         data = super().step_4_prepare_export()

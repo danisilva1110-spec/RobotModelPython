@@ -35,6 +35,8 @@ class App(ctk.CTk):
         self.active_sim = None       
         self.joint_rows = []
         self.last_sim_results = None  # dict com arrays de resultados + ui_params
+        self.comparison_sessions = []  # lista de dicts para comparação de controladores
+        self._session_rows = []        # widgets da lista de sessões na aba Análise
         
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -48,9 +50,11 @@ class App(ctk.CTk):
         
         self.tab_model = self.tabview.add("Modelagem")
         self.tab_sim = self.tabview.add("Simulação")
+        self.tab_analysis = self.tabview.add("Análise")
         
         self.setup_modeling_tab()
         self.setup_simulation_tab()
+        self.setup_analysis_tab()
         self.toggle_sim_tab(False)
         self._update_menu_state()
 
@@ -307,6 +311,14 @@ class App(ctk.CTk):
         self.entry_zeta = ctk.CTkEntry(self.ctc_frame)
         self.entry_zeta.insert(0, "1.0")
         self.entry_zeta.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(self.ctc_frame, text="Ganho Integral Ki (0 = PD puro):").pack(anchor="w")
+        self.entry_ki = ctk.CTkEntry(self.ctc_frame)
+        self.entry_ki.insert(0, "0.0")
+        self.entry_ki.pack(fill="x", pady=(0, 5))
+        ctk.CTkLabel(self.ctc_frame, text="Anti-windup (limite integral):").pack(anchor="w")
+        self.entry_windup = ctk.CTkEntry(self.ctc_frame)
+        self.entry_windup.insert(0, "10.0")
+        self.entry_windup.pack(fill="x", pady=(0, 5))
 
         # ADRC
         self.adrc_frame = ctk.CTkFrame(self.ctrl_inputs_container)
@@ -841,6 +853,33 @@ class App(ctk.CTk):
                             ctk.CTkLabel(row, text=ax, width=14, anchor="e").pack(side="left")
                             _reg_entry(row, sym_key, default).pack(side="left", padx=(0, 6))
 
+            # --- Arrasto hidrodinâmico (modo Hidro) ---
+            if vol_key in sym_names:
+                ctk.CTkLabel(
+                    inner, text="Arrasto hidrodinâmico:", anchor="w"
+                ).pack(anchor="w", pady=(6, 2))
+                row = ctk.CTkFrame(inner, fg_color="transparent")
+                row.pack(fill="x", pady=2)
+                ctk.CTkLabel(row, text="D_lin (Ns/m):", width=160, anchor="w").pack(side="left")
+                _reg_entry(row, f"d_lin{link_num}", "0.0").pack(side="left")
+                row2 = ctk.CTkFrame(inner, fg_color="transparent")
+                row2.pack(fill="x", pady=2)
+                ctk.CTkLabel(row2, text="D_quad (Ns²/m²):", width=160, anchor="w").pack(side="left")
+                _reg_entry(row2, f"d_quad{link_num}", "0.0").pack(side="left")
+
+            # --- Atrito nas juntas (sempre visível) ---
+            ctk.CTkLabel(
+                inner, text="Atrito na junta:", anchor="w"
+            ).pack(anchor="w", pady=(6, 2))
+            row = ctk.CTkFrame(inner, fg_color="transparent")
+            row.pack(fill="x", pady=2)
+            ctk.CTkLabel(row, text="Bv (Nms/rad):", width=160, anchor="w").pack(side="left")
+            _reg_entry(row, f"bv{link_num}", "0.0").pack(side="left")
+            row2 = ctk.CTkFrame(inner, fg_color="transparent")
+            row2.pack(fill="x", pady=2)
+            ctk.CTkLabel(row2, text="Fc (Nm, Coulomb):", width=160, anchor="w").pack(side="left")
+            _reg_entry(row2, f"fc{link_num}", "0.0").pack(side="left")
+
         # ====================================================================
         # Parâmetros globais (rho para modo Hidro)
         # ====================================================================
@@ -928,8 +967,29 @@ class App(ctk.CTk):
             use_feedforward_vel = self.use_feedforward_vel_var.get()
             ctrl_mode = self.ctrl_mode_var.get()
 
+            # ---------------------------------------------------------
+            # 3a. Parâmetros de Atrito e Arrasto por junta
+            # ---------------------------------------------------------
+            n_dof = self.active_sim.num_dof
+            _Bv    = [float(user_params.get(f"bv{i+1}",     0.0)) for i in range(n_dof)]
+            _Fc    = [float(user_params.get(f"fc{i+1}",     0.0)) for i in range(n_dof)]
+            _D_lin  = [float(user_params.get(f"d_lin{i+1}", 0.0)) for i in range(n_dof)]
+            _D_quad = [float(user_params.get(f"d_quad{i+1}",0.0)) for i in range(n_dof)]
+
+            friction_params_run = {"Bv": _Bv, "Fc": _Fc, "epsilon": 0.05}
+            drag_params_run     = {"D_lin": _D_lin, "D_quad": _D_quad}
+
             ctrl_params = {"type": ctrl_mode}
-            if ctrl_mode == "ADRC (Robust)":
+            if ctrl_mode == "Torque Computado":
+                try:
+                    ki_val     = float(self.entry_ki.get())
+                    windup_val = float(self.entry_windup.get())
+                except ValueError:
+                    ki_val, windup_val = 0.0, 10.0
+                ctrl_params.update({"ki": ki_val, "windup_limit": windup_val})
+                if ki_val > 0:
+                    self.log(f"ℹ️ CTC-PID ativo: Ki={ki_val:.3g}, anti-windup={windup_val:.3g}")
+            elif ctrl_mode == "ADRC (Robust)":
                 omega_c = float(self.entry_omega_c.get())
                 omega_o = float(self.entry_omega_o.get())
                 auto_b0 = self.auto_b0_var.get()
@@ -1120,7 +1180,7 @@ class App(ctk.CTk):
         # ---------------------------------------------------------
         try:
             # Passa os parâmetros lidos para o simulador
-            t, err, tau, anim_data = self.active_sim.run(
+            t, err, tau, anim_data, elapsed_time = self.active_sim.run(
                 t_total, start_pos, end_pos, kp,
                 traj_mode=traj_mode, traj_params=traj_params,
                 dt_physics=dt_physics, dt_visual=dt_visual,
@@ -1133,21 +1193,24 @@ class App(ctk.CTk):
                 disturbance_torque=dist_value,
                 orient_mode=orient_mode_str,
                 orient_params=orient_params,
+                friction_params=friction_params_run,
+                drag_params=drag_params_run,
             )
             
             self.last_anim_data = anim_data
             self.last_dt_visual = getattr(self.active_sim, "last_dt_visual", dt_visual)
             self.last_sim_results = {
-                "t":         t,
-                "err":       err,
-                "tau":       tau,
-                "anim_data": anim_data,
-                "dt_visual": self.last_dt_visual,
-                "ui_params": self._collect_ui_params(),
+                "t":            t,
+                "err":          err,
+                "tau":          tau,
+                "anim_data":    anim_data,
+                "dt_visual":    self.last_dt_visual,
+                "ui_params":    self._collect_ui_params(),
+                "elapsed_time": elapsed_time,
             }
             self.plot_results(t, err, tau)
             self._update_menu_state()
-            self.log("✅ Simulação finalizada.")
+            self.log(f"✅ Simulação finalizada em {elapsed_time:.2f}s.")
             self.btn_anim3d.configure(state="normal")
             
         except Exception as e:
@@ -1676,6 +1739,8 @@ class App(ctk.CTk):
             "ctrl_mode":         self.ctrl_mode_var.get(),
             "kp":                self.entry_kp.get(),
             "zeta":              self.entry_zeta.get(),
+            "ki":                self.entry_ki.get(),
+            "windup":            self.entry_windup.get(),
             # ADRC
             "omega_c":           self.entry_omega_c.get(),
             "omega_o":           self.entry_omega_o.get(),
@@ -1740,6 +1805,8 @@ class App(ctk.CTk):
 
         if "kp"                in params: _set(self.entry_kp,               params["kp"])
         if "zeta"              in params: _set(self.entry_zeta,             params["zeta"])
+        if "ki"                in params: _set(self.entry_ki,               params["ki"])
+        if "windup"            in params: _set(self.entry_windup,           params["windup"])
         if "omega_c"           in params: _set(self.entry_omega_c,          params["omega_c"])
         if "omega_o"           in params: _set(self.entry_omega_o,          params["omega_o"])
         if "auto_b0"           in params:
@@ -1795,6 +1862,397 @@ class App(ctk.CTk):
         if "adrc_adv_open" in params:
             if params["adrc_adv_open"] != self._adrc_adv_open:
                 self._toggle_adrc_adv()
+
+    # ==========================================================================
+    # ABA 3: ANÁLISE COMPARATIVA
+    # ==========================================================================
+    def setup_analysis_tab(self):
+        self.tab_analysis.grid_columnconfigure(0, weight=1)
+        self.tab_analysis.grid_columnconfigure(1, weight=2)
+        self.tab_analysis.grid_rowconfigure(0, weight=1)
+
+        # --- Painel esquerdo: gerenciamento de sessões ---
+        left = ctk.CTkFrame(self.tab_analysis)
+        left.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        left.grid_rowconfigure(1, weight=1)
+        left.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(left, text="Sessões de Comparação",
+                     font=("Arial", 13, "bold")).grid(row=0, column=0, pady=(10, 5), padx=10, sticky="w")
+
+        self._session_scroll = ctk.CTkScrollableFrame(left, label_text="Simulações adicionadas")
+        self._session_scroll.grid(row=1, column=0, sticky="nsew", padx=8, pady=5)
+        self._session_scroll.grid_columnconfigure(0, weight=1)
+
+        btn_frame = ctk.CTkFrame(left, fg_color="transparent")
+        btn_frame.grid(row=2, column=0, sticky="ew", padx=8, pady=5)
+        btn_frame.grid_columnconfigure(0, weight=1)
+        btn_frame.grid_columnconfigure(1, weight=1)
+
+        self.btn_add_session = ctk.CTkButton(
+            btn_frame, text="+ Adicionar Atual",
+            fg_color="green", command=self._add_current_session
+        )
+        self.btn_add_session.grid(row=0, column=0, padx=2, pady=2, sticky="ew")
+
+        self.btn_clear_sessions = ctk.CTkButton(
+            btn_frame, text="Limpar Tudo",
+            fg_color="firebrick", command=self._clear_sessions
+        )
+        self.btn_clear_sessions.grid(row=0, column=1, padx=2, pady=2, sticky="ew")
+
+        self.btn_generate_report = ctk.CTkButton(
+            left, text="GERAR RELATÓRIO 📊",
+            height=40, font=ctk.CTkFont(weight="bold"),
+            command=self._generate_report
+        )
+        self.btn_generate_report.grid(row=3, column=0, padx=8, pady=(5, 10), sticky="ew")
+
+        # --- Painel direito: tabela de métricas resumidas ---
+        right = ctk.CTkFrame(self.tab_analysis)
+        right.grid(row=0, column=1, sticky="nsew", padx=5, pady=5)
+        right.grid_rowconfigure(1, weight=1)
+        right.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(right, text="Métricas Resumidas",
+                     font=("Arial", 13, "bold")).grid(row=0, column=0, pady=(10, 5), padx=10, sticky="w")
+
+        self._metrics_box = ctk.CTkTextbox(right, font=("Consolas", 11), state="disabled")
+        self._metrics_box.grid(row=1, column=0, sticky="nsew", padx=8, pady=(0, 8))
+
+        self._refresh_metrics_box()
+
+    def _auto_label(self, sim_results):
+        """Gera um label automático a partir dos ui_params da simulação."""
+        p = sim_results.get("ui_params", {})
+        ctrl = p.get("ctrl_mode", "?")
+        t_total = p.get("time", "?")
+        dist = p.get("disturbance", 0.0)
+
+        if ctrl == "Torque Computado":
+            kp   = p.get("kp", "?")
+            zeta = p.get("zeta", "?")
+            detail = f"Kp={kp} ζ={zeta}"
+        elif ctrl == "ADRC (Robust)":
+            wc = p.get("omega_c", "?")
+            wo = p.get("omega_o", "?")
+            detail = f"ωc={wc} ωo={wo}"
+        elif ctrl == "Sliding Mode (SMC)":
+            variant = p.get("smc_variant", "CT-SMC")
+            lam = p.get("smc_lambda", "?")
+            detail = f"{variant} λ={lam}"
+        else:
+            detail = ""
+
+        dist_str = f" | d={dist:.1f}Nm" if dist != 0.0 else ""
+        return f"{ctrl} | {detail} | T={t_total}s{dist_str}"
+
+    def _add_current_session(self):
+        if self.last_sim_results is None:
+            self.log("⚠️ Rode uma simulação antes de adicionar à sessão de análise.")
+            return
+        label = self._auto_label(self.last_sim_results)
+        session = dict(self.last_sim_results)
+        session["label"] = label
+        self.comparison_sessions.append(session)
+        self._rebuild_session_list()
+        self._refresh_metrics_box()
+        self.log(f"✅ Simulação adicionada à análise: {label}")
+
+    def _rebuild_session_list(self):
+        for widget in self._session_scroll.winfo_children():
+            widget.destroy()
+        self._session_rows.clear()
+
+        for idx, sess in enumerate(self.comparison_sessions):
+            row = ctk.CTkFrame(self._session_scroll, border_width=1)
+            row.pack(fill="x", pady=2, padx=2)
+            row.grid_columnconfigure(0, weight=1)
+
+            lbl_var = ctk.StringVar(value=sess["label"])
+            entry = ctk.CTkEntry(row, textvariable=lbl_var, font=("Consolas", 10))
+            entry.grid(row=0, column=0, sticky="ew", padx=(6, 2), pady=4)
+
+            def _on_label_change(var=lbl_var, i=idx):
+                self.comparison_sessions[i]["label"] = var.get()
+
+            lbl_var.trace_add("write", lambda *_, var=lbl_var, i=idx: _on_label_change(var, i))
+
+            elapsed = sess.get("elapsed_time")
+            elapsed_str = f"{elapsed:.2f}s" if elapsed is not None else "—"
+            n_dof = sess["err"].shape[1] if sess["err"].ndim > 1 else 1
+            info = ctk.CTkLabel(row, text=f"DOF={n_dof} | cômputo={elapsed_str}",
+                                font=("Consolas", 9), text_color="gray70")
+            info.grid(row=1, column=0, sticky="w", padx=8, pady=(0, 3))
+
+            def _remove(i=idx):
+                self.comparison_sessions.pop(i)
+                self._rebuild_session_list()
+                self._refresh_metrics_box()
+
+            btn_del = ctk.CTkButton(row, text="✕", width=28, height=28,
+                                    fg_color="firebrick", command=_remove)
+            btn_del.grid(row=0, column=1, rowspan=2, padx=(2, 6), pady=4)
+
+            self._session_rows.append(row)
+
+    def _clear_sessions(self):
+        self.comparison_sessions.clear()
+        self._rebuild_session_list()
+        self._refresh_metrics_box()
+
+    def _refresh_metrics_box(self):
+        self._metrics_box.configure(state="normal")
+        self._metrics_box.delete("1.0", "end")
+        if not self.comparison_sessions:
+            self._metrics_box.insert("end",
+                "Nenhuma sessão adicionada.\n\n"
+                "Rode uma simulação e clique em\n"
+                "\"+ Adicionar Atual\" para começar.")
+            self._metrics_box.configure(state="disabled")
+            return
+
+        col_w = 14
+        n_dof = self.comparison_sessions[0]["err"].shape[1] \
+            if self.comparison_sessions[0]["err"].ndim > 1 else 1
+
+        header_parts = ["Sessão".ljust(30)]
+        for d in range(n_dof):
+            header_parts.append(f"RMSE J{d+1}".rjust(col_w))
+        header_parts += [
+            "MaxErr".rjust(col_w),
+            "Energia".rjust(col_w),
+            "MaxTau".rjust(col_w),
+            "Chat.".rjust(col_w),
+            "Tempo(s)".rjust(col_w),
+        ]
+        header = "".join(header_parts)
+        sep = "─" * len(header)
+
+        self._metrics_box.insert("end", header + "\n" + sep + "\n")
+
+        for sess in self.comparison_sessions:
+            m = self._compute_metrics(sess["t"], sess["err"], sess["tau"])
+            label = sess["label"][:29].ljust(30)
+            row_parts = [label]
+            for d in range(n_dof):
+                row_parts.append(f"{m['rmse'][d]:.4f}".rjust(col_w))
+            row_parts += [
+                f"{m['max_err']:.4f}".rjust(col_w),
+                f"{m['energy']:.2f}".rjust(col_w),
+                f"{m['max_tau']:.2f}".rjust(col_w),
+                f"{m['chattering']:.4f}".rjust(col_w),
+                f"{sess.get('elapsed_time', 0.0):.2f}".rjust(col_w),
+            ]
+            self._metrics_box.insert("end", "".join(row_parts) + "\n")
+
+        self._metrics_box.configure(state="disabled")
+
+    # ==========================================================================
+    # MÉTRICAS
+    # ==========================================================================
+    @staticmethod
+    def _compute_metrics(t, err, tau):
+        """Calcula métricas de qualidade de controle.
+
+        Parameters
+        ----------
+        t   : (N,) array de tempo
+        err : (N, DOF) array de erros de junta
+        tau : (N, DOF) array de torques aplicados
+
+        Returns
+        -------
+        dict com rmse (por junta), max_err (global), final_err (global),
+        energy (global), max_tau (global), chattering (global)
+        """
+        if err.ndim == 1:
+            err = err[:, np.newaxis]
+        if tau.ndim == 1:
+            tau = tau[:, np.newaxis]
+
+        dt = np.diff(t)
+        if len(dt) == 0:
+            dt = np.array([1.0])
+
+        # Por junta
+        rmse = np.sqrt(np.mean(err ** 2, axis=0))
+
+        # Global (sobre todas as juntas)
+        max_err = float(np.max(np.abs(err)))
+
+        # Regime permanente: média dos últimos 5% dos pontos
+        tail = max(1, int(len(t) * 0.05))
+        final_err = float(np.mean(np.abs(err[-tail:, :])))
+
+        # Energia: integral de |τ|² no tempo
+        tau_sq = tau[:-1, :] ** 2
+        energy = float(np.sum(tau_sq * dt[:, np.newaxis]))
+
+        max_tau = float(np.max(np.abs(tau)))
+
+        # Chattering: variação média do torque
+        dtau = np.abs(np.diff(tau, axis=0))
+        chattering = float(np.mean(dtau))
+
+        return {
+            "rmse":       rmse,
+            "max_err":    max_err,
+            "final_err":  final_err,
+            "energy":     energy,
+            "max_tau":    max_tau,
+            "chattering": chattering,
+        }
+
+    # ==========================================================================
+    # RELATÓRIO
+    # ==========================================================================
+    def _generate_report(self):
+        if not self.comparison_sessions:
+            self.log("⚠️ Adicione ao menos uma simulação na aba Análise antes de gerar o relatório.")
+            return
+
+        sessions = self.comparison_sessions
+        n_sess = len(sessions)
+        n_dof = sessions[0]["err"].shape[1] if sessions[0]["err"].ndim > 1 else 1
+
+        COLORS = [
+            "#1f77b4", "#ff7f0e", "#2ca02c", "#d62728",
+            "#9467bd", "#8c564b", "#e377c2", "#7f7f7f",
+        ]
+
+        def _color(i):
+            return COLORS[i % len(COLORS)]
+
+        # ------------------------------------------------------------------
+        # Layout: 3 linhas
+        #   Linha 0: erro de junta (n_dof colunas)
+        #   Linha 1: torque de junta (n_dof colunas)
+        #   Linha 2: 4 gráficos de barras (RMSE médio, Energia, Max τ, Tempo)
+        # ------------------------------------------------------------------
+        n_bar_cols = 4
+        n_cols = max(n_dof, n_bar_cols)
+
+        fig = plt.figure("Relatório Comparativo — Hephaestus", figsize=(4 * n_cols, 12))
+        fig.patch.set_facecolor("#1a1a2e")
+
+        # Grade manual: 3 linhas × n_cols colunas
+        gs_top  = fig.add_gridspec(1, n_dof,   top=0.96, bottom=0.70, hspace=0.35, wspace=0.35)
+        gs_mid  = fig.add_gridspec(1, n_dof,   top=0.65, bottom=0.39, hspace=0.35, wspace=0.35)
+        gs_bot  = fig.add_gridspec(1, n_bar_cols, top=0.34, bottom=0.08, hspace=0.35, wspace=0.40)
+
+        _ax_style = dict(facecolor="#16213e")
+
+        def _style_ax(ax, title, ylabel, xlabel="Tempo (s)"):
+            ax.set_facecolor("#16213e")
+            ax.set_title(title, color="white", fontsize=9, pad=4)
+            ax.set_xlabel(xlabel, color="#aaaaaa", fontsize=8)
+            ax.set_ylabel(ylabel, color="#aaaaaa", fontsize=8)
+            ax.tick_params(colors="#aaaaaa", labelsize=7)
+            for spine in ax.spines.values():
+                spine.set_edgecolor("#444466")
+            ax.grid(True, color="#2a2a4a", linewidth=0.6)
+
+        # --- Linha 0: Erro por junta ---
+        axes_err = [fig.add_subplot(gs_top[0, d]) for d in range(n_dof)]
+        for d, ax in enumerate(axes_err):
+            for i, sess in enumerate(sessions):
+                err_d = sess["err"][:, d] if sess["err"].ndim > 1 else sess["err"]
+                ax.plot(sess["t"], err_d, color=_color(i),
+                        lw=1.2, alpha=0.85, label=sess["label"])
+            _style_ax(ax, f"Erro — Junta {d+1} (rad/m)", "Erro")
+            if d == n_dof - 1:
+                ax.legend(fontsize=7, loc="upper right",
+                          facecolor="#0f0f23", labelcolor="white",
+                          edgecolor="#444466", framealpha=0.8)
+
+        # --- Linha 1: Torque por junta ---
+        axes_tau = [fig.add_subplot(gs_mid[0, d]) for d in range(n_dof)]
+        for d, ax in enumerate(axes_tau):
+            for i, sess in enumerate(sessions):
+                tau_d = sess["tau"][:, d] if sess["tau"].ndim > 1 else sess["tau"]
+                ax.plot(sess["t"], tau_d, color=_color(i),
+                        lw=1.2, alpha=0.85, label=sess["label"])
+            _style_ax(ax, f"Torque — Junta {d+1} (Nm)", "Torque (Nm)")
+
+        # --- Linha 2: Barras comparativas ---
+        labels_bar = [s["label"] for s in sessions]
+        x = np.arange(n_sess)
+        bar_w = max(0.15, min(0.5, 0.6 / n_sess))
+
+        metrics_list = [self._compute_metrics(s["t"], s["err"], s["tau"]) for s in sessions]
+
+        bar_specs = [
+            (fig.add_subplot(gs_bot[0, 0]),
+             [float(np.mean(m["rmse"])) for m in metrics_list],
+             "RMSE médio (rad/m)", "RMSE"),
+            (fig.add_subplot(gs_bot[0, 1]),
+             [m["energy"] for m in metrics_list],
+             "Energia (∫|τ|²dt)", "Energia"),
+            (fig.add_subplot(gs_bot[0, 2]),
+             [m["max_tau"] for m in metrics_list],
+             "Torque máximo (Nm)", "Max |τ|"),
+            (fig.add_subplot(gs_bot[0, 3]),
+             [s.get("elapsed_time", 0.0) or 0.0 for s in sessions],
+             "Tempo de cômputo (s)", "Tempo (s)"),
+        ]
+
+        for ax_b, values, title, ylabel in bar_specs:
+            bars = ax_b.bar(x, values, width=bar_w * n_sess,
+                            color=[_color(i) for i in range(n_sess)],
+                            edgecolor="#1a1a2e", linewidth=0.8)
+            for bar_obj, val in zip(bars, values):
+                ax_b.text(bar_obj.get_x() + bar_obj.get_width() / 2,
+                          bar_obj.get_height() * 1.02,
+                          f"{val:.3g}", ha="center", va="bottom",
+                          color="white", fontsize=7)
+            ax_b.set_xticks(x)
+            ax_b.set_xticklabels(
+                [lb[:18] for lb in labels_bar],
+                rotation=25, ha="right", fontsize=7
+            )
+            _style_ax(ax_b, title, ylabel, xlabel="")
+
+        # Título principal
+        fig.text(0.5, 0.99,
+                 "Relatório Comparativo de Controladores — Hephaestus",
+                 ha="center", va="top", fontsize=13, color="white", fontweight="bold")
+
+        # Rodapé com métricas extras (chattering, erro final)
+        footer_lines = []
+        for i, (sess, m) in enumerate(zip(sessions, metrics_list)):
+            elapsed = sess.get("elapsed_time") or 0.0
+            footer_lines.append(
+                f"[{_color(i)} ■]  {sess['label'][:50]:<50}  "
+                f"ErroFinal={m['final_err']:.4f}  "
+                f"Chat={m['chattering']:.4f}  "
+                f"Cômputo={elapsed:.2f}s"
+            )
+        fig.text(0.01, 0.04, "\n".join(footer_lines),
+                 fontsize=7, color="#aaaaaa",
+                 fontfamily="monospace", va="top")
+
+        # Botão de exportar PDF dentro da janela matplotlib
+        ax_save = fig.add_axes([0.87, 0.005, 0.12, 0.025])
+        ax_save.set_axis_off()
+        from matplotlib.widgets import Button as MplButton
+        btn_save = MplButton(ax_save, "Exportar PDF", color="#2a2a4a", hovercolor="#444466")
+
+        def _on_save(_event):
+            from tkinter import filedialog as _fd
+            path = _fd.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF", "*.pdf"), ("PNG", "*.png"), ("Todos", "*.*")],
+                title="Exportar Relatório",
+            )
+            if path:
+                fig.savefig(path, dpi=150, bbox_inches="tight",
+                            facecolor=fig.get_facecolor())
+                self.log(f"✅ Relatório exportado: {path}")
+
+        btn_save.on_clicked(_on_save)
+
+        plt.show()
 
     # ==========================================================================
     # MENU DE ARQUIVO

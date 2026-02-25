@@ -1,4 +1,5 @@
 import os
+import time
 from concurrent.futures import ProcessPoolExecutor
 
 import numpy as np
@@ -294,7 +295,8 @@ class RobotSimulator:
         self._executor_workers = 0
 
         print(f"[{mode}] Compilando equações (Isso pode demorar um pouco)...")
-        
+        _t0 = time.perf_counter()
+
         # 1. Identifica Juntas Rotacionais (para wrap)
         self.is_rotational = []
         for j_type in self.bot.joint_config:
@@ -303,32 +305,54 @@ class RobotSimulator:
             else:
                 self.is_rotational.append(False)
         self.is_rotational = np.array(self.is_rotational, dtype=bool)
-        
+
         # 2. Variáveis Simbólicas
         self.sym_vars = self.bot.q + self.bot.dq + self.bot.params_list
         if hasattr(self.bot, 'rho'):
             self.sym_vars.append(self.bot.rho)
-        
+
         # 3. Compila Funções Dinâmicas (M, C, G)
+        # cse=True aplica Common Subexpression Elimination na string gerada pelo
+        # lambdify, sem tocar nas expressões simbólicas. Isso reduz drasticamente
+        # o tamanho do código Python compilado (evita MemoryError em sistemas
+        # grandes) e acelera a avaliação numérica por reutilizar subexpressões.
         self.expr_M = self.bot.M
         self.expr_C = self.bot.C_total
         self.expr_G = self.bot.G_vec
-        self.func_M = sp.lambdify(self.sym_vars, self.bot.M, modules='numpy')
-        self.func_C = sp.lambdify(self.sym_vars, self.bot.C_total, modules='numpy')
-        self.func_G = sp.lambdify(self.sym_vars, self.bot.G_vec, modules='numpy')
-        
-        # 4. Compila Jacobiano e FK
-        self.func_J = sp.lambdify(self.sym_vars, self.bot.Jacobian, modules='numpy')
 
+        print(f"  [M]  compilando inércia...")
+        _t1 = time.perf_counter()
+        self.func_M = sp.lambdify(self.sym_vars, self.bot.M,       modules='numpy', cse=True)
+        print(f"  [M]  OK ({time.perf_counter()-_t1:.1f}s)")
+
+        print(f"  [C]  compilando Coriolis...")
+        _t1 = time.perf_counter()
+        self.func_C = sp.lambdify(self.sym_vars, self.bot.C_total, modules='numpy', cse=True)
+        print(f"  [C]  OK ({time.perf_counter()-_t1:.1f}s)")
+
+        print(f"  [G]  compilando gravidade/empuxo...")
+        _t1 = time.perf_counter()
+        self.func_G = sp.lambdify(self.sym_vars, self.bot.G_vec,   modules='numpy', cse=True)
+        print(f"  [G]  OK ({time.perf_counter()-_t1:.1f}s)")
+
+        # 4. Compila Jacobiano e FK
+        print(f"  [J]  compilando Jacobiano...")
+        _t1 = time.perf_counter()
+        self.func_J = sp.lambdify(self.sym_vars, self.bot.Jacobian, modules='numpy', cse=True)
+        print(f"  [J]  OK ({time.perf_counter()-_t1:.1f}s)")
+
+        print(f"  [FK] compilando cinemática direta ({len(self.bot.frames)} elos)...")
+        _t1 = time.perf_counter()
         self.funcs_fk_all_links = []
         for frame in self.bot.frames:
-            pos_expr = frame[:3, 3] # Pega X, Y, Z
-            f_fk = sp.lambdify(self.sym_vars, pos_expr, modules='numpy')
+            pos_expr = frame[:3, 3]
+            f_fk = sp.lambdify(self.sym_vars, pos_expr, modules='numpy', cse=True)
             self.funcs_fk_all_links.append(f_fk)
+        print(f"  [FK] OK ({time.perf_counter()-_t1:.1f}s)")
 
         # Compila a matriz de rotação do frame final (para visualização de orientação)
         R_last_expr = self.bot.frames[-1][:3, :3]
-        self.func_R_last = sp.lambdify(self.sym_vars, R_last_expr, modules='numpy')
+        self.func_R_last = sp.lambdify(self.sym_vars, R_last_expr, modules='numpy', cse=True)
 
         # Detecta fronteira veículo/braço: conta juntas iniciais sem elo (link vector nulo)
         self.vehicle_dof = 0
@@ -345,9 +369,11 @@ class RobotSimulator:
         self.func_R_vehicle = None
         if 0 < self.vehicle_dof < self.num_dof:
             R_veh_expr = self.bot.frames[self.vehicle_dof - 1][:3, :3]
-            self.func_R_vehicle = sp.lambdify(self.sym_vars, R_veh_expr, modules='numpy')
+            self.func_R_vehicle = sp.lambdify(
+                self.sym_vars, R_veh_expr, modules='numpy', cse=True
+            )
 
-        print("Compilação concluída!")
+        print(f"Compilação concluída em {time.perf_counter()-_t0:.1f}s!")
 
     def close(self):
         """Encerra o executor paralelo (chamar ao descartar o simulador)."""
@@ -694,7 +720,8 @@ class RobotSimulator:
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
             dq_limit=3.0, use_feedforward_vel=True, use_parallel=False, max_workers=None,
             ctrl_params=None, disturbance_torque=None,
-            orient_mode="Livre", orient_params=None):
+            orient_mode="Livre", orient_params=None,
+            friction_params=None, drag_params=None):
         # ... (Início igual ao original) ...
         dt_physics = 0.001 if dt_physics is None else dt_physics
         dt_visual = 0.05 if dt_visual is None else dt_visual
@@ -841,8 +868,26 @@ class RobotSimulator:
                 ddq_filter_alpha=ctrl_params.get("ddq_filter_alpha", 1.0),
             )
 
+        # --- Atrito nas juntas (Coulomb + Viscoso, suavizado por tanh) ---
+        _fric = friction_params or {}
+        _Bv         = np.asarray(_fric.get("Bv",      np.zeros(self.num_dof)), dtype=float)
+        _Fc         = np.asarray(_fric.get("Fc",      np.zeros(self.num_dof)), dtype=float)
+        _eps_fric   = float(_fric.get("epsilon", 0.05))   # zona suave (rad/s)
+        _has_fric   = np.any(_Bv != 0.0) or np.any(_Fc != 0.0)
+
+        # --- Arrasto hidrodinâmico (só modo Hydro) ---
+        _drag = drag_params or {}
+        _D_lin  = np.asarray(_drag.get("D_lin",  np.zeros(self.num_dof)), dtype=float)
+        _D_quad = np.asarray(_drag.get("D_quad", np.zeros(self.num_dof)), dtype=float)
+        _has_drag = (self.mode == "Hydro") and (np.any(_D_lin != 0.0) or np.any(_D_quad != 0.0))
+
+        # --- Estado integral para CTC-PID ---
+        integral_e     = np.zeros(self.num_dof)
+        _ki_val        = ctrl_params.get("ki",           0.0)
+        _windup_limit  = ctrl_params.get("windup_limit", 10.0)
+
         def _run_steps(executor):
-            nonlocal current_time, q, dq, tau_prev, tau_ctrl_prev
+            nonlocal current_time, q, dq, tau_prev, tau_ctrl_prev, integral_e
             for i in range(steps_visual):
                 for _ in range(substeps):
                     current_time += dt_physics
@@ -914,7 +959,16 @@ class RobotSimulator:
                     elif smc is not None:
                         u_control = smc.compute_tau(q, dq, q_d, dq_d, ddq_d, M, C, G, dt_physics)
                     else:
-                        u = ddq_d + (KD @ e_dot) + (KP @ e_pid)
+                        # CTC-PID: acumula integral com anti-windup
+                        integral_e += e_pid * dt_physics
+                        if _windup_limit > 0:
+                            integral_e[:] = np.clip(
+                                integral_e, -_windup_limit, _windup_limit
+                            )
+                        u = (ddq_d
+                             + (KD @ e_dot)
+                             + (KP @ e_pid)
+                             + (_ki_val * integral_e))
                         u_control = M @ u + C + G
 
                     tau_disturbance = np.zeros(self.num_dof)
@@ -927,7 +981,14 @@ class RobotSimulator:
                     tau_ctrl_prev = u_adrc if ladrc is not None else u_control
                     tau_prev = tau_applied
 
-                    ddq = np.linalg.solve(M, tau_applied - C - G)
+                    # --- Arrasto + Atrito (forças dissipativas, não no controle) ---
+                    tau_passive = np.zeros(self.num_dof)
+                    if _has_drag:
+                        tau_passive += _D_lin * dq + _D_quad * np.abs(dq) * dq
+                    if _has_fric:
+                        tau_passive += _Fc * np.tanh(dq / _eps_fric) + _Bv * dq
+
+                    ddq = np.linalg.solve(M, tau_applied - C - G - tau_passive)
                     q += dq * dt_physics
                     dq += ddq * dt_physics
                     q = self._wrap_to_pi(q) # Wrap essencial
@@ -954,6 +1015,7 @@ class RobotSimulator:
                     frame_entry["R_vehicle"] = R_veh.tolist()
                 anim_data.append(frame_entry)
 
+        t_start = time.perf_counter()
         if use_parallel:
             worker_count = max_workers or max(1, min(3, os.cpu_count() or 1))
             # Reutiliza o executor se já existir com o mesmo número de workers.
@@ -971,5 +1033,6 @@ class RobotSimulator:
             _run_steps(self._executor)
         else:
             _run_steps(None)
+        elapsed_time = time.perf_counter() - t_start
 
-        return res_time, res_q, res_tau, anim_data
+        return res_time, res_q, res_tau, anim_data, elapsed_time
