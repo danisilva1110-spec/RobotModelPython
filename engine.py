@@ -187,35 +187,44 @@ class RobotMathEngine:
         self.C_total = sp.zeros(n, 1)
         cpu_total = os.cpu_count() or 1
         workers = self.num_workers if self.num_workers is not None else cpu_total
-        self.log(f"Usando {workers} de {cpu_total} CPUs")
+        use_parallel = workers is not None and workers > 1
+        self.log(f"Usando {workers if use_parallel else 1} de {cpu_total} CPUs")
 
-        # --- Passo 3a: dM/dq paralelizado ---
-        # Serializa M como lista plana para enviar aos workers sem overhead de pickle
-        # em objetos Matrix grandes.
-        self.log("  dM/dq: diferenciando M em paralelo...")
+        # --- Passo 3a: dM/dq ---
+        # Em modo executável (PyInstaller), workers=1 e rodamos em série para
+        # evitar spawn de processos (causa múltiplas janelas e crash no Windows).
+        self.log("  dM/dq: diferenciando M" + (" em paralelo" if use_parallel else "") + "...")
         _t0 = time.perf_counter()
         M_list = list(self.M)  # lista plana de n*n elementos simbólicos
         tasks = [(M_list, n, qk) for qk in self.q]
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            dM_dq_flat = list(executor.map(_diff_M_col, tasks))
+        if use_parallel:
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                dM_dq_flat = list(executor.map(_diff_M_col, tasks))
+        else:
+            dM_dq_flat = [_diff_M_col(t) for t in tasks]
         # Reconstrói lista de matrizes n×n a partir das listas planas retornadas
         dM_dq = [sp.Matrix(n, n, flat) for flat in dM_dq_flat]
         self.log(f"  dM/dq: concluído em {time.perf_counter()-_t0:.1f}s")
 
         # --- Passo 3b: Símbolos de Christoffel → linhas de C(q, dq) ---
-        with ProcessPoolExecutor(max_workers=workers) as executor:
-            for i, row in enumerate(
-                executor.map(
-                    _calc_coriolis_row,
-                    range(n),
-                    repeat(self.q),
-                    repeat(self.dq),
-                    repeat(dM_dq),
-                ),
-                start=1,
-            ):
-                self.C_total[i - 1] = row
-                self.log(f"  Coriolis: linha {i}/{n} concluída")
+        if use_parallel:
+            with ProcessPoolExecutor(max_workers=workers) as executor:
+                for i, row in enumerate(
+                    executor.map(
+                        _calc_coriolis_row,
+                        range(n),
+                        repeat(self.q),
+                        repeat(self.dq),
+                        repeat(dM_dq),
+                    ),
+                    start=1,
+                ):
+                    self.C_total[i - 1] = row
+                    self.log(f"  Coriolis: linha {i}/{n} concluída")
+        else:
+            for i in range(n):
+                self.C_total[i] = _calc_coriolis_row(i, self.q, self.dq, dM_dq)
+                self.log(f"  Coriolis: linha {i+1}/{n} concluída")
 
     def step_4_prepare_export(self):
         self.log("4. Otimizando equações...")

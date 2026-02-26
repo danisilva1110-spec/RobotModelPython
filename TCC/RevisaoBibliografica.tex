@@ -1,0 +1,339 @@
+\chapter{Revisão Bibliográfica e Fundamentos Teóricos}
+
+Este capítulo apresenta a fundamentação teórica e a revisão da literatura sobre os tópicos centrais que sustentam o desenvolvimento do ambiente \textit{Hephaestus}. As áreas abordadas compreendem a modelagem cinemática e dinâmica de manipuladores robóticos, os fundamentos específicos dos Sistemas Manipuladores-Veículos Subaquáticos (UVMS), os algoritmos de cinemática inversa numérica, as estratégias de controle não-linear implementadas e os paradigmas de computação simbólica e numérica explorados. A revisão prioriza referências seminais e trabalhos recentes que fundamentam diretamente as escolhas de projeto e implementação.
+
+% ==============================================================================
+\section{Robótica de Manipuladores: Cinemática e Dinâmica}
+% ==============================================================================
+
+\subsection{Cinemática de Corpos Rígidos}
+
+O estudo sistemático da posição e orientação de corpos rígidos no espaço constitui a base da robótica de manipuladores. A representação por matrizes de transformação homogênea $4 \times 4$, que codificam simultaneamente rotação e translação, foi popularizada por Denavit e Hartenberg (1955) \cite{denavit1955kinematic}, cuja convenção parametriza o posicionamento de elos sequenciais por apenas quatro parâmetros por junta: $a_i$, $d_i$, $\alpha_i$ e $\theta_i$. Embora a convenção DH permaneça amplamente utilizada no ensino, a representação por matrizes de rotação diretas (eixo-ângulo) adotada neste trabalho oferece maior transparência algébrica e facilita a integração com ferramentas de computação simbólica \cite{craig1987introduction, spong2020robot}.
+
+A cinemática direta (FK) mapeia as variáveis de junta $q \in \mathbb{R}^N$ para a posição e orientação do efetuador final no espaço cartesiano. Para uma cadeia serial aberta de $N$ graus de liberdade, a transformação homogênea acumulada $T_N$ é obtida pelo produto:
+\begin{equation}
+    T_N(q) = T_1(q_1) \cdot T_2(q_2) \cdots T_N(q_N),
+\end{equation}
+onde cada $T_i$ encapsula a transformação da junta $i$ e do elo $i$ \cite{spong2020robot}.
+
+A cinemática diferencial relaciona as velocidades no espaço de juntas às velocidades no espaço cartesiano por meio do Jacobiano geométrico $J(q) \in \mathbb{R}^{6 \times N}$:
+\begin{equation}
+    \dot{x} = J(q)\dot{q},
+    \label{eq:jacobian}
+\end{equation}
+onde $\dot{x} = [\dot{p}^\top, \omega^\top]^\top$ reúne a velocidade linear $\dot{p}$ e a angular $\omega$ do efetuador. A decomposição de $J$ em linhas translacionais $J_v$ e rotacionais $J_\omega$ é fundamental para o projeto dos controladores em espaço de tarefa \cite{siciliano2009robotics}.
+
+As singularidades cinemáticas — configurações em que $J$ perde posto — representam pontos de degeneração do mapeamento diferencial, causando velocidades de junta ilimitadas para movimentos cartesianos finitos. Sua análise e tratamento, seja por critério do determinante de $JJ^\top$, por decomposição em valores singulares (SVD) \cite{golub2013matrix} ou por regularização do tipo Mínimos Quadrados Amortecidos (DLS), é abordada em detalhe por Nakamura e Hanafusa (1986) \cite{nakamura1986inverse} e Wampler (1986) \cite{wampler1986manipulator}.
+
+\subsection{Dinâmica de Manipuladores: Formulação de Euler-Lagrange}
+
+A modelagem dinâmica de manipuladores pode ser abordada por dois formalismos clássicos: Newton-Euler e Euler-Lagrange. A formulação de Newton-Euler é recursiva e numericamente eficiente — sua versão recursiva, proposta por Luh, Walker e Paul (1980), tem complexidade $O(N)$ no número de elos \cite{luh1980online}. Já a formulação de Euler-Lagrange, adotada neste trabalho, deriva equações explícitas e simbólicas, tornando-a especialmente adequada para plataformas didáticas e para a síntese de controladores baseados em modelo.
+
+O Lagrangiano $\mathcal{L} = T - V$, diferença entre a energia cinética $T$ e a potencial $V$ do sistema, conduz às equações de movimento de Euler-Lagrange:
+\begin{equation}
+    \frac{d}{dt}\left(\frac{\partial \mathcal{L}}{\partial \dot{q}_i}\right) - \frac{\partial \mathcal{L}}{\partial q_i} = \tau_i, \quad i = 1, \ldots, N.
+    \label{eq:euler_lagrange}
+\end{equation}
+
+O desenvolvimento da Equação \eqref{eq:euler_lagrange} para uma cadeia serial resulta na forma estruturada da equação de movimento:
+\begin{equation}
+    M(q)\ddot{q} + C(q,\dot{q})\dot{q} + G(q) = \tau,
+    \label{eq:motion_equation}
+\end{equation}
+onde $M(q) \in \mathbb{R}^{N \times N}$ é a matriz de inércia (simétrica e definida positiva), $C(q,\dot{q}) \in \mathbb{R}^{N \times N}$ é a matriz de Coriolis e termos centrípetos, e $G(q) \in \mathbb{R}^{N}$ é o vetor de gradiente de energia potencial gravitacional \cite{craig1987introduction, spong2020robot, siciliano2009robotics}.
+
+Os elementos $C_{ij}$ da matriz de Coriolis são calculados pelos símbolos de Christoffel de segunda espécie \cite{spong2020robot}:
+\begin{equation}
+    C_{ij}(q,\dot{q}) = \sum_{k=1}^{N} c_{ijk}(q)\,\dot{q}_k, \quad
+    c_{ijk} = \frac{1}{2}\left(\frac{\partial M_{ij}}{\partial q_k} + \frac{\partial M_{ik}}{\partial q_j} - \frac{\partial M_{jk}}{\partial q_i}\right).
+    \label{eq:christoffel}
+\end{equation}
+
+A matriz de inércia pode ser expressa em termos dos Jacobianos de velocidade linear $J_{v_i}$ e angular $J_{\omega_i}$ do centro de massa do elo $i$:
+\begin{equation}
+    M(q) = \sum_{i=1}^{N} \left[ m_i J_{v_i}^\top J_{v_i} + J_{\omega_i}^\top I_i^{(g)} J_{\omega_i} \right],
+    \label{eq:inertia_matrix}
+\end{equation}
+onde $m_i$ é a massa e $I_i^{(g)} = R_i I_i^{(l)} R_i^\top$ é o tensor de inércia do elo $i$ expresso no referencial global, obtido pela transformação do tensor local $I_i^{(l)}$ pela matriz de rotação acumulada $R_i$ \cite{siciliano2009robotics}. Esta formulação, denominada \textit{método do Jacobiano da inércia}, é a base da implementação na classe \texttt{RobotMathEngine}.
+
+A eficiência computacional do cálculo de $C(q,\dot{q})$ é crítica em sistemas com muitos graus de liberdade. Hollerbach (1980) \cite{hollerbach1980recursive} demonstrou que a formulação recursiva Newton-Euler reduz a complexidade de $O(N^4)$ (Lagrange ingênuo) para $O(N)$. Em abordagens simbólicas como a deste trabalho, a paralelização da computação de $\partial M/\partial q_k$ mitiga esse custo.
+
+\subsection{Propriedades Estruturais da Dinâmica}
+
+A estrutura da Equação \eqref{eq:motion_equation} exibe propriedades que são centrais para a análise de estabilidade e o projeto de controladores \cite{slotine1991applied, spong2020robot}:
+
+\begin{enumerate}
+    \item \textbf{Simetria e positividade de $M(q)$:} $M(q) = M(q)^\top > 0$ para todo $q$.
+    \item \textbf{Antissimetria de $\dot{M} - 2C$:} A matriz $N(q,\dot{q}) = \dot{M}(q) - 2C(q,\dot{q})$ é antissimétrica, i.e., $x^\top N x = 0$ para todo $x$. Esta propriedade é a base da prova de estabilidade de Lyapunov para o controle por torque computado.
+    \item \textbf{Linearidade nos parâmetros:} A equação de movimento pode ser reescrita como $M\ddot{q} + C\dot{q} + G = Y(q,\dot{q},\ddot{q})\,\theta$, onde $Y$ é a \textit{matriz de regressores} e $\theta$ é o vetor de parâmetros inerciais. Isso sustenta os controladores adaptativos \cite{slotine1987adaptive}.
+\end{enumerate}
+
+% ==============================================================================
+\section{Sistemas Manipuladores-Veículos Subaquáticos (UVMS)}
+% ==============================================================================
+
+\subsection{Contexto e Motivação}
+
+Os robôs subaquáticos representam uma das fronteiras mais ativas da engenharia mecatrônica e oceânica. Desde os primeiros estudos sistemáticos de Yuh (1990) \cite{yuh1990modeling}, a modelagem de Veículos Subaquáticos Não Tripulados (UUVs) evoluiu para incorporar a análise de sistemas acoplados veículo-manipulador, os UVMSs. A revisão abrangente de Yuh e West (2001) \cite{yuh2001underwater} cataloga as aplicações práticas — inspeção de dutos, manutenção de plataformas \textit{offshore}, arqueologia submarina e pesquisa oceanográfica — que motivam a crescente demanda por autonomia e precisão.
+
+Trabalhos mais recentes, como a revisão de Sivčev et al. (2018) \cite{sivcev2018underwater}, confirmam que a principal barreira para a automação plena de UVMSs reside na complexidade da interação dinâmica veículo-braço e nas incertezas do meio aquático. Aldhaheri et al. (2022) \cite{aldhaheri2022underwater} fornecem uma revisão atualizada dos avanços em controle e navegação, reforçando a necessidade de simuladores de alta fidelidade para o desenvolvimento e validação de estratégias de controle antes do ensaio físico.
+
+\subsection{Hidrodinâmica: Fundamentos e Formulação}
+
+A modelagem hidrodinâmica de corpos submersos tem como referência fundamental o livro de Thor I. Fossen, \textit{Handbook of Marine Craft Hydrodynamics and Motion Control} (2011) \cite{fossen2011handbook}. Fossen sistematiza a modelagem baseada na formulação SNAME, onde as forças e momentos hidrodinâmicos atuantes sobre um corpo rígido submerso são decompostos em três categorias principais:
+
+\paragraph{Massa Adicionada (\textit{Added Mass}).}
+Ao acelerar um corpo submerso, é necessário acelerar também o fluido ao seu redor. Esse efeito é modelado como uma inércia adicional — a massa adicionada — capturada pelo tensor $M_A \in \mathbb{R}^{6 \times 6}$ \cite{fossen2011handbook, newman1977marine}:
+\begin{equation}
+    M_A = -\frac{\partial}{\partial \dot{\nu}}\left[\text{forças e momentos hidrodinâmicos}\right],
+    \label{eq:added_mass_def}
+\end{equation}
+onde $\nu = [u, v, w, p, q, r]^\top$ é o vetor de velocidades no referencial do corpo. Para corpos com planos de simetria, $M_A$ torna-se diagonal ou quase-diagonal \cite{fossen2011handbook}. No \textit{Hephaestus}, $M_A$ é modelado como um tensor diagonal $6 \times 6$ por elo, com três componentes translacionais $(m_{a,u}, m_{a,v}, m_{a,w})$ e três rotacionais $(m_{a,p}, m_{a,q}, m_{a,r})$, rotacionado para o referencial global conforme a formulação de Fossen \cite{fossen2011handbook}:
+\begin{equation}
+    M_{A}^{(g)} = R_i\,M_{A,\text{lin}}^{(l)}\,R_i^\top, \quad
+    I_{A}^{(g)} = R_i\,M_{A,\text{rot}}^{(l)}\,R_i^\top.
+\end{equation}
+
+A contribuição da massa adicionada à matriz de inércia generalizada do UVMS é, portanto:
+\begin{equation}
+    M_{\text{Hydro}}(q) = \sum_{i=1}^{N} \left[ J_{v_i}^\top (m_i I + M_{A,i}^{(g)}) J_{v_i} + J_{\omega_i}^\top (I_i^{(g)} + I_{A,i}^{(g)}) J_{\omega_i} \right].
+    \label{eq:M_hydro}
+\end{equation}
+Esta formulação, diretamente implementada no método \texttt{step\_2\_jacobian\_M\_G} da classe \texttt{RobotMathHydro}, garante que a contribuição de inércia aparente seja corretamente projetada no espaço de juntas via Jacobianos \cite{antonelli2014modelling}.
+
+\paragraph{Arrasto Hidrodinâmico (\textit{Drag}).}
+O arrasto sobre um corpo submerso em movimento possui componentes viscosa (linear em $\nu$) e de pressão (quadrática em $\nu$). A formulação simplificada, mas amplamente adotada em simuladores de UVMS \cite{antonelli2014modelling, fossen2011handbook}, escreve o vetor de forças de arrasto no espaço de juntas como:
+\begin{equation}
+    \tau_{\text{drag}} = D_{\text{lin}}\,\dot{q} + D_{\text{quad}}\,|\dot{q}|\,\dot{q},
+    \label{eq:drag}
+\end{equation}
+onde $D_{\text{lin}}, D_{\text{quad}} \in \mathbb{R}^{N}$ são vetores de coeficientes de arrasto linear e quadrático. Essa formulação é modelada como força passiva no integrador Simplético, conforme discutido na Seção \ref{sec:simulador}.
+
+\paragraph{Força de Empuxo e Gradiente Estático (\textit{Buoyancy}).}
+O princípio de Arquimedes estabelece que um corpo submerso experimenta uma força de empuxo $B = \rho g V_{\text{sub}}$, onde $\rho$ é a densidade do fluido, $g$ é a aceleração gravitacional e $V_{\text{sub}}$ é o volume deslocado \cite{newman1977marine}. Para um elo submerso, o potencial aparente é:
+\begin{equation}
+    V_i^{\text{app}} = (m_i - \rho\,\text{vol}_i)\,g\,z_{\text{cm},i},
+    \label{eq:buoyancy_potential}
+\end{equation}
+onde $z_{\text{cm},i}$ é a coordenada vertical do centro de massa do elo $i$. O vetor $G(q)$ resultante combina, portanto, o gradiente de Peso menos Empuxo, podendo ser nulo ou muito pequeno quando o elo é neutralmente flutuante ($m_i \approx \rho\,\text{vol}_i$), o que reduz os torques estáticos necessários e é o cenário típico de UVMSs projetados para neutralidade \cite{fossen2011handbook, antonelli2014modelling}.
+
+\subsection{Modelo Dinâmico Completo do UVMS}
+
+Antonelli (2014) \cite{antonelli2014modelling} apresenta o modelo dinâmico unificado de um UVMS como:
+\begin{equation}
+    M_{\text{Hydro}}(q)\ddot{q} + C_{\text{Hydro}}(q,\dot{q})\dot{q} + D(q,\dot{q})\dot{q} + G_{\text{Hydro}}(q) = \tau + J^\top f_{\text{ext}},
+    \label{eq:uvms_model}
+\end{equation}
+onde $D$ reúne os efeitos de arrasto, $f_{\text{ext}}$ são as forças externas aplicadas ao efetuador (e.g., interação com o ambiente) e $J^\top$ é o Jacobiano que projeta essas forças no espaço de juntas. Esta estrutura é idêntica à da Equação \eqref{eq:motion_equation}, com os termos $M$, $C$ e $G$ modificados pela contribuição hidrodinâmica — o que permite que a mesma \textit{engine} seja reutilizada em ambos os modos (ar e água) com a simples extensão implementada em \texttt{RobotMathHydro}.
+
+% ==============================================================================
+\section{Cinemática Inversa Numérica}
+% ==============================================================================
+
+\subsection{Formulação do Problema}
+
+A cinemática inversa (IK) — determinação das variáveis de junta $q$ que posicionam o efetuador em uma configuração cartesiana desejada $x_d$ — é um problema central em robótica. Para cadeias seriais não-redundantes ($N = 6$), soluções analíticas fechadas são, em geral, possíveis \cite{craig1987introduction}. Para sistemas redundantes ($N > 6$) ou com geometrias genéricas, as abordagens numéricas iterativas são necessárias \cite{siciliano2009robotics}.
+
+\subsection{Cinemática Inversa em Malha Fechada (CLIK)}
+
+O algoritmo de Cinemática Inversa em Malha Fechada (\textit{Closed-Loop Inverse Kinematics}, CLIK), proposto por Samson et al. (1991) \cite{samson1991robot} e refinado por Chiaverini et al. (1994) \cite{chiaverini1994review}, integra numericamente a equação diferencial de erro cartesiano para produzir uma referência de velocidade de junta que converge para a configuração desejada. A lei de atualização, na forma discreta com passo $dt$, é:
+\begin{equation}
+    \dot{q}_{k+1} = J^{\dagger}(q_k)\left[\dot{x}_d + K_P e_k\right] + \left(I - J^{\dagger}J\right)\dot{q}_0,
+    \label{eq:clik}
+\end{equation}
+onde $e_k = x_d - x_k$ é o erro cartesiano, $K_P$ é o ganho de realimentação, $J^{\dagger}$ é a pseudo-inversa (ou pseudo-inversa amortecida) do Jacobiano, e o último termo projeta uma velocidade auxiliar $\dot{q}_0$ no espaço nulo de $J$ para satisfazer objetivos secundários sem afetar a tarefa primária \cite{chiaverini1997singularity}.
+
+O CLIK implementado no \textit{Hephaestus} opera no espaço de tarefa completo de 6 dimensões (posição $+$ orientação), utilizando o Jacobiano completo $J \in \mathbb{R}^{6 \times N}$ e incorpora:
+\begin{itemize}
+    \item \textbf{Feedforward de velocidade e aceleração:} contribuição de $\dot{x}_d$ e $\ddot{x}_d$ para melhorar o rastreamento;
+    \item \textbf{Correção de deriva do Jacobiano:} subtração do termo $\dot{J}\dot{q}$ para compensar a aceleração já contabilizada na derivada temporal do Jacobiano \cite{siciliano2009robotics};
+    \item \textbf{Gestão de redundância via Espaço Nulo:} projeção da lei de controle $K_n(q_{\text{home}} - q)$ no kernel de $J$ para atrair o robô à postura preferida \cite{chiaverini1997singularity, liegeois1977automatic}.
+\end{itemize}
+
+\subsection{Tratamento de Singularidades: Mínimos Quadrados Amortecidos (DLS)}
+
+Próximo às singularidades, os valores singulares de $J$ se aproximam de zero, tornando a pseudo-inversa $J^+ = J^\top(JJ^\top)^{-1}$ numericamente instável. Nakamura e Hanafusa (1986) \cite{nakamura1986inverse} propuseram a pseudo-inversa amortecida (DLS — \textit{Damped Least Squares}):
+\begin{equation}
+    J^{\dagger}_{\lambda} = J^\top\left(JJ^\top + \lambda^2 I\right)^{-1},
+    \label{eq:dls}
+\end{equation}
+onde $\lambda > 0$ é o fator de amortecimento. Wampler (1986) \cite{wampler1986manipulator} e Chiaverini et al. (1994) \cite{chiaverini1994review} analisaram as propriedades de estabilidade e a escolha ótima de $\lambda$ em função dos valores singulares mínimos de $J$. A abordagem de DLS com $\lambda$ variável (\textit{variable DLS}), descrita em Chiaverini et al. (1994) \cite{chiaverini1994review}, é especialmente robusta e consiste em aumentar $\lambda$ continuamente conforme o valor singular mínimo decresce.
+
+\subsection{Inicialização por Levenberg-Marquardt com Busca em Linha}
+
+Para a inicialização da postura antes do início da trajetória, o \textit{Hephaestus} utiliza uma variante do algoritmo de Levenberg-Marquardt \cite{marquardt1963algorithm, more1978levenberg}, que ajusta adaptativamente o parâmetro $\lambda$ entre iterações com base no sucesso da redução do erro, combinado com uma busca em linha por \textit{backtracking} (regra de Armijo \cite{armijo1966minimization}) para garantir descida suficiente a cada passo.
+
+\subsection{Erros de Orientação e SLERP}
+
+Para o controle de orientação no espaço de tarefa 6D, o erro de orientação é computado pela formulação de Anel \cite{chiaverini1997singularity} via extração do vetor axial da parte antissimétrica:
+\begin{equation}
+    e_R = \frac{1}{2}\text{vee}\!\left(R_d R_c^\top - R_c R_d^\top\right),
+    \label{eq:orient_error}
+\end{equation}
+onde $R_d$ é a rotação desejada e $R_c$ a rotação corrente. Esta formulação é proporcional ao eixo-ângulo para erros pequenos e evita singularidades de representação por ângulos de Euler \cite{siciliano2009robotics}.
+
+Para a interpolação suave entre duas orientações, é utilizada a \textit{Spherical Linear Interpolation} (SLERP), proposta por Shoemake (1985) \cite{shoemake1985animating} no contexto de animação computacional. Dados dois quaternions (ou matrizes de rotação) $R_0$ e $R_f$, a SLERP define:
+\begin{equation}
+    R(s) = R_0 \left(R_0^\top R_f\right)^s, \quad s \in [0,1],
+    \label{eq:slerp}
+\end{equation}
+garantindo interpolação geodésica (caminho mais curto) sobre o grupo $SO(3)$ \cite{dam1998quaternions}.
+
+% ==============================================================================
+\section{Estratégias de Controle Não-Linear}
+\label{sec:controle}
+% ==============================================================================
+
+\subsection{Controle por Torque Computado (CTC)}
+
+O Controle por Torque Computado (\textit{Computed Torque Control}, CTC), derivado da linearização por realimentação (\textit{feedback linearization}) de Spong e Vidyasagar (1989) \cite{spong1989robot}, é a estratégia fundamental de controle baseado em modelo para robôs. A lei de controle cancela a não-linearidade da dinâmica e impõe uma dinâmica linear de malha fechada:
+\begin{equation}
+    \tau = M(q)\left[\ddot{q}_d + K_D\dot{e} + K_P e + K_I \int e\, dt\right] + C(q,\dot{q})\dot{q} + G(q),
+    \label{eq:ctc_pid}
+\end{equation}
+onde $e = q_d - q$ é o erro de junta, $K_P$, $K_D$ e $K_I$ são matrizes de ganho proporcional, derivativo e integral, respectivamente. Com modelo exato, a dinâmica de erro satisfaz $\ddot{e} + K_D\dot{e} + K_P e = 0$, que é um sistema linear de segunda ordem estável para $K_P, K_D > 0$ \cite{craig1987introduction}.
+
+Na prática, erros de modelo introduzem distúrbios residuais. O termo integral (CTC-PID) melhora a rejeição a distúrbios constantes, mas requer \textit{anti-windup} para evitar saturação do integrador \cite{astrom1995pid}. A implementação no \textit{Hephaestus} inclui \textit{anti-windup} por clamping com limites ajustáveis.
+
+\subsection{Controle por Modo Deslizante (SMC)}
+
+O Controle por Modo Deslizante (\textit{Sliding Mode Control}, SMC) é uma técnica de controle robusto que garante convergência à superfície deslizante $S = \dot{e} + \lambda e = 0$ mesmo na presença de incertezas e perturbações limitadas. A referência canônica é o livro de Slotine e Li (1991) \cite{slotine1991applied}, que apresenta a análise de estabilidade via função de Lyapunov $V = \frac{1}{2}S^\top S$.
+
+A lei de controle implementada no \textit{Hephaestus} segue a formulação por torque computado com superfície deslizante \cite{slotine1991applied}:
+\begin{equation}
+    \tau = M(q)\left[\ddot{q}_d - \lambda\dot{e} - K \tanh(S/\phi)\right] + C(q,\dot{q})\dot{q} + G(q),
+    \label{eq:smc}
+\end{equation}
+onde $\phi$ é a espessura da camada limite que substitui a função $\text{sign}(S)$ pela $\tanh(S/\phi)$, eliminando o \textit{chattering} (oscilações de alta frequência) ao custo de uma robustez finita dentro da camada \cite{slotine1991applied, edwards1998sliding}. A análise de robustez com camada limite foi formalizada por Burton e Zinober (1986) \cite{burton1986continuous}.
+
+\subsection{Algoritmo Super-Twisting (STA)}
+
+O algoritmo Super-Twisting (\textit{Super-Twisting Algorithm}, STA), proposto por Levant (1993) \cite{levant1993sliding}, é um modo deslizante de segunda ordem que elimina o \textit{chattering} intrinsecamente, produzindo um sinal de controle contínuo com convergência em tempo finito:
+\begin{align}
+    v_{\text{sw}} &= -k_1 |S|^{1/2} \text{sign}(S) + z, \label{eq:sta1}\\
+    \dot{z} &= -k_2 \,\text{sign}(S), \label{eq:sta2}
+\end{align}
+onde $z$ é uma variável interna que integra o sinal descontínuo, produzindo $v_{\text{sw}}$ contínuo. Moreno e Osorio (2012) \cite{moreno2012strict} forneceram uma função de Lyapunov estrita para o STA, estabelecendo condições de ganho suficientes para rejeição de perturbações com derivada limitada: $k_2 > \delta$, $k_1 > 2\sqrt{k_2 \delta}$, onde $|\dot{d}| \leq \delta$. A convergência em tempo finito diferencia o STA do SMC de primeira ordem, cuja convergência é assintótica \cite{utkin2009sliding}.
+
+\subsection{Controle por Rejeição Ativa de Distúrbios (ADRC/LADRC)}
+
+O Controle por Rejeição Ativa de Distúrbios (\textit{Active Disturbance Rejection Control}, ADRC), proposto por Han (1995) \cite{han1995nonlinear} e popularizado em versão linear (LADRC) por Gao (2003) \cite{gao2003scaling}, é uma abordagem paradigmática de controle que interpreta todas as incertezas do modelo, dinâmicas não-modeladas e perturbações externas como um único ``distúrbio total'' $f(q,\dot{q},d,t)$, estimado em tempo real por um Observador de Estado Estendido (ESO) e cancelado pela lei de controle.
+
+A dinâmica de segunda ordem de uma junta é reescrita como:
+\begin{equation}
+    \ddot{q}_i = b_0 \tau_i + f_i, \quad f_i \triangleq \text{distúrbio total},
+    \label{eq:adrc_plant}
+\end{equation}
+onde $b_0$ é um ganho nominal conhecido (aqui, $b_0 \approx 1/M_{ii}$). O ESO de terceira ordem (linear) observa o estado aumentado $[q_i, \dot{q}_i, f_i]$:
+\begin{align}
+    \dot{z}_1 &= z_2 - \beta_1(z_1 - q_i), \label{eq:eso1}\\
+    \dot{z}_2 &= z_3 - \beta_2(z_1 - q_i) + b_0\tau_i, \label{eq:eso2}\\
+    \dot{z}_3 &= -\beta_3(z_1 - q_i), \label{eq:eso3}
+\end{align}
+com ganhos $\beta_1 = 3\omega_o$, $\beta_2 = 3\omega_o^2$, $\beta_3 = \omega_o^3$, parametrizados pela frequência de observador $\omega_o$ \cite{gao2003scaling}. A lei de controle cancela o distúrbio estimado $z_3$:
+\begin{equation}
+    \tau_i = \frac{u_0 - z_3}{b_0}, \quad u_0 = \ddot{q}_{d,i} + k_p(q_{d,i} - q_i) + k_d(\dot{q}_{d,i} - \dot{q}_i).
+    \label{eq:adrc_control}
+\end{equation}
+
+A análise de estabilidade do LADRC foi formalizada por Zheng e Gao (2010) \cite{zheng2010stability}. A formulação descentralizada — um ESO por junta, ignorando o acoplamento dinâmico — é especialmente atraente para robótica: Huang e Xue (2014) \cite{huang2014active} e trabalhos subsequentes demonstraram sua eficácia em manipuladores, onde os termos de Coriolis e gravidade são tratados como distúrbios a serem estimados pelo ESO. O artigo de revisão de Han (2009) \cite{han2009pid} sintetiza a motivação filosófica da abordagem ADRC como extensão natural do controlador PID.
+
+No \textit{Hephaestus}, a implementação inclui feedforward explícito de $G(q)$ e $C(q,\dot{q})$, reduzindo o distúrbio residual que o ESO deve estimar para apenas erros de modelo e perturbações externas.
+
+% ==============================================================================
+\section{Planejamento de Trajetórias}
+% ==============================================================================
+
+O planejamento de trajetórias em robótica define os perfis de posição, velocidade e aceleração que o efetuador deve seguir ao longo do tempo. Siciliano et al. (2009) \cite{siciliano2009robotics} distinguem entre planejamento no espaço de juntas e no espaço cartesiano.
+
+\subsection{Polinômio Cúbico e Perfil de \textit{Jerk} Finito}
+
+Para interpolação de um ponto $P_i$ a um ponto $P_f$ em um tempo $T$, o polinômio cúbico (grau 3) garante continuidade de posição e velocidade nos extremos com velocidades inicial e final nulas \cite{siciliano2009robotics, craig1987introduction}:
+\begin{equation}
+    s(t) = 3\left(\frac{t}{T}\right)^2 - 2\left(\frac{t}{T}\right)^3,
+    \label{eq:cubic_poly}
+\end{equation}
+com $\dot{s}(0) = \dot{s}(T) = 0$ e aceleração máxima $\ddot{s}_{\max} = 6/T^2$ no instante $T/2$. O polinômio de grau 5, embora garanta continuidade de aceleração nos extremos (menor \textit{jerk}), não foi adotado aqui por apresentar valores de pico de aceleração ligeiramente superiores para o mesmo tempo de trajetória \cite{siciliano2009robotics}.
+
+\subsection{Trajetória Circular no Espaço Cartesiano}
+
+A trajetória circular é parametrizada por um centro $C$, dois vetores ortonormais $e_1$, $e_2$ no plano do arco, raio $R$ e ângulo total $\theta_f - \theta_0$:
+\begin{equation}
+    P(t) = C + R\left[\cos(\theta(t))\,e_1 + \sin(\theta(t))\,e_2\right],
+    \label{eq:circle_traj}
+\end{equation}
+onde $\theta(t) = \theta_0 + (\theta_f - \theta_0)\,s(t)$ e $s(t)$ é o polinômio cúbico de Eq. \eqref{eq:cubic_poly}. As velocidade e aceleração cartesianas são obtidas pela diferenciação analítica de $P(t)$ \cite{siciliano2009robotics}.
+
+% ==============================================================================
+\section{Computação Simbólica e Geração de Código Numérico}
+% ==============================================================================
+
+\subsection{Álgebra Computacional Simbólica com SymPy}
+
+O projeto \textit{SymPy} \cite{meurer2017sympy} é uma biblioteca Python de Álgebra Computacional Simbólica (\textit{Computer Algebra System}, CAS) inteiramente implementada em Python puro, o que a torna portável e integrável sem dependências externas de compilação. Meurer et al. (2017) \cite{meurer2017sympy} descrevem a arquitetura modular do SymPy, destacando o módulo \texttt{sympy.physics.mechanics}, que fornece o tipo \texttt{dynamicsymbols} — símbolos dependentes do tempo com diferenciação automática — e as funções do método de Lagrange que automatizam a derivação das equações de movimento a partir da energia cinética e potencial.
+
+A manipulação simbólica de expressões de grande porte — como as matrizes $M(q)$ de sistemas com 6 ou mais graus de liberdade — pode produzir expressões com dezenas de milhares de subexpressões primitivas. A gestão eficiente dessas expressões é crítica para viabilizar a simulação numérica subsequente \cite{harrington2019automated}.
+
+\subsection{Eliminação de Subexpressões Comuns (CSE)}
+
+A Eliminação de Subexpressões Comuns (\textit{Common Subexpression Elimination}, CSE) é uma otimização clássica de compiladores \cite{aho2006compilers} que identifica subexpressões repetidas em uma expressão aritmética e as substitui por variáveis temporárias, reduzindo o número total de operações elementares. No contexto da simulação robótica, Moses (1971) \cite{moses1971algebraic} demonstrou que a simplificação algébrica de expressões cinemáticas pode reduzir em mais de uma ordem de grandeza o número de operações necessárias.
+
+A função \texttt{sp.lambdify()} do SymPy com a flag \texttt{cse=True} aplica automaticamente a CSE antes de gerar o código Python/NumPy, detectando e fatorando subexpressões comuns nas matrizes $M$, $C$ e $G$ antes da geração do código numérico \cite{meurer2017sympy}. Isso reduz significativamente o tamanho do bytecode compilado — crítico para evitar \texttt{MemoryError} em sistemas de grande porte — e acelera a avaliação numérica por reutilização de subexpressões em cache.
+
+\subsection{Paralelismo na Derivação Simbólica}
+
+A derivação simbólica do vetor de Coriolis, que requer o cálculo de $\partial M / \partial q_k$ para $k = 1, \ldots, N$ e de todas as combinações de símbolos de Christoffel (Equação \eqref{eq:christoffel}), possui complexidade $O(N^3)$ em termos de operações simbólicas, tornando-se o principal gargalo de tempo para sistemas com muitos graus de liberdade.
+
+O módulo \texttt{concurrent.futures.ProcessPoolExecutor} da biblioteca padrão do Python permite a distribuição dessas tarefas entre múltiplos processos, contornando o \textit{Global Interpreter Lock} (GIL) do CPython \cite{beazley2010understanding}. A abordagem de \textit{pool} de processos com passagem de dados simbólicos via \textit{pickle} foi validada por Harrington et al. (2019) \cite{harrington2019automated} para sistemas de dinâmica multivariável de grande porte.
+
+\subsection{Integração Numérica: Método de Euler Simplético}
+
+A integração numérica das equações de movimento \eqref{eq:motion_equation} é realizada pelo método de Euler Simplético (também chamado de Euler Simplético de primeira ordem ou método de Euler semi-implícito). Em contraste com o Euler Explícito padrão (atualização de $q$ e $\dot{q}$ simultaneamente com valores do passo anterior), o Euler Simplético atualiza primeiro a velocidade e depois a posição:
+\begin{align}
+    \dot{q}^{n+1} &= \dot{q}^n + \ddot{q}^n \Delta t, \label{eq:symplectic_euler1}\\
+    q^{n+1} &= q^n + \dot{q}^{n+1} \Delta t. \label{eq:symplectic_euler2}
+\end{align}
+Esta sequência é um método simplético de primeira ordem — pertence à família de integradores que preservam a estrutura Hamiltoniana do sistema \cite{leimkuhler2004simulating, hairer2006geometric}. Sua principal vantagem sobre o Euler Explícito é a preservação de energia a longo prazo: enquanto o Euler Explícito apresenta acúmulo secular de energia (instabilidade numérica suave), o Euler Simplético preserva uma ``energia modificada'' próxima da real \cite{leimkuhler2004simulating}. Para simulações de controle em malha fechada com duração moderada (tipicamente $< 30$ s), essa diferença é crítica para a fidelidade dos resultados.
+
+% ==============================================================================
+\section{Ferramentas de Simulação para UVMS: Estado da Arte}
+% ==============================================================================
+
+O desenvolvimento de simuladores para robótica subaquática é um campo ativo. O ambiente UWSim, descrito por Prats et al. (2012) \cite{prats2012open}, foi um dos primeiros a oferecer simulação de UVMS com integração ao ROS (\textit{Robot Operating System}) e renderização realista por OpenSceneGraph. UWSim suporta múltiplos veículos e manipuladores, mas sua arquitetura de simulação dinâmica é baseada em Newton-Euler recursivo sem suporte nativo à modelagem simbólica.
+
+O simulador DAVE, apresentado por Zhang et al. (2022) \cite{zhang2022dave}, estende o Gazebo com modelos hidrodinâmicos para veículos e manipuladores subaquáticos, integrando ao ROS2. Apesar da fidelidade visual e da integração com hardware real, a caixa-preta do motor de física do Gazebo (ODE ou Bullet) não expõe as equações analíticas, dificultando estudos de modelagem comparativa.
+
+No domínio educacional, trabalhos como o de Moura et al. (2020) \cite{moura2020educational} propõem ambientes simplificados em Python para ensino de controle de manipuladores. Contudo, esses ambientes não contemplam a modelagem hidrodinâmica completa de UVMS nem a transição simbólico-numérica otimizada.
+
+O \textit{Hephaestus} diferencia-se dessas ferramentas por: (i) derivar analiticamente e exibir as equações lagrangianas explícitas; (ii) suportar modelos de massa adicionada 6D por elo; (iii) implementar quatro estratégias de controle não-linear comparáveis em uma única interface; e (iv) operar como aplicação \textit{standalone} sem dependência de ROS ou Gazebo, distribuída via PyInstaller.
+
+% ==============================================================================
+\section{Síntese da Revisão}
+% ==============================================================================
+
+A Tabela \ref{tab:revisao_sintetica} sintetiza as referências seminais e os módulos do \textit{Hephaestus} correspondentes, evidenciando a cobertura da literatura em cada componente técnico.
+
+\begin{table}[h!]
+\centering
+\caption{Mapeamento entre fundamentos teóricos e componentes do \textit{Hephaestus}.}
+\label{tab:revisao_sintetica}
+\begin{tabular}{p{4.5cm} p{5.0cm} p{4.0cm}}
+\hline
+\textbf{Fundamento} & \textbf{Referências Principais} & \textbf{Componente} \\
+\hline
+Cinemática FK / Jacobiano & \cite{craig1987introduction, spong2020robot, siciliano2009robotics} & \texttt{step\_1\_kinematics} \\
+Dinâmica Lagrangiana ($M$, $C$, $G$) & \cite{hollerbach1980recursive, spong2020robot} & \texttt{step\_2, step\_3} \\
+Modelagem Hidrodinâmica & \cite{fossen2011handbook, antonelli2014modelling} & \texttt{RobotMathHydro} \\
+CLIK + DLS + Espaço Nulo & \cite{chiaverini1994review, nakamura1986inverse, chiaverini1997singularity} & \texttt{solve\_ik\_numerical} \\
+SLERP & \cite{shoemake1985animating, dam1998quaternions} & \texttt{\_slerp\_rotation} \\
+CTC-PID & \cite{craig1987introduction, astrom1995pid} & \texttt{run (CTC-PID)} \\
+SMC com camada limite & \cite{slotine1991applied, edwards1998sliding} & \texttt{SlidingModeControl} \\
+Super-Twisting STA & \cite{levant1993sliding, moreno2012strict} & \texttt{SuperTwistingSMC} \\
+LADRC / ESO & \cite{han2009pid, gao2003scaling, zheng2010stability} & \texttt{Decentralized\_LADRC} \\
+CSE + lambdify & \cite{meurer2017sympy, aho2006compilers} & \texttt{RobotSimulator.\_\_init\_\_} \\
+Euler Simplético & \cite{leimkuhler2004simulating, hairer2006geometric} & \texttt{run (integrador)} \\
+\hline
+\end{tabular}
+\end{table}
+
+A revisão apresentada neste capítulo evidencia que o \textit{Hephaestus} não apenas integra o estado da arte em cada uma das áreas abordadas, mas o faz por meio de uma cadeia de software transparente e documentada, onde cada escolha de algoritmo pode ser rastreada à literatura científica correspondente. Os capítulos seguintes detalham a arquitetura de implementação e os resultados experimentais obtidos com a plataforma.

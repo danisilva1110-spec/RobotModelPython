@@ -1,13 +1,14 @@
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
+import multiprocessing
 import sympy as sp
+import sys
 from sympy.physics.mechanics import dynamicsymbols
 from sympy.printing.octave import octave_code
 import os
 import pickle
 import threading
-import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
@@ -172,11 +173,18 @@ class App(ctk.CTk):
 
             modo = self.mode_var.get()
             self.log(f"--- Iniciando Modelagem ({modo}) ---")
-            
+
+            # Paralelismo: None = usa todas as CPUs. Se HEPHAESTUS_NO_PARALLEL=1
+            # (ex.: executável ainda crashando com ProcessPoolExecutor), força serial.
+            num_workers = None
+            if os.environ.get("HEPHAESTUS_NO_PARALLEL") == "1":
+                num_workers = 1
+                self.log("⚠️ HEPHAESTUS_NO_PARALLEL=1: Coriolis em série.")
+
             if modo == "Água (UVMS)":
-                self.active_bot = RobotMathHydro(j_types, l_vecs, logger_callback=self.log)
+                self.active_bot = RobotMathHydro(j_types, l_vecs, logger_callback=self.log, num_workers=num_workers)
             else:
-                self.active_bot = RobotMathEngine(j_types, l_vecs, logger_callback=self.log)
+                self.active_bot = RobotMathEngine(j_types, l_vecs, logger_callback=self.log, num_workers=num_workers)
 
             results = self.active_bot.run_full_process()
             
@@ -2421,5 +2429,10 @@ class App(ctk.CTk):
         threading.Thread(target=self._load_model_thread, args=(filepath, True), daemon=True).start()
 
 if __name__ == "__main__":
+    # Obrigatório para PyInstaller + multiprocessing no Windows.
+    # Sem isso, o ProcessPoolExecutor no cálculo de Coriolis causa spawn de
+    # processos que reabrem o executável e geram o erro "A process in the
+    # process pool was terminated abruptly".
+    multiprocessing.freeze_support()
     app = App()
     app.mainloop()

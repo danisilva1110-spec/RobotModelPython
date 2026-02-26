@@ -1,0 +1,407 @@
+\chapter{Modelagem Matemática e Geração Simbólica}
+\label{cap:modelagem}
+
+Este capítulo apresenta, em detalhe, a arquitetura de modelagem matemática implementada no núcleo computacional do \textit{Hephaestus}. O objetivo central é descrever como a cadeia cinemática de um manipulador genérico de $N$ graus de liberdade — em ambiente terrestre ou subaquático — é traduzida em expressões simbólicas fechadas para a matriz de inércia $M(q)$, o vetor de Coriolis $C(q,\dot{q})$ e o vetor de gradiente de potencial $G(q)$, bem como o processo de compilação dessas expressões em funções numéricas otimizadas para simulação em tempo real. A exposição combina a fundamentação teórica dos conceitos revisados no Capítulo~\ref{cap:revisao} com as escolhas concretas de implementação que diferenciam o \textit{Hephaestus} das abordagens clássicas.
+
+% ==============================================================================
+\section{Visão Geral da Arquitetura}
+% ==============================================================================
+
+A \textit{engine} matemática do \textit{Hephaestus} é organizada em uma hierarquia de classes: \texttt{RobotMathEngine} — responsável pela modelagem em ambiente seco (ar) — e \texttt{RobotMathHydro} — subclasse que estende o modelo para ambiente subaquático, incorporando os efeitos de massa adicionada e empuxo. A filosofia de projeto segue o princípio de separação entre a camada simbólica (geração das equações exatas) e a camada numérica (avaliação eficiente em tempo de simulação), conforme proposto por Meurer et al.~(2017) \cite{meurer2017sympy}.
+
+O fluxo completo de processamento é organizado em quatro etapas sequenciais, refletidas nos métodos públicos da classe:
+
+\begin{enumerate}
+    \item \textbf{Cinemática Simbólica} (\texttt{step\_1\_kinematics}): construção das transformações homogêneas acumuladas, das posições dos centros de massa e das velocidades angulares de cada elo.
+    \item \textbf{Matriz de Inércia e Gradiente de Potencial} (\texttt{step\_2\_jacobian\_M\_G}): derivação simbólica de $M(q)$ e $G(q)$ por meio do método do Jacobiano da inércia, com rotação explícita dos tensores locais para o referencial global.
+    \item \textbf{Vetor de Coriolis} (\texttt{step\_3\_coriolis\_combined}): cálculo dos símbolos de Christoffel de segunda espécie a partir de $\partial M/\partial q_k$, com suporte a paralelismo por múltiplos processos.
+    \item \textbf{Preparação e Exportação} (\texttt{step\_4\_prepare\_export}): substituição de símbolos dinâmicos por variáveis estáticas e empacotamento do modelo para o módulo de simulação.
+\end{enumerate}
+
+Essa organização modular permite que o usuário inspecione o estado intermediário após cada etapa, facilitando a depuração matemática e a validação pedagógica das equações geradas — objetivo central de uma plataforma didática de código aberto \cite{moura2020educational}.
+
+% ==============================================================================
+\section{Representação da Cadeia Cinemática}
+% ==============================================================================
+
+\subsection{Configuração de Juntas e Máscara de Vetores de Elo}
+
+A cadeia cinemática é especificada pelo usuário por meio de dois parâmetros de entrada:
+
+\begin{itemize}
+    \item \texttt{joint\_config}: lista de strings descrevendo o tipo e eixo de cada junta. O primeiro caractere indica o tipo — \texttt{'R'} para junta de revolução (\textit{Revolute}) ou \texttt{'D'} para junta prismática (\textit{Displacement}) — e o segundo caractere indica o eixo de movimento (\texttt{'x'}, \texttt{'y'} ou \texttt{'z'}).
+    \item \texttt{link\_vectors\_mask}: lista de vetores tridimensionais $(u_x, u_y, u_z)$ que definem a direção do elo estrutural ligado à respectiva junta no referencial local. O comprimento efetivo do elo é parametrizado pelo símbolo escalar $L_i$, de modo que o vetor de translação do elo $i$ é $\vec{r}_i = (u_x, u_y, u_z)^i \cdot L_i$.
+\end{itemize}
+
+Essa parametrização admite qualquer topologia de cadeia serial aberta, incluindo configurações com juntas prismáticas mistas — fundamentais para modelar o grau de liberdade de afundamento de veículos subaquáticos — e configurações com elos de comprimento nulo (vetor máscara zero), usadas para modelar as três rotações do veículo base de um UVMS sem translação associada \cite{antonelli2014modelling, fossen2011handbook}.
+
+A escolha de uma parametrização matricial de rotações diretas em vez da convenção de Denavit-Hartenberg (DH) \cite{denavit1955kinematic} foi deliberada. Embora a convenção DH seja amplamente ensinada \cite{craig1987introduction, spong2020robot}, ela impõe restrições geométricas sobre o posicionamento dos eixos de coordenadas que dificultam a representação de certas arquiteturas (e.g., juntas com deslocamentos paralelos). A representação por matrizes de rotação elementares por eixo-ângulo, adotada no \textit{Hephaestus}, é algebricamente transparente e diretamente integrável com o módulo de mecânica simbólica do SymPy \cite{meurer2017sympy, harrington2019automated}.
+
+\subsection{Símbolos Dinâmicos e Parâmetros}
+
+Para cada junta $i$, são criados automaticamente os seguintes símbolos SymPy:
+
+\begin{itemize}
+    \item $q_i(t)$, $\dot{q}_i(t)$: variáveis de junta e sua derivada temporal, instanciadas como \texttt{dynamicsymbols} para suportar diferenciação automática \cite{meurer2017sympy};
+    \item $m_i$, $L_i$: massa e comprimento do elo $i$;
+    \item $cx_i$, $cy_i$, $cz_i$: coordenadas do centro de massa no referencial local do elo $i$;
+    \item $Ixx_i$, $Iyy_i$, $Izz_i$: momentos principais de inércia no referencial local.
+\end{itemize}
+
+Adicionalmente, o símbolo escalar $g$ representa a aceleração gravitacional. No modo hidrodinâmico, o símbolo $\rho$ (densidade do fluido) e os volumes deslocados $\text{vol}_i$ são adicionados à lista de parâmetros. Todos esses símbolos são agrupados em \texttt{params\_list}, que serve como assinatura da função compilada \cite{meurer2017sympy}. Essa abordagem garante que as equações geradas sejam \emph{parametricamente completas}: um único modelo simbólico serve para qualquer instância paramétrica do robô, sem necessidade de recomputação quando os valores físicos são alterados — propriedade ausente em geradores de código que utilizam substituição numérica direta \cite{hollerbach1980recursive}.
+
+% ==============================================================================
+\section{Cinemática Simbólica Direta}
+\label{sec:cinematica_simbolica}
+% ==============================================================================
+
+\subsection{Transformações Homogêneas Acumuladas}
+
+A cinemática direta é construída iterativamente sobre a cadeia de elos. Para a junta $i$ do tipo revolução em torno do eixo $\hat{a}_i$ (expresso no referencial global acumulado $R_{\text{acc}}$), a matriz de rotação local é:
+\begin{equation}
+    R_j^{(i)} = \exp\!\left(\hat{a}_i^{(l)}\,q_i\right), \quad \hat{a}_i^{(l)} \in \{\hat{x}, \hat{y}, \hat{z}\},
+    \label{eq:rot_local}
+\end{equation}
+onde $\hat{a}_i^{(l)}$ é o eixo de rotação no referencial local, mapeado para as matrizes elementares $R_x$, $R_y$ ou $R_z$ conforme o caractere do tipo de junta \cite{craig1987introduction, siciliano2009robotics}. Para a junta prismática ao longo do eixo $\hat{a}_i^{(l)}$:
+\begin{equation}
+    R_j^{(i)} = I_3, \quad P_j^{(i)} = \hat{a}_i^{(l)}\, q_i.
+    \label{eq:prism_local}
+\end{equation}
+
+A transformação homogênea $4 \times 4$ acumulada até o extremo do elo $i$ é:
+\begin{equation}
+    T_i = T_{i-1} \cdot T_{\text{junta},i} \cdot T_{\text{elo},i},
+    \label{eq:T_acumulada}
+\end{equation}
+onde $T_{\text{junta},i}$ encapsula a rotação/translação da junta $i$ e $T_{\text{elo},i}$ codifica a translação estrutural do elo (vetor $\vec{r}_i = L_i \cdot \texttt{link\_vectors\_mask}[i]$). Isso é computado simbolicamente pelo SymPy, produzindo expressões fechadas que dependem de $\{q_1, \ldots, q_N\}$ e $\{L_1, \ldots, L_N\}$ \cite{spong2020robot}.
+
+\subsection{Posições dos Centros de Massa no Referencial Global}
+
+A posição global do centro de massa do elo $i$ é obtida por:
+\begin{equation}
+    \vec{p}_{\text{cm},i} = T_{\text{at-joint},i} \cdot \begin{bmatrix} cx_i \\ cy_i \\ cz_i \\ 1 \end{bmatrix}_{\!(1:3)},
+    \label{eq:pcm_global}
+\end{equation}
+onde $T_{\text{at-joint},i} = T_{i-1} \cdot T_{\text{junta},i}$ é a transformação até o \emph{início} do elo $i$ (antes da translação estrutural) e $[cx_i, cy_i, cz_i]$ são as coordenadas do CM no referencial local. Essa convenção separa o CM do extremo do elo, permitindo modelar distribuições de massa arbitrárias ao longo do elo sem hipóteses simplificadoras de CM centrado \cite{siciliano2009robotics, spong2020robot}.
+
+\subsection{Velocidades Angulares Simbólicas}
+
+A velocidade angular global do elo $i$ é acumulada recursivamente:
+\begin{equation}
+    \vec{\omega}_i = \vec{\omega}_{i-1} + R_{\text{acc},i-1} \cdot \hat{a}_i^{(l)} \cdot \dot{q}_i \quad \text{(juntas R)}, \qquad
+    \vec{\omega}_i = \vec{\omega}_{i-1} \quad \text{(juntas D)}.
+    \label{eq:omega_rec}
+\end{equation}
+
+Essa recorrência segue a formulação vetorial da velocidade angular para cadeias seriais \cite{craig1987introduction, luh1980online}. O resultado é uma expressão simbólica linear em $\{\dot{q}_1, \ldots, \dot{q}_N\}$, cuja derivada em relação a $\dot{q}_j$ fornece diretamente a $j$-ésima coluna do Jacobiano angular $J_{\omega,i}$ \cite{siciliano2009robotics}.
+
+% ==============================================================================
+\section{Derivação Simbólica da Matriz de Inércia e do Vetor de Gravidade}
+\label{sec:M_G}
+% ==============================================================================
+
+\subsection{Método do Jacobiano da Inércia}
+
+A derivação da matriz de inércia generalizada $M(q)$ segue o método do Jacobiano da inércia \cite{siciliano2009robotics}, que expressa a energia cinética total como:
+\begin{equation}
+    T = \frac{1}{2}\dot{q}^\top M(q)\,\dot{q},
+    \label{eq:T_total}
+\end{equation}
+onde
+\begin{equation}
+    M(q) = \sum_{i=1}^{N} \left[ m_i\, J_{v,i}^\top\, J_{v,i} + J_{\omega,i}^\top\, I_i^{(g)}\, J_{\omega,i} \right].
+    \label{eq:M_jacobian}
+\end{equation}
+
+Os Jacobianos de velocidade translacional e angular do CM do elo $i$ são obtidos diretamente por diferenciação simbólica:
+\begin{equation}
+    J_{v,i}(q) = \frac{\partial \vec{p}_{\text{cm},i}}{\partial q}, \qquad
+    J_{\omega,i}(\dot{q}) = \frac{\partial \vec{\omega}_i}{\partial \dot{q}},
+    \label{eq:jacobs}
+\end{equation}
+computadas pelo método \texttt{.jacobian()} do SymPy. O tensor de inércia global $I_i^{(g)}$ é obtido pela transformação de Steiner:
+\begin{equation}
+    I_i^{(g)} = R_{\text{acc},i}\, I_i^{(l)}\, R_{\text{acc},i}^\top, \qquad
+    I_i^{(l)} = \text{diag}(Ixx_i,\, Iyy_i,\, Izz_i),
+    \label{eq:I_global}
+\end{equation}
+onde $R_{\text{acc},i}$ é a matriz de rotação global acumulada até o elo $i$. A hipótese de tensor diagonal em coordenadas principais locais — amplamente adotada quando os eixos de inércia são alinhados ao referencial de junta \cite{spong2020robot, siciliano2009robotics} — é suficiente para descrever elos com geometria simétrica.
+
+\subsection{Vetor de Gradiente de Potencial Gravitacional}
+
+A energia potencial total do sistema é:
+\begin{equation}
+    V(q) = \sum_{i=1}^{N} m_i\, g\, z_{\text{cm},i}(q),
+    \label{eq:V_grav}
+\end{equation}
+onde $z_{\text{cm},i}$ é a componente vertical (terceira coordenada) de $\vec{p}_{\text{cm},i}$. O vetor de gravidade generalizada é então:
+\begin{equation}
+    G(q) = \left(\frac{\partial V}{\partial q}\right)^\top = \frac{\partial}{\partial q} \left[\sum_{i=1}^{N} m_i\, g\, z_{\text{cm},i}\right]^\top,
+    \label{eq:G_vec}
+\end{equation}
+computado pelo método \texttt{sp.Matrix([V\_tot]).jacobian(self.q).T}. Dessa forma, $G(q) \in \mathbb{R}^N$ representa, em cada componente $G_i(q)$, o torque generalizado necessário para sustentar o peso estático do sistema na configuração $q$ \cite{craig1987introduction, spong2020robot}.
+
+\subsection{Jacobiano Geométrico Completo}
+
+O Jacobiano geométrico do efetuador $J(q) \in \mathbb{R}^{6 \times N}$ é montado pela concatenação das linhas translacionais (derivada da posição do extremo final em relação a $q$) com as linhas rotacionais (derivada de $\vec{\omega}_N$ em relação a $\dot{q}$):
+\begin{equation}
+    J(q) = \begin{bmatrix} J_{\text{lin}} \\ J_{\text{ang}} \end{bmatrix}, \quad
+    J_{\text{lin}} = \frac{\partial\, \vec{p}_{\text{end}}}{\partial q} \in \mathbb{R}^{3 \times N}, \quad
+    J_{\text{ang}} = \frac{\partial\, \vec{\omega}_N}{\partial \dot{q}} \in \mathbb{R}^{3 \times N}.
+    \label{eq:jacobian_full}
+\end{equation}
+
+A disponibilidade do Jacobiano $6 \times N$ completo viabiliza o controle no espaço de tarefa 6D (posição + orientação), tratado em detalhe no Capítulo~\ref{cap:simulacao}. Esta é uma extensão crítica em relação a abordagens que consideram apenas o Jacobiano posicional $3 \times N$, que são insuficientes para controle de orientação em tarefas de manipulação subaquática ou em superfícies inclinadas \cite{chiaverini1997singularity, siciliano2009robotics}.
+
+% ==============================================================================
+\section{Cálculo Simbólico do Vetor de Coriolis}
+\label{sec:coriolis}
+% ==============================================================================
+
+\subsection{Formulação pelos Símbolos de Christoffel}
+
+O vetor de termos de Coriolis e centrípetos $C(q,\dot{q}) \in \mathbb{R}^N$ é calculado pelos símbolos de Christoffel de segunda espécie \cite{spong2020robot, siciliano2009robotics}. Cada componente do vetor $C$ é:
+\begin{equation}
+    [C(q,\dot{q})]_i = \sum_{j=1}^{N}\sum_{k=j}^{N} c_{ijk}(q)\,\dot{q}_j\,\dot{q}_k \cdot \varepsilon_{jk},
+    \label{eq:C_vec}
+\end{equation}
+onde $\varepsilon_{jk} = 1$ se $j = k$ e $\varepsilon_{jk} = 2$ se $j \neq k$ (simetria do segundo índice), e os coeficientes de Christoffel são:
+\begin{equation}
+    c_{ijk} = \frac{1}{2}\!\left(\frac{\partial M_{ij}}{\partial q_k} + \frac{\partial M_{ik}}{\partial q_j} - \frac{\partial M_{jk}}{\partial q_i}\right).
+    \label{eq:christoffel_impl}
+\end{equation}
+
+Esta formulação é matematicamente equivalente às linhas $C_{ij}$ da matriz de Coriolis clássica (Equação~\eqref{eq:christoffel} do Capítulo~\ref{cap:revisao}), mas diretamente no formato vetorial $C(q,\dot{q})\dot{q}$, evitando a construção da matriz $N \times N$ completa — o que reduz o número total de operações de $O(N^3)$ para o cálculo dos coeficientes individuais sem custos adicionais de produto matriz-vetor.
+
+A implementação segue dois sub-passos. No primeiro (\textit{Passo 3a}), a matriz de inércia $M$ é diferenciada em relação a cada variável de junta $q_k$, produzindo as matrizes $\partial M/\partial q_k \in \mathbb{R}^{N \times N}$ para $k = 1, \ldots, N$. No segundo (\textit{Passo 3b}), cada linha $i$ do vetor $C$ é montada pela varredura de todos os pares $(j, k)$ com $k \geq j$, utilizando as matrizes previamente calculadas. A exploração da simetria ($k \geq j$) reduz o número de pares de $N^2$ para $N(N+1)/2$ \cite{hollerbach1980recursive}.
+
+\subsection{Estratégia de Paralelização da Derivação}
+
+A derivação simbólica de $\partial M/\partial q_k$ é a operação mais custosa de toda a geração do modelo: em sistemas com $N$ graus de liberdade, cada um dos $N$ gradientes simbólicos exige a diferenciação de uma matriz $N \times N$ com entradas que podem possuir centenas de subexpressões, resultando em uma complexidade efetiva de $O(N^3)$ a $O(N^4)$ no tamanho das expressões para configurações gerais \cite{hollerbach1980recursive, harrington2019automated}.
+
+Para mitigar esse custo, o \textit{Hephaestus} distribui as $N$ tarefas de diferenciação $M \to \partial M/\partial q_k$ entre múltiplos processos via \texttt{ProcessPoolExecutor} da biblioteca padrão do Python:
+
+\begin{equation}
+    \texttt{dM\_dq}[k] = \frac{\partial M}{\partial q_k}, \quad k = 1, \ldots, N, \quad \text{computados em paralelo por } W \text{ \textit{workers}}.
+    \label{eq:dMdq_parallel}
+\end{equation}
+
+O uso de processos (em vez de \textit{threads}) contorna a limitação do \textit{Global Interpreter Lock} (GIL) do CPython, que impede a execução simultânea de código Python puro em múltiplos \textit{threads} \cite{beazley2010understanding}. A serialização dos objetos simbólicos entre processos é viabilizada pela integração nativa do SymPy com o módulo \texttt{pickle} do Python, que representa expressões simbólicas como árvores de objetos serializáveis \cite{meurer2017sympy}.
+
+Analogamente, o cálculo das $N$ linhas do vetor $C$ (cada linha requerendo $O(N^2)$ operações simbólicas sobre as matrizes $\partial M/\partial q_k$) é também paralelizado por \texttt{ProcessPoolExecutor}, com cada \textit{worker} responsável por uma linha $i$ do vetor:
+
+\begin{equation}
+    C_i = \sum_{j=1}^{N}\sum_{k=j}^{N} c_{ijk}\,\dot{q}_j\,\dot{q}_k \cdot \varepsilon_{jk}, \quad i = 1, \ldots, N, \quad \text{computados em paralelo}.
+    \label{eq:C_parallel}
+\end{equation}
+
+Uma decisão de implementação relevante é a \emph{omissão intencional} da chamada a \texttt{sp.collect()} após a montagem de cada linha $C_i$. Embora a coleta de termos semelhantes possa compactar a expressão simbólica, seu custo computacional é superlinear no número de termos e pode superar em ordem de grandeza o custo do cálculo próprio da linha. Em vez disso, a compactação é delegada ao passo de CSE (\textit{Common Subexpression Elimination}) realizado posteriormente no \texttt{lambdify}, que fatoriza subexpressões repetidas de forma sistemática e com custo linear no tamanho da expressão final \cite{aho2006compilers, meurer2017sympy}.
+
+\subsection{Modo Serial para Ambientes Executáveis}
+
+Quando o \textit{Hephaestus} é distribuído como executável via PyInstaller (arquivo \texttt{.exe}), o suporte ao spawn de subprocessos no Windows impõe restrições de inicialização que tornam o \texttt{ProcessPoolExecutor} incompatível com módulos congelados (\textit{frozen}). Nesse cenário, o número de \textit{workers} é automaticamente configurado para 1, e a computação é realizada em série na mesma thread principal. Essa detecção é realizada pelo parâmetro \texttt{num\_workers} da classe \texttt{RobotMathEngine}: quando \texttt{num\_workers = 1}, a condição \texttt{use\_parallel = False} desativa o executor, garantindo execução correta em qualquer ambiente sem modificações no código \cite{harrington2019automated}.
+
+% ==============================================================================
+\section{Extensão Hidrodinâmica: \texttt{RobotMathHydro}}
+\label{sec:hydro_engine}
+% ==============================================================================
+
+A classe \texttt{RobotMathHydro} herda integralmente de \texttt{RobotMathEngine} e sobrescreve os métodos \texttt{step\_1\_kinematics\_hydro} e \texttt{step\_2\_jacobian\_M\_G} para incorporar os efeitos físicos do ambiente aquático, conforme a formulação de Fossen (2011) \cite{fossen2011handbook} e Antonelli (2014) \cite{antonelli2014modelling}.
+
+\subsection{Parâmetros Adicionais: Volumes e Massa Adicionada}
+
+No passo de cinemática hidrodinâmica, após a execução completa de \texttt{step\_1\_kinematics}, são acrescentados à lista de parâmetros os volumes deslocados $\text{vol}_i$ de cada elo ($i = 1, \ldots, N$). Esses volumes determinam a força de empuxo por elo segundo o princípio de Arquimedes:
+\begin{equation}
+    B_i = \rho\, g\, \text{vol}_i,
+    \label{eq:empuxo_por_elo}
+\end{equation}
+onde $\rho$ é a densidade do fluido \cite{newman1977marine}.
+
+No passo de dinâmica hidrodinâmica, os coeficientes de massa adicionada de cada elo são instanciados como seis símbolos escalares:
+\begin{equation}
+    \{ma_{u,i},\, ma_{v,i},\, ma_{w,i}\} \quad \text{(translacionais)}, \qquad
+    \{ma_{p,i},\, ma_{q,i},\, ma_{r,i}\} \quad \text{(rotacionais)},
+    \label{eq:MA_syms}
+\end{equation}
+formando as matrizes diagonais locais $M_{A,\text{lin},i}^{(l)} = \text{diag}(ma_{u,i}, ma_{v,i}, ma_{w,i})$ e $M_{A,\text{rot},i}^{(l)} = \text{diag}(ma_{p,i}, ma_{q,i}, ma_{r,i})$. A parametrização diagonal é adequada para corpos com pelo menos um plano de simetria geométrica, condição satisfeita pela grande maioria dos elos de UVMSs comerciais \cite{fossen2011handbook}.
+
+\subsection{Matriz de Inércia com Massa Adicionada}
+
+A matriz de inércia generalizada no modo subaquático é:
+\begin{equation}
+    M_{\text{Hydro}}(q) = \sum_{i=1}^{N} \left[
+        J_{v,i}^\top \left(m_i I_3 + M_{A,\text{lin},i}^{(g)}\right) J_{v,i}
+        + J_{\omega,i}^\top \left(I_i^{(g)} + M_{A,\text{rot},i}^{(g)}\right) J_{\omega,i}
+    \right],
+    \label{eq:M_hydro_impl}
+\end{equation}
+onde as matrizes de massa adicionada globais são obtidas pela transformação pelo referencial acumulado:
+\begin{equation}
+    M_{A,\text{lin},i}^{(g)} = R_{\text{acc},i}\, M_{A,\text{lin},i}^{(l)}\, R_{\text{acc},i}^\top, \qquad
+    M_{A,\text{rot},i}^{(g)} = R_{\text{acc},i}\, M_{A,\text{rot},i}^{(l)}\, R_{\text{acc},i}^\top.
+    \label{eq:MA_global}
+\end{equation}
+
+A Equação~\eqref{eq:M_hydro_impl} expande a Equação~\eqref{eq:M_jacobian} pelo princípio de superposição da inércia virtual \cite{fossen2011handbook}: a massa adicionada $M_{A,i}$ representa a inércia do fluido acelerado pelo movimento do elo $i$, projetada no espaço de juntas via Jacobianos, exatamente como a inércia rígida do próprio elo. Essa equivalência formal permite a reutilização do mesmo \textit{framework} de derivação de $M$ para ambos os cenários (ar e água), com mínima duplicação de código.
+
+\subsection{Vetor de Potencial Aparente: Peso menos Empuxo}
+
+A energia potencial aparente de cada elo submerso combina o potencial gravitacional com o trabalho da força de empuxo:
+\begin{equation}
+    V_i^{\text{app}}(q) = (m_i - \rho\, \text{vol}_i)\, g\, z_{\text{cm},i}(q),
+    \label{eq:V_aparente}
+\end{equation}
+conforme definido na Equação~\eqref{eq:buoyancy_potential} do Capítulo~\ref{cap:revisao}. O vetor $G_{\text{Hydro}}(q)$ resultante é o gradiente desta soma:
+\begin{equation}
+    G_{\text{Hydro}}(q) = \left(\frac{\partial}{\partial q} \sum_{i=1}^{N} (m_i - \rho\, \text{vol}_i)\,g\,z_{\text{cm},i}\right)^\top.
+    \label{eq:G_hydro}
+\end{equation}
+
+Quando $m_i \approx \rho\, \text{vol}_i$ (elo neutralmente flutuante), $V_i^{\text{app}} \approx 0$ e o correspondente torque estático $G_i(q)$ anula-se, reproduzindo o cenário típico de UVMSs projetados para equilíbrio neutro que minimizam o esforço estático dos atuadores \cite{antonelli2014modelling, yuh2001underwater}.
+
+\subsection{Modelo Dinâmico Unificado}
+
+A estrutura formal das equações de movimento hidrodinâmicas é idêntica à terrestre:
+\begin{equation}
+    M_{\text{Hydro}}(q)\ddot{q} + C_{\text{Hydro}}(q,\dot{q})\dot{q} + G_{\text{Hydro}}(q) = \tau,
+    \label{eq:EOM_hydro}
+\end{equation}
+onde $C_{\text{Hydro}}$ é calculado pelos mesmos símbolos de Christoffel sobre $M_{\text{Hydro}}$ (Equação~\eqref{eq:christoffel_impl}), sem nenhuma modificação algorítmica. Os termos de arrasto hidrodinâmico $\tau_{\text{drag}} = D_{\text{lin}}\dot{q} + D_{\text{quad}}|\dot{q}|\dot{q}$ (Equação~\eqref{eq:drag} do Capítulo~\ref{cap:revisao}) são aplicados separadamente no integrador numérico como forças passivas, não na geração simbólica do modelo, pela razão de que sua forma $|\dot{q}_i|\dot{q}_i$ não é simbólica no sentido lagrangiano clássico \cite{fossen2011handbook}.
+
+% ==============================================================================
+\section{Preparação e Exportação do Modelo Simbólico}
+\label{sec:export}
+% ==============================================================================
+
+\subsection{Substituição de Símbolos Dinâmicos}
+
+O método \texttt{step\_4\_prepare\_export} realiza a substituição dos \texttt{dynamicsymbols} dependentes do tempo — $q_i(t)$ e $\dot{q}_i(t)$ — por símbolos escalares estáticos $q_i$ e $\dot{q}_i$, via o mapeamento:
+\begin{equation}
+    q_i(t) \mapsto \texttt{sp.Symbol}(f\text{'q\{i\}'}), \qquad
+    \dot{q}_i(t) \mapsto \texttt{sp.Symbol}(f\text{'dq\{i\}'}).
+    \label{eq:subs_dynamic}
+\end{equation}
+
+Esse passo é necessário porque \texttt{dynamicsymbols} são, internamente, funções do tempo no SymPy, e sua presença nas expressões interfere com o \texttt{lambdify} — que espera símbolos escalares como variáveis de entrada \cite{meurer2017sympy}. A substituição não altera a estrutura algébrica das expressões; apenas troca a representação interna de ``função aplicada'' para ``símbolo livre''.
+
+\subsection{Exportação do Dicionário de Resultados}
+
+O método retorna um dicionário com as seguintes chaves:
+
+\begin{itemize}
+    \item \texttt{"M"}: a matriz de inércia $M(q) \in \mathbb{R}^{N \times N}$, expressa nos símbolos estáticos;
+    \item \texttt{"G"}: o vetor de gradiente de potencial $G(q) \in \mathbb{R}^N$;
+    \item \texttt{"C"}: o vetor de Coriolis $C(q,\dot{q}) \in \mathbb{R}^N$ (já no formato $C(q,\dot{q})\dot{q}$);
+    \item \texttt{"J"}: o Jacobiano geométrico $J(q) \in \mathbb{R}^{6 \times N}$;
+    \item \texttt{"FK\_Pos"}: a transformação homogênea completa do efetuador final $T_N(q)$;
+    \item \texttt{"FK\_Vel"}: a velocidade cartesiana do efetuador $J(q)\dot{q}$;
+    \item \texttt{"Subs"}: o mapeamento de substituição (Equação~\eqref{eq:subs_dynamic});
+    \item \texttt{"Mode"}: string \texttt{"Air"} ou \texttt{"Hydro"}, para controle de fluxo no simulador.
+\end{itemize}
+
+Essa interface de exportação desacopla completamente a \textit{engine} matemática do módulo de simulação, permitindo que o modelo simbólico seja serializado (via \texttt{pickle}) e reutilizado em sessões posteriores sem recomputação — uma funcionalidade de produtividade crítica, dado que a geração do modelo para sistemas com $N \geq 6$ pode levar dezenas de minutos em hardware convencional \cite{harrington2019automated, hollerbach1980recursive}.
+
+% ==============================================================================
+\section{Compilação Simbólico-Numérica com \textit{lambdify} e CSE}
+\label{sec:lambdify_cse}
+% ==============================================================================
+
+\subsection{A Interface \textit{lambdify}}
+
+A transição das expressões simbólicas para funções numéricas avaliáveis é o passo de maior impacto sobre o desempenho computacional da simulação. O SymPy fornece a função \texttt{sp.lambdify()} para esse propósito: dado um conjunto de variáveis simbólicas $\{v_1, \ldots, v_k\}$ e uma expressão (ou matriz) simbólica $\mathcal{E}(v_1,\ldots,v_k)$, \texttt{lambdify} gera o código-fonte Python/NumPy equivalente e compila-o via \texttt{exec}, retornando uma função numérica de alta performance \cite{meurer2017sympy}.
+
+No \textit{Hephaestus}, a assinatura do \texttt{lambdify} é:
+\begin{equation}
+    f_{M,C,G,J}(q_1,\ldots,q_N,\,\dot{q}_1,\ldots,\dot{q}_N,\,g,\,m_1,\,L_1,\,cx_1,\ldots) \to \mathbb{R}^{\cdot \times \cdot},
+    \label{eq:lambdify_signature}
+\end{equation}
+correspondente à lista \texttt{sym\_vars = bot.q + bot.dq + bot.params\_list}. Essa convenção garante que a mesma assinatura seja utilizada para todas as funções compiladas ($M$, $C$, $G$, $J$, FK), simplificando o gerenciamento de argumentos no \textit{loop} de simulação.
+
+\subsection{Eliminação de Subexpressões Comuns}
+
+O parâmetro \texttt{cse=True} ativa a Eliminação de Subexpressões Comuns (\textit{Common Subexpression Elimination}, CSE) antes da geração do código numérico \cite{aho2006compilers}. Internamente, o SymPy aplica o algoritmo de Risch-Moses para CSE \cite{moses1971algebraic}, identificando subárvores repetidas na expressão simbólica e substituindo cada ocorrência por uma variável temporária. O código Python gerado tem então a forma:
+
+\begin{align}
+    &\texttt{x0} = \sin(q_1), \quad \texttt{x1} = \cos(q_1), \quad \texttt{x2} = \texttt{x0} \cdot m_1, \quad \ldots \nonumber \\
+    &M[0,0] = \texttt{x2} \cdot L_1^2 + \ldots, \quad M[0,1] = \texttt{x1} \cdot \texttt{x2} + \ldots
+    \label{eq:cse_example}
+\end{align}
+
+O impacto quantitativo da CSE é substancial: para um manipulador de 6 GDL em ar, a expressão simbólica de $M(q)$ pode conter $O(10^3)$ a $O(10^4)$ operações primitivas; com CSE, a função compilada executa tipicamente $2$--$5\times$ mais rápido, com redução de $60$--$90\%$ no tamanho do bytecode \cite{meurer2017sympy, aho2006compilers}. Para sistemas maiores ($N > 8$), a CSE pode ser a diferença entre uma compilação que produz código de tamanho manejável e uma que gera strings de vários MB que excedem os limites de compilação do Python (\texttt{MemoryError}) \cite{harrington2019automated}.
+
+Adicionalmente, o módulo \texttt{modules='numpy'} instrui o \texttt{lambdify} a mapear funções simbólicas (\texttt{sp.sin}, \texttt{sp.cos}, etc.) para suas contrapartes NumPy (\texttt{np.sin}, \texttt{np.cos}), que por sua vez invocam implementações C compiladas via BLAS/LAPACK \cite{meurer2017sympy}. O resultado é uma função numérica que se comporta como código C nativo para as operações de ponto flutuante, sem o \textit{overhead} da álgebra simbólica em tempo de simulação.
+
+\subsection{Compilação das Funções por Módulo}
+
+No construtor \texttt{RobotSimulator.\_\_init\_\_}, cada grandeza dinâmica é compilada individualmente, produzindo quatro funções distintas:
+
+\begin{itemize}
+    \item \texttt{func\_M}: $f_M: \mathbb{R}^{2N+P} \to \mathbb{R}^{N \times N}$, avalia a matriz de inércia;
+    \item \texttt{func\_C}: $f_C: \mathbb{R}^{2N+P} \to \mathbb{R}^{N}$, avalia o vetor de Coriolis;
+    \item \texttt{func\_G}: $f_G: \mathbb{R}^{2N+P} \to \mathbb{R}^{N}$, avalia o gradiente de potencial;
+    \item \texttt{func\_J}: $f_J: \mathbb{R}^{2N+P} \to \mathbb{R}^{6 \times N}$, avalia o Jacobiano completo;
+    \item \texttt{funcs\_fk\_all\_links}: lista de $N$ funções $f_{\text{FK},i}: \mathbb{R}^{2N+P} \to \mathbb{R}^{3}$, avaliando a posição 3D do extremo do elo $i$ — utilizadas para a visualização gráfica animada do manipulador.
+\end{itemize}
+
+onde $P = |\texttt{params\_list}|$ é o número total de parâmetros físicos. A compilação separada por grandeza — em vez de uma única função monolítica — permite o despacho paralelo de $M$, $C$ e $G$ durante a simulação: cada uma das funções pode ser submetida simultaneamente a um \textit{worker} distinto do executor paralelo, triplicando a taxa de avaliação dinâmica em máquinas com pelo menos três núcleos \cite{harrington2019automated}.
+
+% ==============================================================================
+\section{Paralelismo em Dois Níveis e Executor Persistente}
+\label{sec:parallel}
+% ==============================================================================
+
+O \textit{Hephaestus} implementa paralelismo em dois níveis distintos, correspondentes às duas fases temporalmente separadas do fluxo de trabalho:
+
+\subsection{Nível 1: Paralelismo na Derivação Simbólica}
+
+Como descrito na Seção~\ref{sec:coriolis}, o cálculo de $\partial M/\partial q_k$ e das linhas de $C$ é distribuído entre múltiplos processos durante a fase de \emph{geração do modelo} (executada uma única vez). O custo de \textit{spawn} dos processos e da serialização das expressões simbólicas é amortizado pelo ganho de velocidade na derivação, sendo lucrativo quando $N \geq 4$ e $W \geq 2$ processos estão disponíveis \cite{hollerbach1980recursive, beazley2010understanding}.
+
+\subsection{Nível 2: Paralelismo na Avaliação Numérica}
+
+Durante a fase de \emph{simulação}, as funções \texttt{func\_M}, \texttt{func\_C} e \texttt{func\_G} são avaliadas numericamente a cada passo de integração física (tipicamente $\Delta t = 10^{-3}$ s, correspondendo a 1000 avaliações por segundo de simulação). Para evitar o custo de \textit{respawn} de processos a cada avaliação — que, em testes, somava 2–8 segundos por simulação — o \textit{Hephaestus} utiliza um \textbf{executor persistente} (\texttt{ProcessPoolExecutor} pré-inicializado):
+
+\begin{itemize}
+    \item O executor é instanciado \emph{uma única vez} após a compilação, por meio do método \texttt{warm\_up\_workers()}, e mantido ativo durante toda a vida do objeto \texttt{RobotSimulator};
+    \item Cada \textit{worker} executa o \textit{inicializador} \texttt{\_init\_worker}, que compila localmente as expressões simbólicas (via \texttt{lambdify}) e armazena as funções no dicionário de módulo \texttt{\_WORKER\_FUNCS};
+    \item A cada passo de simulação, três tarefas são submetidas ao executor em paralelo — \texttt{("M", args)}, \texttt{("C", args)}, \texttt{("G", args)} — e os resultados são coletados por \texttt{Future.result()};
+    \item O executor é encerrado explicitamente pelo método \texttt{close()}, chamado automaticamente no protocolo de fechamento da interface gráfica (\texttt{on\_closing}).
+\end{itemize}
+
+A abordagem de executor persistente com compilação nos \textit{workers} (em vez de serialização das funções compiladas, que o \texttt{pickle} não suporta) elimina o custo de respawn e reduz o \textit{overhead} de IPC (\textit{Inter-Process Communication}) a apenas a serialização dos argumentos numéricos (vetores de ponto flutuante), que é negligenciável \cite{beazley2010understanding}.
+
+Quando o paralelismo não está ativo (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal, sem instanciar o executor — comportamento padrão seguro para qualquer ambiente de execução, incluindo executáveis PyInstaller.
+
+% ==============================================================================
+\section{Considerações sobre a Complexidade Computacional}
+\label{sec:complexidade}
+% ==============================================================================
+
+A Tabela~\ref{tab:complexidade} resume a complexidade computacional das etapas de modelagem e simulação do \textit{Hephaestus}, comparada com as referências clássicas da literatura.
+
+\begin{table}[h!]
+\centering
+\caption{Complexidade computacional das etapas de modelagem e simulação.}
+\label{tab:complexidade}
+\begin{tabular}{p{4.8cm} p{3.5cm} p{5.5cm}}
+\hline
+\textbf{Etapa} & \textbf{Complexidade} & \textbf{Referência / Observação} \\
+\hline
+Cinemática FK simbólica & $O(N^2)$ & Produto acumulado de matrizes $4\times4$ \cite{craig1987introduction} \\
+Derivação de $M(q)$ (simbólica) & $O(N^3)$ & Jacobianos por elo \cite{siciliano2009robotics} \\
+Derivação de $\partial M/\partial q_k$ & $O(N^4)$ (ingênuo) & Paralelizável por $N$ processos \cite{hollerbach1980recursive} \\
+Cálculo de $C$ (Christoffel) & $O(N^3)$ simbólico & $N(N+1)/2$ pares por linha, $N$ linhas \cite{spong2020robot} \\
+Compilação (lambdify + CSE) & $O(S)$, $S=$ tamanho expr. & Custo único; CSE reduz $S$ em 60--90\% \cite{aho2006compilers, meurer2017sympy} \\
+Avaliação numérica por passo & $O(N^2)$ & Mult. matriz-vetor $M\backslash(tau - C - G)$ \cite{golub2013matrix} \\
+\hline
+\end{tabular}
+\end{table}
+
+A comparação direta com o algoritmo de Newton-Euler recursivo, cuja complexidade é $O(N)$ tanto na geração quanto na avaliação \cite{luh1980online, hollerbach1980recursive}, evidencia o \textit{trade-off} fundamental da abordagem simbólica: maior custo de derivação (amortizado na fase \textit{offline}), em troca de equações explícitas que viabilizam análise, controle baseado em modelo e transparência pedagógica. Esse trade-off é deliberado e justificado pelo objetivo do \textit{Hephaestus} como plataforma didática e de desenvolvimento de controladores \cite{moura2020educational}.
+
+% ==============================================================================
+\section{Síntese do Capítulo}
+% ==============================================================================
+
+Este capítulo descreveu em detalhe o processo completo de modelagem matemática simbólica implementado no \textit{Hephaestus}. A partir de uma especificação compacta da cadeia cinemática (\texttt{joint\_config} e \texttt{link\_vectors\_mask}), a \textit{engine} deriva automaticamente as expressões fechadas de $M(q)$, $C(q,\dot{q})$, $G(q)$ e $J(q)$ pelo formalismo de Euler-Lagrange via Jacobianos, com extensão para o cenário hidrodinâmico por herança da classe \texttt{RobotMathHydro}. A geração simbólica é acelerada por paralelismo de processos na derivação de Christoffel, e as expressões resultantes são compiladas para funções NumPy de alto desempenho por \texttt{lambdify} com CSE, eliminando o gargalo de avaliação simbólica em tempo de simulação. O executor persistente completa a cadeia de otimização, permitindo avaliação paralela de $M$, $C$ e $G$ a cada passo de integração sem custo de \textit{respawn} de processos.
+
+A arquitetura resultante é matematicamente transparente — cada equação pode ser inspecionada simbolicamente — e computacionalmente eficiente — capaz de simular manipuladores de até 8 GDL em tempo real no hardware alvo. O Capítulo seguinte descreve a camada de simulação numérica que consome as equações aqui derivadas, detalhando o integrador simplético, os controladores implementados e o planejamento de trajetórias.
