@@ -1,0 +1,158 @@
+\chapter{Conclusões e Trabalhos Futuros}
+\label{cap:conclusoes}
+
+% ==============================================================================
+\section{Síntese das Contribuições}
+% ==============================================================================
+
+Este trabalho apresentou o \textit{Hephaestus}: um ambiente computacional integrado, de código aberto, desenvolvido inteiramente em Python, para modelagem dinâmica simbólica, simulação numérica e controle de manipuladores robóticos em ambientes terrestres e subaquáticos. A motivação central foi preencher a lacuna existente entre a teoria matemática rigorosa dos sistemas robóticos multicorpos e as ferramentas de simulação de código fechado — como MATLAB/Simulink — que atuam como caixas-pretas para estudantes e pesquisadores \cite{moura2020educational}. A plataforma resultante une, em um único fluxo de trabalho transparente, a derivação simbólica exata das equações de movimento, a compilação eficiente para código numérico vetorizado, a simulação em malha fechada e a interface gráfica interativa, tornando o ciclo completo de modelagem-controle acessível sem código proprietário \cite{meurer2017sympy, harrington2019automated}.
+
+As contribuições técnicas do trabalho podem ser agrupadas em cinco eixos principais, correspondentes aos objetivos específicos estabelecidos na Seção~\ref{} da Introdução:
+
+\begin{enumerate}
+    \item \textbf{Modelagem simbólica paramétrica e genérica:} A \textit{engine} matemática (\texttt{RobotMathEngine} e \texttt{RobotMathHydro}) deriva automaticamente, por formulação de Euler-Lagrange via Jacobianos, as matrizes $M(q)$, $C(q,\dot{q})$, $G(q)$ e o Jacobiano $J(q) \in \mathbb{R}^{6 \times N}$ para qualquer cadeia serial aberta de $N$ graus de liberdade com juntas rotacionais e/ou prismáticas, em ambiente seco ou subaquático. A representação por matrizes de rotação diretas por eixo-ângulo \cite{craig1987introduction, spong2020robot} dispensa as restrições geométricas da parametrização de Denavit-Hartenberg \cite{denavit1955kinematic}, aumentando a expressividade da especificação cinemática. A extensão hidrodinâmica incorpora, com rigor, os tensores de massa adicionada por elo (seis componentes $6 \times 6$ rotacionados para o referencial global) e o vetor de potencial aparente peso–empuxo, em conformidade com a formulação de Fossen (2011) \cite{fossen2011handbook} e Antonelli (2014) \cite{antonelli2014modelling}.
+
+    \item \textbf{Otimização da transição simbólico-numérica:} A compilação das expressões via \texttt{sp.lambdify()} com Eliminação de Subexpressões Comuns (\textit{CSE}) \cite{meurer2017sympy, aho2006compilers} produz funções NumPy de desempenho comparável a código C nativo, reduzindo o tamanho do bytecode compilado em 60--90\% e acelerando a avaliação numérica em 2--5$\times$ em relação à avaliação simbólica direta. A geração do modelo é ainda acelerada por paralelismo de processos (\texttt{ProcessPoolExecutor}) nas derivações de $\partial M/\partial q_k$ e nas linhas do vetor $C$ \cite{hollerbach1980recursive, beazley2010understanding}, e um executor persistente elimina o custo de \textit{respawn} de processos durante a simulação, garantindo avaliação paralela de $M$, $C$, $G$ a cada passo de integração sem \textit{overhead} de instanciação repetida \cite{harrington2019automated}.
+
+    \item \textbf{Simulador numérico de alta fidelidade:} O módulo \texttt{RobotSimulator} integra o planejamento de trajetórias com polinômio cúbico (segmentos lineares e arcos circulares) com \textit{feedforward} analítico de velocidade e aceleração \cite{siciliano2009robotics}, seis modos de referência de orientação — incluindo interpolação SLERP geodésica em $SO(3)$ \cite{shoemake1985animating, dam1998quaternions} e controle tangente à trajetória — e o integrador simplético de Euler com \textit{substeps} independentes da taxa de visualização \cite{leimkuhler2004simulating, hairer2006geometric}. Modelos de atrito de Coulomb + viscoso suavizados por $\tanh$ \cite{slotine1991applied} e de arrasto hidrodinâmico linear e quadrático no espaço de juntas \cite{fossen2011handbook, antonelli2014modelling} completam a fidelidade física da simulação.
+
+    \item \textbf{Controle no espaço de tarefa 6D com CLIK robusto:} O algoritmo de Cinemática Inversa em Malha Fechada (CLIK) \cite{samson1991robot, chiaverini1994review} foi estendido ao espaço de tarefa completo de 6 dimensões, combinando controle de posição e orientação no Jacobiano completo $6 \times N$ com pseudo-inversa amortecida DLS \cite{nakamura1986inverse, wampler1986manipulator} e gestão de redundância via projeção no espaço nulo \cite{chiaverini1997singularity, liegeois1977automatic}. A inicialização de postura por Levenberg-Marquardt com busca em linha adaptativa (regra de Armijo) \cite{marquardt1963algorithm, more1978levenberg, armijo1966minimization} garante convergência robusta a partir de qualquer configuração factível, inclusive próxima de singularidades.
+
+    \item \textbf{Quatro estratégias de controle não-linear comparáveis:} O ambiente implementa, em uma interface unificada, o Controle por Torque Computado com PID (CTC-PID) \cite{craig1987introduction, spong2020robot}, o Controle por Modo Deslizante com Torque Computado (CT-SMC) com camada limite \cite{slotine1991applied, burton1986continuous}, o algoritmo Super-Twisting (STA) de modo deslizante de segunda ordem \cite{levant1993sliding, moreno2012strict} e o Controle por Rejeição Ativa de Distúrbios Linear (LADRC) com ESO de terceira ordem \cite{gao2003scaling, han2009pid, huang2014active}. A comparação direta das quatro estratégias — sob condições rigorosamente idênticas de trajetória, modelo e perturbações — é viabilizada pela aba de Análise da interface gráfica, que sobrepõe múltiplas sessões nos mesmos gráficos.
+\end{enumerate}
+
+% ==============================================================================
+\section{Conclusões sobre os Resultados Obtidos}
+% ==============================================================================
+
+\subsection{Sobre a Modelagem Simbólica e a Extensão Hidrodinâmica}
+
+A abordagem de modelagem adotada — derivação lagrangiana via Jacobianos de inércia, com parametrização simbólica completa de massas, comprimentos, centros de massa e tensores de inércia — demonstrou-se matematicamente correta e pedagogicamente valiosa. A propriedade de skew-simetria da matriz $\dot{M} - 2C$ \cite{spong2020robot, siciliano2009robotics}, que pode ser verificada algebricamente nas expressões geradas por \texttt{RobotMathEngine}, confirma a consistência energética da formulação de Christoffel implementada e constitui por si só um resultado didático relevante para o ensino de dinâmica de robótica \cite{tomei1991robust, slotine1987adaptive}.
+
+A extensão hidrodinâmica via \texttt{RobotMathHydro} corrobora a formulação de Fossen (2011) \cite{fossen2011handbook}: ao adotar tensores de massa adicionada diagonais no referencial local de cada elo — adequados para corpos com pelo menos um plano de simetria, condição típica de elos de UVMSs comerciais \cite{antonelli2014modelling} — e ao rotacioná-los para o referencial global via $R_{\text{acc},i}$, a implementação reproduz corretamente o acoplamento entre massa adicionada e configuração de junta, que é ignorado por abordagens simplificadas que aplicam a massa adicionada apenas no espaço cartesiano do efetuador \cite{yuh2001underwater}. O modelo de potencial aparente $(m_i - \rho\,\text{vol}_i)\,g\,z_{\text{cm},i}$ assegura que, para elos com flutuabilidade neutra ($m_i \approx \rho\,\text{vol}_i$), o vetor $G(q) \approx 0$, reproduzindo o comportamento de UVMSs projetados para equilíbrio neutro e eliminando o componente estático do esforço de atuação \cite{newman1977marine, antonelli2014modelling}.
+
+\subsection{Sobre a Eficiência Computacional}
+
+O \textit{trade-off} fundamental da abordagem simbólica — maior custo de derivação (amortizado na fase \textit{offline}) em troca de equações explícitas que viabilizam análise e controle baseado em modelo — foi atenuado de forma significativa pelas estratégias de otimização implementadas. A combinação de paralelismo de derivação, compilação com CSE e executor persistente demonstrou, na prática, que é possível simular manipuladores de até 8 GDL em hardware convencional com tempo de geração de modelo aceitável para uso interativo \cite{harrington2019automated, hollerbach1980recursive}.
+
+A comparação com o algoritmo de Newton-Euler recursivo — complexidade $O(N)$ tanto na geração quanto na avaliação \cite{luh1980online} — evidencia que a abordagem simbólica possui custo de derivação assintoticamente superior ($O(N^4)$ na geração de $\partial M/\partial q_k$), mas esta desvantagem é compensada pela disponibilidade das equações analíticas completas, que habilitam o controle baseado em modelo, a análise de sensibilidade paramétrica e a verificação cruzada com referências da literatura \cite{siciliano2009robotics, corke2017robotics}. Além disso, para sistemas de até 6 GDL — escopo típico de UVMSs comerciais \cite{antonelli2014modelling} — o custo de geração é perfeitamente compatível com o ciclo de desenvolvimento de controladores, e o custo de avaliação numérica (único custo recorrente em tempo de simulação) é dominado pelo produto matriz-vetor $O(N^2)$, bem dentro das capacidades de hardware de laboratório \cite{golub2013matrix}.
+
+\subsection{Sobre o Integrador Simplético e a Fidelidade Numérica}
+
+A escolha do integrador simplético de Euler \cite{leimkuhler2004simulating, hairer2006geometric} sobre o Euler explícito padrão demonstrou-se crucial para a fidelidade das simulações de controle em malha fechada. A preservação da energia modificada ao longo da trajetória impede a acumulação secular de energia que o Euler explícito exibe, garantindo que os erros de rastreamento medidos no simulador sejam atribuíveis às características dos controladores e não a artefatos numéricos do integrador. Esta propriedade é especialmente relevante para comparações quantitativas entre estratégias de controle, nas quais diferenças sutis de desempenho podem ser mascaradas por instabilidades numéricas de baixa magnitude \cite{hairer2006geometric, spong2020robot}.
+
+A hierarquia de \textit{substeps} (passo físico $\Delta t_{\text{phys}} \ll$ passo de visualização $\Delta t_{\text{vis}}$) permitiu atingir, simultaneamente, alta fidelidade numérica e taxa de renderização interativa, sem custo proporcional de armazenamento. A verificação de finitude após cada substep previne a propagação silenciosa de instabilidades, tornando o diagnóstico de configurações de ganhos inviáveis imediato \cite{astrom1995pid}.
+
+\subsection{Sobre as Estratégias de Controle}
+
+A análise comparativa das quatro estratégias de controle, viabilizada pela interface unificada do \textit{Hephaestus}, confirma as previsões teóricas da literatura:
+
+O \textbf{CTC-PID} \cite{craig1987introduction, spong2020robot} apresenta o melhor desempenho de rastreamento quando o modelo dinâmico é preciso, com ajuste intuitivo por apenas dois parâmetros ($k_p$, $\zeta$) e interpretação direta pela teoria de sistemas lineares de segunda ordem \cite{ogata2010modern, astrom1995pid}. Sua fragilidade a erros de modelo é confirmada: perturbações da ordem de 10\% nas massas dos elos ou na massa adicionada produzem erros de regime permanente proporcionais que apenas o termo integral $K_I$ é capaz de compensar.
+
+O \textbf{CT-SMC} \cite{slotine1991applied, utkin2009sliding} demonstra robustez intrínseca a perturbações limitadas, mantendo o estado próximo da superfície deslizante mesmo em presença de erros paramétricos significativos. O compromisso \textit{chattering}-precisão controlado pela espessura da camada limite $\phi$ \cite{burton1986continuous} é claramente observável nos gráficos de torque: valores menores de $\phi$ reduzem o erro de regime ao custo de oscilações de alta frequência nos atuadores. O filtro de aceleração $\ddot{q}_{d,f}$ provou-se indispensável para evitar amplificação de picos do CLIK pela lei de chaveamento, confirmando a observação prática de Slotine e Li (1991) \cite{slotine1991applied} e Siciliano e Villani (1999) \cite{siciliano1999robot}.
+
+O \textbf{STA} \cite{levant1993sliding, moreno2012strict} confirma as propriedades de continuidade do sinal de controle e convergência em tempo finito: os gráficos de torque são visivelmente mais suaves que os do CT-SMC para configurações equivalentes de $\lambda$, sem sacrifício da robustez a perturbações. As condições de Moreno e Osorio (2012) \cite{moreno2012strict} para os ganhos $k_1$, $k_2$ provaram-se heurísticas de projeto confiáveis no contexto do simulador. Para cenários com atuadores de corrente contínua, nos quais oscilações de alta frequência são limitantes práticas \cite{shtessel2014sliding}, o STA emerge como substituto natural ao CT-SMC.
+
+O \textbf{LADRC} \cite{gao2003scaling, han2009pid, huang2014active} destaca-se pela robustez a incertezas paramétricas severas: mesmo com $b_0$ estimado apenas pela diagonal de $M(q_0)$, o ESO de terceira ordem estima e cancela implicitamente os acoplamentos dinâmicos residuais, os termos de Coriolis e as perturbações externas, produzindo desempenho comparável ao CTC-PID com modelo exato. O \textit{feedforward} explícito de $G$ e $C$ demonstrou-se crítico para a qualidade do transitório inicial, reduzindo o distúrbio residual que o ESO precisa rastrear de um sinal rapidamente crescente (por $C \propto \dot{q}^2$) para um sinal quase constante (erro de modelo puro) \cite{han2009pid, zheng2010stability}. Para o cenário subaquático — no qual a estimação dos coeficientes de massa adicionada por ensaios em fluido é imprecisa e os erros paramétricos podem superar 30\% \cite{fossen2011handbook, aldhaheri2022underwater} — o LADRC posiciona-se como a estratégia de controle mais adequada.
+
+% ==============================================================================
+\section{Limitações do Trabalho}
+% ==============================================================================
+
+Embora os resultados obtidos demonstrem a viabilidade e a eficácia da plataforma \textit{Hephaestus}, algumas limitações importantes devem ser reconhecidas:
+
+\begin{itemize}
+    \item \textbf{Complexidade de Geração para Sistemas Grandes:} Para manipuladores com $N \geq 9$ GDL, o tempo de geração do modelo simbólico pode superar dezenas de minutos em hardware convencional, mesmo com o paralelismo implementado \cite{hollerbach1980recursive, harrington2019automated}. A serialização via \texttt{pickle} parcialmente mitiga esse custo ao permitir reutilização do modelo em sessões posteriores, mas a experiência de uso em sistemas grandes ainda pode ser limitante.
+
+    \item \textbf{Modelo Hidrodinâmico Simplificado:} O modelo de arrasto no espaço de juntas (linear e quadrático) é uma aproximação do comportamento real do fluido, que é inerentemente tridimensional e dependente da geometria exata do elo \cite{fossen2011handbook, newman1977marine}. Efeitos como correntes oceânicas, cavitação, interação entre elos e efeito de superfície livre não são modelados, o que limita a fidelidade da simulação subaquática a cenários com fluido em repouso e velocidades moderadas \cite{antonelli2014modelling}.
+
+    \item \textbf{Integrador de Primeira Ordem:} O integrador simplético de Euler é de primeira ordem em termos de precisão numérica local \cite{leimkuhler2004simulating}. Embora a preservação da energia modificada garanta estabilidade de longo prazo, métodos de ordem superior — como Runge-Kutta simplético de quarta ordem ou integração de Störmer-Verlet \cite{hairer2006geometric} — produziriam erros locais menores para o mesmo $\Delta t_{\text{phys}}$, permitindo passos maiores com mesma fidelidade ou maior eficiência computacional.
+
+    \item \textbf{Abordagem Descentralizada do LADRC:} A implementação descentralizada do LADRC — um ESO por junta, ignorando acoplamentos dinâmicos explicitamente — é eficaz para acoplamentos moderados, mas pode apresentar degradação em manipuladores com elos muito pesados ou trajetórias extremamente rápidas, onde os termos fora da diagonal de $M$ são dominantes e o distúrbio residual excede a capacidade de estimação do ESO \cite{huang2014active, madonski2019adrc}.
+
+    \item \textbf{Ausência de Validação Experimental:} As simulações realizadas no \textit{Hephaestus} são baseadas em modelos matemáticos e não foram validadas contra resultados experimentais em hardware real ou em tanque de testes subaquáticos. A validação experimental é o passo necessário para confirmar a fidelidade do modelo em condições de operação real, conforme exigido pela literatura de UVMSs \cite{yuh2001underwater, aldhaheri2022underwater, antonelli2014modelling}.
+\end{itemize}
+
+% ==============================================================================
+\section{Trabalhos Futuros}
+% ==============================================================================
+
+A plataforma \textit{Hephaestus}, em sua versão atual, oferece uma base sólida sobre a qual diversas extensões podem ser desenvolvidas. As direções de trabalho futuro identificadas são organizadas em três categorias: extensões da modelagem, extensões do controle e integrações de software/hardware.
+
+% ------------------------------------------------------------------------------
+\subsection{Extensões da Modelagem Matemática}
+% ------------------------------------------------------------------------------
+
+\subsubsection*{Cadeias Cinemáticas Fechadas e Robôs Paralelos}
+
+A arquitetura atual suporta exclusivamente cadeias seriais abertas. A extensão para cadeias cinemáticas fechadas — fundamentais para robôs paralelos do tipo Stewart-Gough \cite{siciliano2009robotics} e Delta \cite{spong2020robot} — requer a formulação de vínculos holonômicos no Lagrangiano via multiplicadores de Lagrange e a resolução de um sistema de equações algébrico-diferenciais (DAE) em vez de equações diferenciais ordinárias \cite{leimkuhler2004simulating}. A natureza simbólica da \textit{engine} do \textit{Hephaestus} facilita a derivação analítica dos Jacobianos de vínculo, que são essenciais para a resolução eficiente do DAE \cite{hairer2006geometric}.
+
+\subsubsection*{Elos Flexíveis e Dinâmica de Vibração}
+
+A hipótese de elos rígidos, adotada em todo o trabalho, é satisfatória para manipuladores industriais compactos mas torna-se imprecisa para elos longos e leves — comuns em UVMSs de grande envergadura — que exibem modos de vibração flexíveis acoplados à dinâmica de corpo rígido \cite{siciliano2009robotics, spong2020robot}. A modelagem por subestrutura modal (\textit{Assumed Modes Method} ou \textit{Finite Element Method}) introduz graus de liberdade adicionais para descrever a deformação elástica, cujo tratamento simbólico é diretamente compatível com o \textit{framework} de derivação lagrangiana do \textit{Hephaestus} \cite{craig1987introduction}. A validação do modelo flexível requereria ensaios modais experimentais para identificação das frequências naturais e modos de vibração dos elos \cite{golub2013matrix}.
+
+\subsubsection*{Modelos Hidrodinâmicos de Alta Fidelidade}
+
+O modelo de arrasto no espaço de juntas poderia ser substituído por um modelo no espaço cartesiano que considera a geometria específica de cada elo. A formulação de Morison \cite{newman1977marine} — que decompõe a força hidrodinâmica em termos de inércia (proporcional à aceleração do fluido relativa ao corpo) e de arrasto (proporcional ao quadrado da velocidade relativa) — é o padrão de alta fidelidade para corpos submersos com geometria arbitrária \cite{fossen2011handbook}. A integração desta formulação com o modelo lagrangiano do \textit{Hephaestus} exigiria a transformação das forças do espaço cartesiano para o espaço de juntas via Jacobiano transposto \cite{siciliano2009robotics}, além de dados de coeficientes hidrodinâmicos para cada geometria de elo — tipicamente obtidos por ensaios em tanque de testes ou por simulações CFD (\textit{Computational Fluid Dynamics}) \cite{antonelli2014modelling, aldhaheri2022underwater}.
+
+\subsubsection*{Veículo de Base Livre com Dinâmica Completa}
+
+A modelagem atual do UVMS trata as primeiras juntas sem vetor de elo estrutural como as rotações/translações do veículo base, mas sem dinâmica própria do veículo — atuadores ou propulsores não são modelados. Uma extensão natural é a inclusão da dinâmica completa do veículo: equações de movimento de corpo flutuante com seis graus de liberdade, modelo de propulsores (empuxo, saturação, dinâmica elétrica), e acoplamento bidirecional entre o movimento do veículo e as perturbações de reação do braço manipulador \cite{fossen2011handbook, antonelli2014modelling}. Esta extensão habilitaria o estudo de estratégias de controle coordenadas veículo-braço, que exploram a redundância global do UVMS para otimizar critérios de manipulabilidade ou consumo de energia \cite{yuh2001underwater, chiaverini1997singularity}.
+
+% ------------------------------------------------------------------------------
+\subsection{Extensões das Estratégias de Controle}
+% ------------------------------------------------------------------------------
+
+\subsubsection*{Controle Adaptativo}
+
+As quatro estratégias implementadas assumem parâmetros dinâmicos conhecidos (ou aproximados) e fixos. Uma extensão importante é a incorporação de leis de adaptação em linha que estimam e atualizam iterativamente os parâmetros dinâmicos $\{m_i, I_i, cx_i, \ldots\}$ durante a operação, com base na observação do erro de rastreamento. O controle adaptativo por torque computado de Slotine e Li (1987) \cite{slotine1987adaptive} e Tomei (1991) \cite{tomei1991robust} — que exploram a parametrização linear em relação aos parâmetros dinâmicos da equação de movimento — são candidatos naturais para integração com o modelo simbólico do \textit{Hephaestus}, cujas expressões de $M$, $C$ e $G$ são lineares nos parâmetros por construção lagrangiana \cite{siciliano2009robotics, spong2020robot}. Para o cenário subaquático, a adaptação dos coeficientes de massa adicionada e arrasto durante a operação é especialmente relevante, dada a dificuldade de sua identificação prévia \cite{antonelli2014modelling, aldhaheri2022underwater}.
+
+\subsubsection*{Controle Baseado em Aprendizado de Máquina}
+
+A combinação de controle baseado em modelo com aprendizado de máquina — conhecida como \textit{Model-Based Reinforcement Learning} (MBRL) \cite{khalil2002nonlinear} ou controle híbrido físico-neural — é uma direção de pesquisa de intensa atividade. Redes neurais profundas podem ser treinadas para compensar os resíduos de modelagem que os controladores clássicos deixam no erro de rastreamento, atuando como um termo de distúrbio aprendido que complementa a lei de controle baseada em modelo \cite{isidori1995nonlinear}. A plataforma \textit{Hephaestus}, com sua capacidade de simular perturbações configuráveis e coletar dados de erro e torque, é um ambiente natural para o treinamento e avaliação dessas abordagens híbridas \cite{moura2020educational}.
+
+\subsubsection*{Controle por Impedância e Interação com o Ambiente}
+
+As estratégias de controle implementadas são projetadas para rastreamento de trajetória livre de contato. Para tarefas que envolvam interação física com o ambiente — como manipulação de objetos, inspeção em contato, ou ancoragem em estruturas submarinas — o controle por impedância \cite{siciliano2009robotics, spong2020robot} é o paradigma adequado: em vez de rastrear uma posição, o controlador regula a relação força-deslocamento (impedância mecânica) do efetuador, permitindo conformidade controlada. A extensão do \textit{Hephaestus} para controle por impedância requereria a inclusão de modelos de contato \cite{khalil2002nonlinear} e, idealmente, a integração com sensores de força/torque no efetuador — o que constitui uma ponte direta com a validação experimental \cite{antonelli2014modelling}.
+
+\subsubsection*{Controle Preditivo Baseado em Modelo (MPC)}
+
+O Controle Preditivo Baseado em Modelo (\textit{Model Predictive Control}, MPC) \cite{astrom1995pid} — que otimiza sequências de controle futuras sobre um horizonte deslizante, sujeito a restrições de estado e entrada — é uma abordagem atraente para manipuladores com limites de torque e de espaço de trabalho explícitos. A disponibilidade das equações dinâmicas simbólicas compiladas no \textit{Hephaestus} viabiliza a linearização em torno da trajetória nominal a cada instante, gerando modelos lineares por partes que podem ser utilizados em MPC linear (\textit{Linear MPC}) \cite{ogata2010modern} sem necessidade de re-derivação numérica.
+
+\subsubsection*{Controle por Modos Deslizantes de Ordem Superior com Observadores}
+
+O algoritmo STA implementado opera com estados medidos (posição e velocidade de junta). Em hardware real, a velocidade frequentemente não é medida diretamente mas estimada por diferenciação numérica ou por observador de Luenberger \cite{ogata2010modern}. A integração do STA com observadores de ordem reduzida ou com o ESO do LADRC (aproveitando a estimação de velocidade já disponível em $z_2$) é uma direção promissora para melhorar a robustez a ruído de medição sem sacrificar as propriedades de convergência em tempo finito \cite{levant2003higher, shtessel2014sliding, moreno2012strict}. A análise de estabilidade do sistema observador-controlador combinado é um problema aberto para manipuladores de múltiplos GDL \cite{utkin2009sliding}.
+
+% ------------------------------------------------------------------------------
+\subsection{Integrações de Software e Hardware}
+% ------------------------------------------------------------------------------
+
+\subsubsection*{Integração com ROS/ROS2}
+
+O \textit{Robot Operating System} (ROS) é o middleware de facto para sistemas robóticos experimentais \cite{corke2017robotics}. A integração do \textit{Hephaestus} com ROS2 permitiria publicar as referências de junta geradas pelo CLIK como tópicos ROS e receber feedback de posição/velocidade de hardware real ou de simuladores físicos como Gazebo, fechando o laço de controle com o robô físico. O modelo simbólico compilado poderia ser exportado como um nó ROS de dinâmica, servindo como referência de modelo para outros nós de controle \cite{harrington2019automated}.
+
+\subsubsection*{Validação em Hardware de Baixo Custo}
+
+Uma direção imediata de trabalho futuro é a validação experimental dos controladores em plataformas de baixo custo acessíveis para laboratórios de ensino, como manipuladores de 3--4 GDL baseados em servomotores Dynamixel ou similares. A comparação entre as simulações do \textit{Hephaestus} e os dados experimentais permitiria quantificar a fidelidade do modelo e identificar as principais fontes de discrepância — informação essencial para a calibração dos parâmetros dinâmicos e para o ajuste dos ganhos de controle em hardware real \cite{spong2020robot, siciliano2009robotics}.
+
+\subsubsection*{Identificação de Parâmetros Dinâmicos}
+
+Uma lacuna prática do \textit{Hephaestus} é a necessidade de o usuário fornecer os parâmetros dinâmicos ($m_i$, $I_i$, $cx_i$, etc.) manualmente ou por projeto CAD. Métodos de identificação de parâmetros dinâmicos — que estimam os parâmetros por mínimos quadrados a partir de trajetórias de excitação otimizadas \cite{siciliano2009robotics, spong2020robot} — poderiam ser integrados como um módulo adicional do simulador, fechando o ciclo entre a plataforma computacional e o robô físico. Para o caso subaquático, a identificação dos coeficientes de massa adicionada e arrasto por ensaios de movimento forçado em tanque \cite{fossen2011handbook, newman1977marine} é um passo necessário para validação do modelo hidrodinâmico.
+
+\subsubsection*{Suporte a Múltiplos Robôs e Coordenação}
+
+A extensão para cenários com múltiplos robôs — manipuladores cooperativos em operação conjunta \cite{siciliano2009robotics} ou múltiplos UVMSs em missão coordenada \cite{antonelli2014modelling} — requereria a modelagem do objeto compartilhado (ou da tarefa distribuída) e a síntese de leis de controle descentralizadas com garantias de estabilidade do sistema global \cite{chiaverini1997singularity}. O \textit{framework} de modelagem simbólica do \textit{Hephaestus} poderia ser estendido para criar um modelo acoplado de múltiplos robôs, explorando a mesma infraestrutura de Jacobianos e derivação lagrangiana.
+
+\subsubsection*{Compilação para Sistemas Embarcados}
+
+O modelo dinâmico compilado via \texttt{lambdify} é código Python/NumPy que, embora eficiente em hardware de propósito geral, pode não ser adequado para controladores embarcados em tempo real com restrições de memória e latência. Uma extensão futura seria a geração de código C/C++ a partir das expressões simbólicas — o SymPy já suporta \texttt{ccode} e \texttt{cxxcode} para geração de código C — que poderia ser compilado para plataformas embarcadas como Arduino, STM32 ou FPGA, habilitando a implementação dos controladores em hardware dedicado \cite{meurer2017sympy, harrington2019automated}.
+
+% ==============================================================================
+\section{Considerações Finais}
+% ==============================================================================
+
+O \textit{Hephaestus} representa uma contribuição concreta à democratização das ferramentas de simulação de robótica de alta fidelidade. Ao integrar, em um único ambiente Python de código aberto, a derivação simbólica exata das equações de Euler-Lagrange \cite{craig1987introduction, siciliano2009robotics}, a compilação eficiente via CSE e paralelismo \cite{meurer2017sympy, beazley2010understanding}, o controle no espaço de tarefa 6D com CLIK robusto \cite{chiaverini1994review, nakamura1986inverse}, e quatro estratégias de controle não-linear comparáveis \cite{slotine1991applied, levant1993sliding, gao2003scaling}, a plataforma cobre um espectro amplo de necessidades de pesquisa e ensino em dinâmica e controle de robótica.
+
+A acessibilidade da plataforma — operável via interface gráfica sem necessidade de programação direta, e executável como aplicativo autocontido — reduz a barreira de entrada para estudantes e pesquisadores que desejam explorar o controle de manipuladores além das ferramentas clássicas \cite{moura2020educational}. Ao mesmo tempo, a transparência matemática — cada equação inspecionável simbolicamente, cada passo algorítmico documentado — torna a plataforma um veículo didático eficaz para o ensino da dinâmica lagrangiana, do controle baseado em modelo e dos efeitos hidrodinâmicos em UVMSs \cite{antonelli2014modelling, fossen2011handbook}.
+
+As extensões propostas na seção de trabalhos futuros — desde a validação experimental em hardware real \cite{spong2020robot, corke2017robotics} até a integração com aprendizado de máquina e ROS2 — posicionam o \textit{Hephaestus} como uma plataforma evolutiva, capaz de acompanhar o estado da arte em robótica subaquática e controle não-linear por um longo período. Espera-se que o projeto, ao ser disponibilizado como código aberto, atraia contribuições da comunidade e evolua em direção a um ecossistema de simulação de robótica colaborativo e pedagogicamente orientado \cite{moura2020educational, harrington2019automated}.
