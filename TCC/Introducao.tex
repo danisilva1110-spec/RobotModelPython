@@ -28,6 +28,8 @@ Assim, este trabalho justifica-se pela criação do ambiente \textit{Hephaestus}
 Desenvolver um ambiente computacional integrado em Python para a modelagem dinâmica simbólica e simulação de manipuladores robóticos e sistemas UVMS. O projeto visa implementar uma arquitetura que automatize a derivação das equações de movimento via formulação Lagrangiana e execute simulações de controle em malha fechada com alto desempenho, considerando explicitamente os efeitos hidrodinâmicos, o controle de orientação no espaço de tarefa 6D e a comparação entre múltiplas estratégias de controle não-linear.
 
 \subsection{Objetivos Específicos}
+\label{sec:Objetivos}
+
 A fim de atingir o objetivo geral, foram definidos os seguintes objetivos específicos:
 
 \begin{itemize}
@@ -43,7 +45,7 @@ A fim de atingir o objetivo geral, foram definidos os seguintes objetivos espec�
 
     \item \textbf{Projeto e Validação de Controle:} Implementar e comparar quatro estratégias de controle não-linear em malha fechada:
     \begin{enumerate}
-        \item \textbf{Controle por Torque Computado com PID} (CTC-PID): linearização por realimentação com termo integral e anti-windup \cite{craig1987introduction};
+        \item \textbf{Controle por Torque Computado com PID} (CTC-PID): linearização por realimentação com termo integral e anti-windup \cite{craig1989introduction};
         \item \textbf{Controle por Modo Deslizante} (CT-SMC): superfície deslizante com camada limite suavizante ($\tanh$) \cite{slotine1991applied};
         \item \textbf{Super-Twisting SMC} (STA): algoritmo de modo deslizante de 2ª ordem com sinal de controle contínuo e convergência em tempo finito \cite{levant1993sliding, moreno2012strict};
         \item \textbf{Controle por Rejeição Ativa de Distúrbios} (LADRC): observador de estado estendido (ESO) descentralizado com estimação e cancelamento em malha fechada dos distúrbios residuais \cite{han2009pid}.
@@ -63,7 +65,8 @@ Esta etapa foca na eficiência computacional e na superação do gargalo de dese
 
 Para lidar com a complexidade computacional do termo de Coriolis em sistemas de múltiplos graus de liberdade, será implementado processamento paralelo em dois níveis distintos. No primeiro nível, a derivação simbólica de $\partial M/\partial q_k$ e o cálculo das linhas do vetor $C$ são distribuídos entre múltiplos processos via \texttt{ProcessPoolExecutor}, visando otimizar o tempo de geração do modelo conforme as métricas de eficiência discutidas por Hollerbach (1980) \cite{hollerbach1980recursive}. No segundo nível, durante a simulação, um executor de processos persistente — pré-inicializado após a compilação e reutilizado em todos os ciclos subsequentes — avalia $M(q)$, $C(q, \dot{q})$ e $G(q)$ em paralelo a cada passo de integração, eliminando o custo de instanciação repetida de workers.
 
-\subsection{Simulação e Controle (A Camada \textit{Simulator})}
+\subsection{Simulação e Controle (A Camada \textit{Simulator}) }
+\label{sec:simulador}
 Será desenvolvido um integrador numérico Simplético de Euler operando em malha fechada. A escolha pelo método Simplético (atualização de $q$ antes de $\dot{q}$) em detrimento do Euler Explícito padrão é motivada pela melhor preservação da energia do sistema ao longo da trajetória. O passo de integração física pode ser subdividido (\textit{substeps}) de forma independente do passo de visualização, permitindo alta fidelidade numérica sem custo proporcional de renderização.
 
 O controle dinâmico será realizado por uma das quatro estratégias implementadas (CTC-PID, CT-SMC, STA ou LADRC), todas alimentadas por um algoritmo de Cinemática Inversa em Malha Fechada (CLIK). A fase de inicialização da postura utiliza um algoritmo de Levenberg-Marquardt com busca em linha adaptativa, que ajusta dinamicamente o parâmetro de amortecimento $\lambda$ para garantir convergência robusta antes do início da trajetória. Durante a simulação, o CLIK opera no espaço de tarefa 6D (posição + orientação), incorporando: referência de velocidade e aceleração por \textit{feedforward}, correção de deriva do Jacobiano ($\dot{J}\dot{q}$), tratamento de singularidades via DLS \cite{nakamura1986inverse} e gestão de redundância via projeção no Espaço Nulo \cite{chiaverini1997singularity}.

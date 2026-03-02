@@ -26,7 +26,7 @@ A detecção automática da fronteira veículo/braço — pela contagem das junt
 \label{sec:traj_planning}
 % ==============================================================================
 
-O planejamento de trajetórias define as referências de posição $P_{\text{ref}}(t)$, velocidade $\dot{P}_{\text{ref}}(t)$ e aceleração $\ddot{P}_{\text{ref}}(t)$ que o efetuador deve rastrear ao longo do tempo. Siciliano et al. (2009) \cite{siciliano2009robotics} e Craig (1987) \cite{craig1987introduction} distinguem o planejamento no espaço de juntas do planejamento no espaço cartesiano; este trabalho adota o segundo, em que as referências são geradas diretamente na posição do efetuador e convertidas para comandos de junta pelo CLIK a cada instante.
+O planejamento de trajetórias define as referências de posição $P_{\text{ref}}(t)$, velocidade $\dot{P}_{\text{ref}}(t)$ e aceleração $\ddot{P}_{\text{ref}}(t)$ que o efetuador deve rastrear ao longo do tempo. Siciliano et al. (2009) \cite{siciliano2009robotics} e Craig (1987) \cite{craig1989introduction} distinguem o planejamento no espaço de juntas do planejamento no espaço cartesiano; este trabalho adota o segundo, em que as referências são geradas diretamente na posição do efetuador e convertidas para comandos de junta pelo CLIK a cada instante.
 
 \subsection{Polinômio Cúbico de Interpolação}
 
@@ -42,7 +42,7 @@ com derivadas:
     \label{eq:cubic_ds}
 \end{equation}
 
-Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ — ou seja, partida e parada suaves — e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1987introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. (2009) \cite{siciliano2009robotics}.
+Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ — ou seja, partida e parada suaves — e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1989introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. (2009) \cite{siciliano2009robotics}.
 
 \subsection{Segmento de Reta}
 
@@ -123,7 +123,7 @@ Os modos 2 a 6 ativam o Jacobiano completo $6 \times N$ no CLIK, descrito na Se�
 \label{sec:ik_initial}
 % ==============================================================================
 
-Antes do início da trajetória, o \textit{Hephaestus} resolve o problema de IK estática para posicionar o efetuador em $P_i$ a partir da postura inicial $q_0$ (postura \textit{home} ou última postura convergida). Para garantir convergência robusta mesmo próximo de singularidades ou partindo de configurações distantes, é empregada uma variante do algoritmo de Levenberg-Marquardt \cite{marquardt1963algorithm, more1978levenberg} com busca em linha por \textit{backtracking} (regra de Armijo \cite{armijo1966minimization}).
+Antes do início da trajetória, o \textit{Hephaestus} resolve o problema de IK estática para posicionar o efetuador em $P_i$ a partir da postura inicial $q_0$ (postura \textit{home} ou última postura convergida). Para garantir convergência robusta mesmo próximo de singularidades ou partindo de configurações distantes, é empregada uma variante do algoritmo de Levenberg-Marquardt \cite{marquardt1963algorithm, more2006levenberg} com busca em linha por \textit{backtracking} (regra de Armijo \cite{armijo1966minimization}).
 
 O algoritmo iterativo é descrito a seguir. A cada iteração $k$:
 \begin{enumerate}
@@ -140,7 +140,7 @@ O algoritmo iterativo é descrito a seguir. A cada iteração $k$:
     \item Detecta estagnação: se $|\|e_{k-1}\| - \|e_k\|| < 0.1\,\varepsilon_{\text{tol}}$ por 10 iterações consecutivas, interrompe.
 \end{enumerate}
 
-A estratégia adaptativa de $\lambda$ é a essência do algoritmo de Levenberg-Marquardt: para erros grandes (longe do mínimo), $\lambda$ grande amortece o passo, comportando-se como o método do gradiente; próximo do mínimo, $\lambda$ pequeno permite convergência quadrática típica de Newton-Gauss \cite{more1978levenberg}. A combinação com a busca em linha de Armijo confere estabilidade adicional quando o Jacobiano é mal-condicionado, conforme demonstrado por Nakamura e Hanafusa (1986) \cite{nakamura1986inverse} e Wampler (1986) \cite{wampler1986manipulator} para IK de manipuladores com singularidades.
+A estratégia adaptativa de $\lambda$ é a essência do algoritmo de Levenberg-Marquardt: para erros grandes (longe do mínimo), $\lambda$ grande amortece o passo, comportando-se como o método do gradiente; próximo do mínimo, $\lambda$ pequeno permite convergência quadrática típica de Newton-Gauss \cite{more2006levenberg}. A combinação com a busca em linha de Armijo confere estabilidade adicional quando o Jacobiano é mal-condicionado, conforme demonstrado por Nakamura e Hanafusa (1986) \cite{nakamura1986inverse} e Wampler (1986) \cite{wampler2007manipulator} para IK de manipuladores com singularidades.
 
 % ==============================================================================
 \section{Cinemática Inversa em Malha Fechada (CLIK)}
@@ -156,7 +156,7 @@ Durante a trajetória, a cada passo de integração, o CLIK (Closed-Loop Inverse
 \end{equation}
 onde $e_{\text{pos}} = P_{\text{ref}} - p_{\text{curr}}$ é o erro de posição cartesiano, $K_P = K_{p,\text{IK}} \cdot I_3$ é o ganho proporcional do CLIK, e o último termo projeta uma velocidade auxiliar $\dot{q}_0$ no espaço nulo de $J_{\text{pos}}$ para controle de redundância \cite{chiaverini1997singularity, liegeois1977automatic}.
 
-A pseudo-inversa amortecida (DLS) $J_{\text{DLS}}^{\dagger} \in \mathbb{R}^{N \times 3}$ é \cite{nakamura1986inverse, wampler1986manipulator}:
+A pseudo-inversa amortecida (DLS) $J_{\text{DLS}}^{\dagger} \in \mathbb{R}^{N \times 3}$ é \cite{nakamura1986inverse, wampler2007manipulator}:
 \begin{equation}
     J_{\text{DLS}}^{\dagger} = J_{\text{pos}}^\top \left(J_{\text{pos}} J_{\text{pos}}^\top + \lambda_{\text{DLS}}^2 I_3\right)^{-1}.
     \label{eq:dls_pos}
@@ -268,19 +268,19 @@ Quatro estratégias de controle não-linear são implementadas no \textit{Hephae
 
 \subsection{Controle por Torque Computado com PID (CTC-PID)}
 
-O Controle por Torque Computado com PID \cite{craig1987introduction, spong2020robot} é a estratégia padrão do simulador. A lei de controle é:
+O Controle por Torque Computado com PID \cite{craig1989introduction, spong2020robot} é a estratégia padrão do simulador. A lei de controle é:
 \begin{equation}
     \tau_{\text{CTC-PID}} = M(q)\left[\ddot{q}_d + K_D\dot{e} + K_P e + K_I \int e\,dt\right] + C(q,\dot{q}) + G(q),
     \label{eq:ctc_pid_impl}
 \end{equation}
-onde $e = q_d - q$, $K_P = k_p I_N$, $K_D = 2\zeta\sqrt{k_p} I_N$ (criticamente amortecido para $\zeta = 1$) e $K_I = k_i I_N$. O ganho derivativo é derivado automaticamente do proporcional pelo método do polinômio característico de segunda ordem, garantindo amortecimento crítico para qualquer valor de $k_p$ \cite{astrom1995pid}.
+onde $e = q_d - q$, $K_P = k_p I_N$, $K_D = 2\zeta\sqrt{k_p} I_N$ (criticamente amortecido para $\zeta = 1$) e $K_I = k_i I_N$. O ganho derivativo é derivado automaticamente do proporcional pelo método do polinômio característico de segunda ordem, garantindo amortecimento crítico para qualquer valor de $k_p$ \cite{astrom1995theory}.
 
 O integrador é sujeito a \textit{anti-windup} por clamping:
 \begin{equation}
     \int e\,dt \leftarrow \text{clip}\!\left(\int e\,dt + e\,\Delta t,\;  -e_{\max},\; e_{\max}\right),
     \label{eq:antiwindup}
 \end{equation}
-onde $e_{\max}$ é o limite de \textit{windup} configurável, que previne a acumulação do integrador durante períodos de saturação do atuador \cite{astrom1995pid}. Com modelo dinâmico exato, a lei CTC cancela a não-linearidade e a dinâmica de erro satisfaz $\ddot{e} + K_D\dot{e} + K_P e = 0$, que é um sistema linear estável de segunda ordem \cite{craig1987introduction}.
+onde $e_{\max}$ é o limite de \textit{windup} configurável, que previne a acumulação do integrador durante períodos de saturação do atuador \cite{astrom1995theory}. Com modelo dinâmico exato, a lei CTC cancela a não-linearidade e a dinâmica de erro satisfaz $\ddot{e} + K_D\dot{e} + K_P e = 0$, que é um sistema linear estável de segunda ordem \cite{craig1989introduction}.
 
 \subsection{Controle por Modo Deslizante (CT-SMC)}
 
@@ -311,13 +311,13 @@ onde $z$ é uma variável interna integrada numericamente por Euler explícito: 
     \label{eq:sta_ctrl}
 \end{equation}
 
-O sinal $v_{\text{sw}}$ é contínuo porque $z$ integra o sinal descontínuo, fazendo $v_{\text{sw}}$ variar continuamente mesmo que $\text{sign}(S)$ seja descontínuo. Moreno e Osorio (2012) \cite{moreno2012strict} forneceram uma função de Lyapunov estrita para o STA, estabelecendo condições de ganho suficientes para convergência em tempo finito com distúrbio de derivada limitada $|\dot{d}| \leq \delta$: $k_2 > \delta$ e $k_1 > 2\sqrt{k_2\,\delta}$. A convergência em tempo finito de $S \to 0$ e $\dot{S} \to 0$ diferencia qualitativamente o STA do CT-SMC de primeira ordem, cuja convergência é assintótica \cite{levant1993sliding, utkin2009sliding}.
+O sinal $v_{\text{sw}}$ é contínuo porque $z$ integra o sinal descontínuo, fazendo $v_{\text{sw}}$ variar continuamente mesmo que $\text{sign}(S)$ seja descontínuo. Moreno e Osorio (2012) \cite{moreno2012strict} forneceram uma função de Lyapunov estrita para o STA, estabelecendo condições de ganho suficientes para convergência em tempo finito com distúrbio de derivada limitada $|\dot{d}| \leq \delta$: $k_2 > \delta$ e $k_1 > 2\sqrt{k_2\,\delta}$. A convergência em tempo finito de $S \to 0$ e $\dot{S} \to 0$ diferencia qualitativamente o STA do CT-SMC de primeira ordem, cuja convergência é assintótica \cite{levant1993sliding, utkin2017sliding}.
 
 O filtro de $\ddot{q}_{d,f}$ é compartilhado com a implementação do CT-SMC, sendo parametrizado pelo mesmo coeficiente $\alpha$, o que garante comparabilidade direta das duas estratégias quando $\lambda$, $K$ (CT-SMC) e $k_1$, $k_2$ (STA) são ajustados para desempenhos nominais equivalentes.
 
 \subsection{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}
 
-O LADRC (Linear Active Disturbance Rejection Control), proposto por Han (1995) \cite{han1995nonlinear} e formalizado em versão linear por Gao (2003) \cite{gao2003scaling}, é implementado de forma descentralizada — um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
+O LADRC (Linear Active Disturbance Rejection Control), proposto por Han (1995) \cite{han1995class} e formalizado em versão linear por Gao (2003) \cite{gao2003scaling}, é implementado de forma descentralizada — um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
 \begin{equation}
     \ddot{q}_i = b_{0,i}\,\tau_i + f_i, \qquad f_i = \text{distúrbio total},
     \label{eq:adrc_plant_impl}
@@ -330,7 +330,7 @@ O ESO de terceira ordem (linear) é integrado por Euler explícito a cada passo 
     z_2^{n+1} &= z_2^n + \Delta t\left[z_3^n - \beta_2(z_1^n - q_i^n) + b_0 \tau_i^{n-1}\right], \label{eq:eso2_impl}\\
     z_3^{n+1} &= z_3^n - \Delta t\,\beta_3(z_1^n - q_i^n), \label{eq:eso3_impl}
 \end{align}
-com $\beta_1 = 3\omega_o$, $\beta_2 = 3\omega_o^2$, $\beta_3 = \omega_o^3$ \cite{gao2003scaling}. A frequência $\omega_o$ é automaticamente limitada por $\omega_o \leq \omega_{\max}/\Delta t$ para garantir estabilidade numérica do ESO discreto: a condição $\omega_o \Delta t \leq 0.1$ é aplicada como heurística de projeto \cite{zheng2010stability}.
+com $\beta_1 = 3\omega_o$, $\beta_2 = 3\omega_o^2$, $\beta_3 = \omega_o^3$ \cite{gao2003scaling}. A frequência $\omega_o$ é automaticamente limitada por $\omega_o \leq \omega_{\max}/\Delta t$ para garantir estabilidade numérica do ESO discreto: a condição $\omega_o \Delta t \leq 0.1$ é aplicada como heurística de projeto \cite{zheng2010practical}.
 
 A estimativa $z_3^n$ do distúrbio total é suavizada por um filtro IIR de primeira ordem antes de ser usada na lei de controle:
 \begin{equation}
@@ -349,7 +349,7 @@ A lei de controle cancela o distúrbio estimado e acrescenta \textit{feedforward
     \label{eq:ladrc_u0}
 \end{equation}
 
-O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas — sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao (2010) \cite{zheng2010stability}.
+O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas — sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao (2010) \cite{zheng2010practical}.
 
 % ==============================================================================
 \section{Modelos de Forças Dissipativas}
@@ -399,7 +399,7 @@ O executor \texttt{ProcessPoolExecutor} é inicializado uma única vez após a c
 \end{equation}
 e os resultados são coletados por \texttt{Future.result()} após o despacho das três tarefas, aproveitando a sobreposição de computação \cite{beazley2010understanding}.
 
-A chave da eficiência é a \textbf{persistência} do executor: ao contrário de uma implementação ingênua que instancia e destrói um \textit{pool} por simulação (custo de 2--8 s por instância, conforme medido nos testes), o executor é instanciado uma única vez e reutilizado em todas as chamadas subsequentes a \texttt{run()}. A detecção de mudança no número de \textit{workers} solicita reinicialização automática do executor, garantindo flexibilidade sem custo desnecessário \cite{harrington2019automated}.
+A chave da eficiência é a \textbf{persistência} do executor: ao contrário de uma implementação ingênua que instancia e destrói um \textit{pool} por simulação (custo de 2--8 s por instância, conforme medido nos testes), o executor é instanciado uma única vez e reutilizado em todas as chamadas subsequentes a \texttt{run()}. A detecção de mudança no número de \textit{workers} solicita reinicialização automática do executor, garantindo flexibilidade sem custo desnecessário \cite{leu1986automated}.
 
 Quando o paralelismo não está habilitado (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal — comportamento padrão seguro para executáveis PyInstaller, máquinas com um único núcleo ou ambientes de depuração. Esta opção também é preferida para sistemas com $N \leq 4$ GDL, onde o \textit{overhead} de IPC supera o ganho de paralelismo \cite{beazley2010understanding}.
 
@@ -415,7 +415,7 @@ A estabilidade numérica do integrador simplético é governada pela relação e
 \end{equation}
 ou seja, ao menos dois passos por período de oscilação de malha fechada. Para $k_p = 100$ rad$^2$/s$^2$ (ganho típico), $\omega_n = 10$ rad/s e $\Delta t_{\text{phys}} < 0.2$ s — condição satisfeita com folga para $\Delta t_{\text{phys}} = 10^{-3}$ s \cite{hairer2006geometric}. Avisos automáticos são emitidos quando $\Delta t_{\text{phys}} > 10^{-2}$ s ou $\Delta t_{\text{vis}} > 0.1$ s, alertando o usuário sobre potencial instabilidade.
 
-Para o LADRC, a condição adicional de estabilidade do ESO discreto é $\omega_o \Delta t_{\text{phys}} \leq 0.1$, correspondente à frequência de observador máxima $\omega_o^{\max} = 0.1/\Delta t_{\text{phys}} = 100$ rad/s para $\Delta t_{\text{phys}} = 10^{-3}$ s. Este limite é imposto automaticamente pela verificação \texttt{max\_wo\_dt} no construtor do LADRC \cite{zheng2010stability}.
+Para o LADRC, a condição adicional de estabilidade do ESO discreto é $\omega_o \Delta t_{\text{phys}} \leq 0.1$, correspondente à frequência de observador máxima $\omega_o^{\max} = 0.1/\Delta t_{\text{phys}} = 100$ rad/s para $\Delta t_{\text{phys}} = 10^{-3}$ s. Este limite é imposto automaticamente pela verificação \texttt{max\_wo\_dt} no construtor do LADRC \cite{zheng2010practical}.
 
 % ==============================================================================
 \section{Síntese do Capítulo}
@@ -428,9 +428,9 @@ Este capítulo descreveu a arquitetura completa de simulação numérica do \tex
     \item \textbf{Inicialização robusta} por Levenberg-Marquardt com busca em linha adaptativa \cite{marquardt1963algorithm, armijo1966minimization}, garantindo partida a partir de qualquer configuração factível.
     \item \textbf{CLIK estendido ao espaço 6D}, com \textit{feedforward} de velocidade e aceleração, correção de deriva do Jacobiano, tratamento de singularidades por DLS \cite{nakamura1986inverse} e gestão de redundância via espaço nulo \cite{chiaverini1997singularity, liegeois1977automatic}.
     \item \textbf{Integrador simplético de Euler} com \textit{substeps} independentes da taxa de visualização, garantindo estabilidade de energia a longo prazo e alta fidelidade numérica \cite{leimkuhler2004simulating, hairer2006geometric}.
-    \item \textbf{Quatro controladores não-lineares} comparáveis: CTC-PID \cite{craig1987introduction, astrom1995pid}, CT-SMC com camada limite \cite{slotine1991applied, burton1986continuous}, Super-Twisting STA com convergência em tempo finito \cite{levant1993sliding, moreno2012strict} e LADRC descentralizado com ESO de terceira ordem \cite{gao2003scaling, zheng2010stability, huang2014active}.
+    \item \textbf{Quatro controladores não-lineares} comparáveis: CTC-PID \cite{craig1989introduction, astrom1995theory}, CT-SMC com camada limite \cite{slotine1991applied, burton1986continuous}, Super-Twisting STA com convergência em tempo finito \cite{levant1993sliding, moreno2012strict} e LADRC descentralizado com ESO de terceira ordem \cite{gao2003scaling, zheng2010practical, huang2014active}.
     \item \textbf{Forças dissipativas} de atrito nas juntas (Coulomb + viscoso, suavizado por $\tanh$) e arrasto hidrodinâmico (linear + quadrático) \cite{fossen2011handbook, antonelli2014modelling}, aplicadas separadamente do controle para máxima fidelidade física.
-    \item \textbf{Executor paralelo persistente} para avaliação paralela de $M$, $C$, $G$ a cada substep, com custo de \textit{spawn} amortizado sobre toda a simulação \cite{beazley2010understanding, harrington2019automated}.
+    \item \textbf{Executor paralelo persistente} para avaliação paralela de $M$, $C$, $G$ a cada substep, com custo de \textit{spawn} amortizado sobre toda a simulação \cite{beazley2010understanding, leu1986automated}.
 \end{itemize}
 
 O Capítulo seguinte apresenta os resultados experimentais obtidos com a plataforma \textit{Hephaestus} em dois cenários de validação: um manipulador serial de 3 GDL em ambiente terrestre e um UVMS de 6 GDL em ambiente subaquático, comparando as quatro estratégias de controle em termos de erro de rastreamento, torques requeridos e resposta a perturbações externas.

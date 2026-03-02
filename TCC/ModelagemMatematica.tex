@@ -18,7 +18,7 @@ O fluxo completo de processamento é organizado em quatro etapas sequenciais, re
     \item \textbf{Preparação e Exportação} (\texttt{step\_4\_prepare\_export}): substituição de símbolos dinâmicos por variáveis estáticas e empacotamento do modelo para o módulo de simulação.
 \end{enumerate}
 
-Essa organização modular permite que o usuário inspecione o estado intermediário após cada etapa, facilitando a depuração matemática e a validação pedagógica das equações geradas — objetivo central de uma plataforma didática de código aberto \cite{moura2020educational}.
+Essa organização modular permite que o usuário inspecione o estado intermediário após cada etapa, facilitando a depuração matemática e a validação pedagógica das equações geradas — objetivo central de uma plataforma didática de código aberto \cite{corke2021toolbox}.
 
 % ==============================================================================
 \section{Representação da Cadeia Cinemática}
@@ -35,7 +35,7 @@ A cadeia cinemática é especificada pelo usuário por meio de dois parâmetros 
 
 Essa parametrização admite qualquer topologia de cadeia serial aberta, incluindo configurações com juntas prismáticas mistas — fundamentais para modelar o grau de liberdade de afundamento de veículos subaquáticos — e configurações com elos de comprimento nulo (vetor máscara zero), usadas para modelar as três rotações do veículo base de um UVMS sem translação associada \cite{antonelli2014modelling, fossen2011handbook}.
 
-A escolha de uma parametrização matricial de rotações diretas em vez da convenção de Denavit-Hartenberg (DH) \cite{denavit1955kinematic} foi deliberada. Embora a convenção DH seja amplamente ensinada \cite{craig1987introduction, spong2020robot}, ela impõe restrições geométricas sobre o posicionamento dos eixos de coordenadas que dificultam a representação de certas arquiteturas (e.g., juntas com deslocamentos paralelos). A representação por matrizes de rotação elementares por eixo-ângulo, adotada no \textit{Hephaestus}, é algebricamente transparente e diretamente integrável com o módulo de mecânica simbólica do SymPy \cite{meurer2017sympy, harrington2019automated}.
+A escolha de uma parametrização matricial de rotações diretas em vez da convenção de Denavit-Hartenberg (DH) \cite{denavit1955kinematic} foi deliberada. Embora a convenção DH seja amplamente ensinada \cite{craig1989introduction, spong2020robot}, ela impõe restrições geométricas sobre o posicionamento dos eixos de coordenadas que dificultam a representação de certas arquiteturas (e.g., juntas com deslocamentos paralelos). A representação por matrizes de rotação elementares por eixo-ângulo, adotada no \textit{Hephaestus}, é algebricamente transparente e diretamente integrável com o módulo de mecânica simbólica do SymPy \cite{meurer2017sympy, leu1986automated}.
 
 \subsection{Símbolos Dinâmicos e Parâmetros}
 
@@ -62,7 +62,7 @@ A cinemática direta é construída iterativamente sobre a cadeia de elos. Para 
     R_j^{(i)} = \exp\!\left(\hat{a}_i^{(l)}\,q_i\right), \quad \hat{a}_i^{(l)} \in \{\hat{x}, \hat{y}, \hat{z}\},
     \label{eq:rot_local}
 \end{equation}
-onde $\hat{a}_i^{(l)}$ é o eixo de rotação no referencial local, mapeado para as matrizes elementares $R_x$, $R_y$ ou $R_z$ conforme o caractere do tipo de junta \cite{craig1987introduction, siciliano2009robotics}. Para a junta prismática ao longo do eixo $\hat{a}_i^{(l)}$:
+onde $\hat{a}_i^{(l)}$ é o eixo de rotação no referencial local, mapeado para as matrizes elementares $R_x$, $R_y$ ou $R_z$ conforme o caractere do tipo de junta \cite{craig1989introduction, siciliano2009robotics}. Para a junta prismática ao longo do eixo $\hat{a}_i^{(l)}$:
 \begin{equation}
     R_j^{(i)} = I_3, \quad P_j^{(i)} = \hat{a}_i^{(l)}\, q_i.
     \label{eq:prism_local}
@@ -93,7 +93,7 @@ A velocidade angular global do elo $i$ é acumulada recursivamente:
     \label{eq:omega_rec}
 \end{equation}
 
-Essa recorrência segue a formulação vetorial da velocidade angular para cadeias seriais \cite{craig1987introduction, luh1980online}. O resultado é uma expressão simbólica linear em $\{\dot{q}_1, \ldots, \dot{q}_N\}$, cuja derivada em relação a $\dot{q}_j$ fornece diretamente a $j$-ésima coluna do Jacobiano angular $J_{\omega,i}$ \cite{siciliano2009robotics}.
+Essa recorrência segue a formulação vetorial da velocidade angular para cadeias seriais \cite{craig1989introduction, luh1980online}. O resultado é uma expressão simbólica linear em $\{\dot{q}_1, \ldots, \dot{q}_N\}$, cuja derivada em relação a $\dot{q}_j$ fornece diretamente a $j$-ésima coluna do Jacobiano angular $J_{\omega,i}$ \cite{siciliano2009robotics}.
 
 % ==============================================================================
 \section{Derivação Simbólica da Matriz de Inércia e do Vetor de Gravidade}
@@ -139,7 +139,7 @@ onde $z_{\text{cm},i}$ é a componente vertical (terceira coordenada) de $\vec{p
     G(q) = \left(\frac{\partial V}{\partial q}\right)^\top = \frac{\partial}{\partial q} \left[\sum_{i=1}^{N} m_i\, g\, z_{\text{cm},i}\right]^\top,
     \label{eq:G_vec}
 \end{equation}
-computado pelo método \texttt{sp.Matrix([V\_tot]).jacobian(self.q).T}. Dessa forma, $G(q) \in \mathbb{R}^N$ representa, em cada componente $G_i(q)$, o torque generalizado necessário para sustentar o peso estático do sistema na configuração $q$ \cite{craig1987introduction, spong2020robot}.
+computado pelo método \texttt{sp.Matrix([V\_tot]).jacobian(self.q).T}. Dessa forma, $G(q) \in \mathbb{R}^N$ representa, em cada componente $G_i(q)$, o torque generalizado necessário para sustentar o peso estático do sistema na configuração $q$ \cite{craig1989introduction, spong2020robot}.
 
 \subsection{Jacobiano Geométrico Completo}
 
@@ -177,7 +177,7 @@ A implementação segue dois sub-passos. No primeiro (\textit{Passo 3a}), a matr
 
 \subsection{Estratégia de Paralelização da Derivação}
 
-A derivação simbólica de $\partial M/\partial q_k$ é a operação mais custosa de toda a geração do modelo: em sistemas com $N$ graus de liberdade, cada um dos $N$ gradientes simbólicos exige a diferenciação de uma matriz $N \times N$ com entradas que podem possuir centenas de subexpressões, resultando em uma complexidade efetiva de $O(N^3)$ a $O(N^4)$ no tamanho das expressões para configurações gerais \cite{hollerbach1980recursive, harrington2019automated}.
+A derivação simbólica de $\partial M/\partial q_k$ é a operação mais custosa de toda a geração do modelo: em sistemas com $N$ graus de liberdade, cada um dos $N$ gradientes simbólicos exige a diferenciação de uma matriz $N \times N$ com entradas que podem possuir centenas de subexpressões, resultando em uma complexidade efetiva de $O(N^3)$ a $O(N^4)$ no tamanho das expressões para configurações gerais \cite{hollerbach1980recursive, leu1986automated}.
 
 Para mitigar esse custo, o \textit{Hephaestus} distribui as $N$ tarefas de diferenciação $M \to \partial M/\partial q_k$ entre múltiplos processos via \texttt{ProcessPoolExecutor} da biblioteca padrão do Python:
 
@@ -195,11 +195,11 @@ Analogamente, o cálculo das $N$ linhas do vetor $C$ (cada linha requerendo $O(N
     \label{eq:C_parallel}
 \end{equation}
 
-Uma decisão de implementação relevante é a \emph{omissão intencional} da chamada a \texttt{sp.collect()} após a montagem de cada linha $C_i$. Embora a coleta de termos semelhantes possa compactar a expressão simbólica, seu custo computacional é superlinear no número de termos e pode superar em ordem de grandeza o custo do cálculo próprio da linha. Em vez disso, a compactação é delegada ao passo de CSE (\textit{Common Subexpression Elimination}) realizado posteriormente no \texttt{lambdify}, que fatoriza subexpressões repetidas de forma sistemática e com custo linear no tamanho da expressão final \cite{aho2006compilers, meurer2017sympy}.
+Uma decisão de implementação relevante é a \emph{omissão intencional} da chamada a \texttt{sp.collect()} após a montagem de cada linha $C_i$. Embora a coleta de termos semelhantes possa compactar a expressão simbólica, seu custo computacional é superlinear no número de termos e pode superar em ordem de grandeza o custo do cálculo próprio da linha. Em vez disso, a compactação é delegada ao passo de CSE (\textit{Common Subexpression Elimination}) realizado posteriormente no \texttt{lambdify}, que fatoriza subexpressões repetidas de forma sistemática e com custo linear no tamanho da expressão final \cite{alfred2007compilers, meurer2017sympy}.
 
 \subsection{Modo Serial para Ambientes Executáveis}
 
-Quando o \textit{Hephaestus} é distribuído como executável via PyInstaller (arquivo \texttt{.exe}), o suporte ao spawn de subprocessos no Windows impõe restrições de inicialização que tornam o \texttt{ProcessPoolExecutor} incompatível com módulos congelados (\textit{frozen}). Nesse cenário, o número de \textit{workers} é automaticamente configurado para 1, e a computação é realizada em série na mesma thread principal. Essa detecção é realizada pelo parâmetro \texttt{num\_workers} da classe \texttt{RobotMathEngine}: quando \texttt{num\_workers = 1}, a condição \texttt{use\_parallel = False} desativa o executor, garantindo execução correta em qualquer ambiente sem modificações no código \cite{harrington2019automated}.
+Quando o \textit{Hephaestus} é distribuído como executável via PyInstaller (arquivo \texttt{.exe}), o suporte ao spawn de subprocessos no Windows impõe restrições de inicialização que tornam o \texttt{ProcessPoolExecutor} incompatível com módulos congelados (\textit{frozen}). Nesse cenário, o número de \textit{workers} é automaticamente configurado para 1, e a computação é realizada em série na mesma thread principal. Essa detecção é realizada pelo parâmetro \texttt{num\_workers} da classe \texttt{RobotMathEngine}: quando \texttt{num\_workers = 1}, a condição \texttt{use\_parallel = False} desativa o executor, garantindo execução correta em qualquer ambiente sem modificações no código \cite{leu1986automated}.
 
 % ==============================================================================
 \section{Extensão Hidrodinâmica: \texttt{RobotMathHydro}}
@@ -299,7 +299,7 @@ O método retorna um dicionário com as seguintes chaves:
     \item \texttt{"Mode"}: string \texttt{"Air"} ou \texttt{"Hydro"}, para controle de fluxo no simulador.
 \end{itemize}
 
-Essa interface de exportação desacopla completamente a \textit{engine} matemática do módulo de simulação, permitindo que o modelo simbólico seja serializado (via \texttt{pickle}) e reutilizado em sessões posteriores sem recomputação — uma funcionalidade de produtividade crítica, dado que a geração do modelo para sistemas com $N \geq 6$ pode levar dezenas de minutos em hardware convencional \cite{harrington2019automated, hollerbach1980recursive}.
+Essa interface de exportação desacopla completamente a \textit{engine} matemática do módulo de simulação, permitindo que o modelo simbólico seja serializado (via \texttt{pickle}) e reutilizado em sessões posteriores sem recomputação — uma funcionalidade de produtividade crítica, dado que a geração do modelo para sistemas com $N \geq 6$ pode levar dezenas de minutos em hardware convencional \cite{leu1986automated, hollerbach1980recursive}.
 
 % ==============================================================================
 \section{Compilação Simbólico-Numérica com \textit{lambdify} e CSE}
@@ -319,7 +319,7 @@ correspondente à lista \texttt{sym\_vars = bot.q + bot.dq + bot.params\_list}. 
 
 \subsection{Eliminação de Subexpressões Comuns}
 
-O parâmetro \texttt{cse=True} ativa a Eliminação de Subexpressões Comuns (\textit{Common Subexpression Elimination}, CSE) antes da geração do código numérico \cite{aho2006compilers}. Internamente, o SymPy aplica o algoritmo de Risch-Moses para CSE \cite{moses1971algebraic}, identificando subárvores repetidas na expressão simbólica e substituindo cada ocorrência por uma variável temporária. O código Python gerado tem então a forma:
+O parâmetro \texttt{cse=True} ativa a Eliminação de Subexpressões Comuns (\textit{Common Subexpression Elimination}, CSE) antes da geração do código numérico \cite{alfred2007compilers}. Internamente, o SymPy aplica o algoritmo de Risch-Moses para CSE \cite{moses1971algebraic}, identificando subárvores repetidas na expressão simbólica e substituindo cada ocorrência por uma variável temporária. O código Python gerado tem então a forma:
 
 \begin{align}
     &\texttt{x0} = \sin(q_1), \quad \texttt{x1} = \cos(q_1), \quad \texttt{x2} = \texttt{x0} \cdot m_1, \quad \ldots \nonumber \\
@@ -327,7 +327,7 @@ O parâmetro \texttt{cse=True} ativa a Eliminação de Subexpressões Comuns (\t
     \label{eq:cse_example}
 \end{align}
 
-O impacto quantitativo da CSE é substancial: para um manipulador de 6 GDL em ar, a expressão simbólica de $M(q)$ pode conter $O(10^3)$ a $O(10^4)$ operações primitivas; com CSE, a função compilada executa tipicamente $2$--$5\times$ mais rápido, com redução de $60$--$90\%$ no tamanho do bytecode \cite{meurer2017sympy, aho2006compilers}. Para sistemas maiores ($N > 8$), a CSE pode ser a diferença entre uma compilação que produz código de tamanho manejável e uma que gera strings de vários MB que excedem os limites de compilação do Python (\texttt{MemoryError}) \cite{harrington2019automated}.
+O impacto quantitativo da CSE é substancial: para um manipulador de 6 GDL em ar, a expressão simbólica de $M(q)$ pode conter $O(10^3)$ a $O(10^4)$ operações primitivas; com CSE, a função compilada executa tipicamente $2$--$5\times$ mais rápido, com redução de $60$--$90\%$ no tamanho do bytecode \cite{meurer2017sympy, alfred2007compilers}. Para sistemas maiores ($N > 8$), a CSE pode ser a diferença entre uma compilação que produz código de tamanho manejável e uma que gera strings de vários MB que excedem os limites de compilação do Python (\texttt{MemoryError}) \cite{leu1986automated}.
 
 Adicionalmente, o módulo \texttt{modules='numpy'} instrui o \texttt{lambdify} a mapear funções simbólicas (\texttt{sp.sin}, \texttt{sp.cos}, etc.) para suas contrapartes NumPy (\texttt{np.sin}, \texttt{np.cos}), que por sua vez invocam implementações C compiladas via BLAS/LAPACK \cite{meurer2017sympy}. O resultado é uma função numérica que se comporta como código C nativo para as operações de ponto flutuante, sem o \textit{overhead} da álgebra simbólica em tempo de simulação.
 
@@ -343,7 +343,7 @@ No construtor \texttt{RobotSimulator.\_\_init\_\_}, cada grandeza dinâmica é c
     \item \texttt{funcs\_fk\_all\_links}: lista de $N$ funções $f_{\text{FK},i}: \mathbb{R}^{2N+P} \to \mathbb{R}^{3}$, avaliando a posição 3D do extremo do elo $i$ — utilizadas para a visualização gráfica animada do manipulador.
 \end{itemize}
 
-onde $P = |\texttt{params\_list}|$ é o número total de parâmetros físicos. A compilação separada por grandeza — em vez de uma única função monolítica — permite o despacho paralelo de $M$, $C$ e $G$ durante a simulação: cada uma das funções pode ser submetida simultaneamente a um \textit{worker} distinto do executor paralelo, triplicando a taxa de avaliação dinâmica em máquinas com pelo menos três núcleos \cite{harrington2019automated}.
+onde $P = |\texttt{params\_list}|$ é o número total de parâmetros físicos. A compilação separada por grandeza — em vez de uma única função monolítica — permite o despacho paralelo de $M$, $C$ e $G$ durante a simulação: cada uma das funções pode ser submetida simultaneamente a um \textit{worker} distinto do executor paralelo, triplicando a taxa de avaliação dinâmica em máquinas com pelo menos três núcleos \cite{leu1986automated}.
 
 % ==============================================================================
 \section{Paralelismo em Dois Níveis e Executor Persistente}
@@ -386,17 +386,17 @@ A Tabela~\ref{tab:complexidade} resume a complexidade computacional das etapas d
 \hline
 \textbf{Etapa} & \textbf{Complexidade} & \textbf{Referência / Observação} \\
 \hline
-Cinemática FK simbólica & $O(N^2)$ & Produto acumulado de matrizes $4\times4$ \cite{craig1987introduction} \\
+Cinemática FK simbólica & $O(N^2)$ & Produto acumulado de matrizes $4\times4$ \cite{craig1989introduction} \\
 Derivação de $M(q)$ (simbólica) & $O(N^3)$ & Jacobianos por elo \cite{siciliano2009robotics} \\
 Derivação de $\partial M/\partial q_k$ & $O(N^4)$ (ingênuo) & Paralelizável por $N$ processos \cite{hollerbach1980recursive} \\
 Cálculo de $C$ (Christoffel) & $O(N^3)$ simbólico & $N(N+1)/2$ pares por linha, $N$ linhas \cite{spong2020robot} \\
-Compilação (lambdify + CSE) & $O(S)$, $S=$ tamanho expr. & Custo único; CSE reduz $S$ em 60--90\% \cite{aho2006compilers, meurer2017sympy} \\
+Compilação (lambdify + CSE) & $O(S)$, $S=$ tamanho expr. & Custo único; CSE reduz $S$ em 60--90\% \cite{alfred2007compilers, meurer2017sympy} \\
 Avaliação numérica por passo & $O(N^2)$ & Mult. matriz-vetor $M\backslash(tau - C - G)$ \cite{golub2013matrix} \\
 \hline
 \end{tabular}
 \end{table}
 
-A comparação direta com o algoritmo de Newton-Euler recursivo, cuja complexidade é $O(N)$ tanto na geração quanto na avaliação \cite{luh1980online, hollerbach1980recursive}, evidencia o \textit{trade-off} fundamental da abordagem simbólica: maior custo de derivação (amortizado na fase \textit{offline}), em troca de equações explícitas que viabilizam análise, controle baseado em modelo e transparência pedagógica. Esse trade-off é deliberado e justificado pelo objetivo do \textit{Hephaestus} como plataforma didática e de desenvolvimento de controladores \cite{moura2020educational}.
+A comparação direta com o algoritmo de Newton-Euler recursivo, cuja complexidade é $O(N)$ tanto na geração quanto na avaliação \cite{luh1980online, hollerbach1980recursive}, evidencia o \textit{trade-off} fundamental da abordagem simbólica: maior custo de derivação (amortizado na fase \textit{offline}), em troca de equações explícitas que viabilizam análise, controle baseado em modelo e transparência pedagógica. Esse trade-off é deliberado e justificado pelo objetivo do \textit{Hephaestus} como plataforma didática e de desenvolvimento de controladores \cite{corke2021toolbox}.
 
 % ==============================================================================
 \section{Síntese do Capítulo}
