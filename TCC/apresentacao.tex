@@ -1,0 +1,196 @@
+\documentclass[compress]{beamer}
+
+%% Setup appearance:
+%\usetheme{Darmstadt}
+\usetheme{Frankfurt}
+%\usetheme{Madrid}
+%\usetheme{Bergen}
+\usefonttheme[onlylarge]{structurebold}
+\setbeamerfont*{frametitle}{size=\normalsize,series=\bfseries}
+\setbeamertemplate{navigation symbols}{}
+\usepackage{default}
+\usepackage[brazil]{babel}
+%\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage{times}
+\usepackage[T1]{fontenc}
+\usepackage{psfrag}
+\usepackage{amsmath}
+\usepackage{pifont}
+\usepackage{subfig}
+\usepackage{hyperref}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{MnSymbol}
+\usepackage{tikz}
+%\usepackage{algpseudocode}
+%\usepackage{algorithmicx}
+\usepackage[Algoritmo]{algorithm}
+\usepackage[noend]{algorithmic}
+\usepackage{graphicx} % for pdf, bitmapped graphics files
+\usepackage{epsfig} % for postscript graphics files
+\usepackage{mathptmx} % assumes new font selection scheme installed
+\usepackage{amssymb}  % assumes amsmath package installed
+
+%% Setup TikZ
+
+\usepackage{tikz}
+
+%\selectlanguage{brazilian}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%% Author, Title, etc.
+
+\title[T\'itulo do Trabalho]{T\'itulo do Trabalho}
+
+\author[Nome]{Nome completo do Aluno}
+
+\institute[POLI/UFRJ] {Universidade Federal do Rio de Janeiro, RJ, Brasil\\
+  Departamento de Especializa\c c\~ao em Engenharia Mecatr\^onica\\
+  Orientador: Nome do Orientador\\}
+  
+\date{\scriptsize{\today}}
+
+% The main document
+
+\begin{document}
+
+\begin{frame}{}
+  \titlepage
+\end{frame}
+
+\begin{frame}{Sumário}
+  \setcounter{tocdepth}{1}
+  \tableofcontents[]
+\end{frame}
+
+\AtBeginSection[]
+{
+\begin{frame}
+\frametitle{Sumário}
+\tableofcontents[currentsection]
+\end{frame}
+}
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Início %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%--------------------------------------------------------------------------------
+
+\section{Introdução}
+
+\subsection{Motiva\c c\~ao}
+
+\begin{frame}{Motiva\c c\~ao}
+
+\begin{block}{T\'itulo}
+
+Inserir t\'opicos:
+%
+\begin{itemize}
+	\item Primeiro t\'opico
+	\item Segundo t\'opico
+	\item Terceiro t\'opico
+\end{itemize}
+%
+\end{block}
+
+\end{frame}
+%--------------------------------------------------------------------------------
+
+
+
+\subsection{Justificativa}
+
+\begin{frame}{Justificativa}
+
+Inserir texto.
+
+\end{frame}
+
+
+\subsection{Objetivo Principal}
+
+\begin{frame}{Objetivo Principal}
+
+Inserir texto.
+
+\end{frame}
+
+
+\subsection{Objetivos Secund\'arios}
+
+\begin{frame}{Objetivos Secund\'arios}
+
+Inserir texto.
+
+\end{frame}
+
+
+\subsection{Metodologia}
+
+\begin{frame}{Metodologia}
+
+Inserir texto.
+
+\end{frame}
+
+
+\subsection{Organiza\c c\~ao do Trabalho}
+
+\begin{frame}{Organiza\c c\~ao do Trabalho}
+
+Inserir texto.
+
+\end{frame}
+
+%--------------------------------------------------------------------------------
+
+\section{Revis\~ao Bibliogr\'afica}
+
+\begin{frame}{Exemplo de Equa\c c\~ao}
+
+Xxx:
+
+\begin{block}
+
+%
+{\scriptsize $$\sum\limits_{i = 1}^6 {\left[ {{}^I{{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{P} }^{0i/C}}\times\left( { - {}^I{{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{F} }_{01i}}} \right) - {}^I{{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{M} }_{01i}}} \right]} \,\, = \,{}^II{I^C} \cdot \,{}^I{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{\alpha} ^C} + \,{ {{}^I{{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{w} }^C}} }\times\,\,{}^II{I^C} \cdot {}^I{\underset{\raise0.2em\hbox{$\smash{\scriptscriptstyle\thicksim}$}}{w} ^C}\,,\,\,i=1..6 $$}
+
+\end{block}
+
+\end{frame}
+
+%--------------------------------------------------------------------------------
+
+\section{M\'etodo Proposto}
+
+\begin{frame}{M\'etodo Proposto}
+
+Xxx:
+
+\end{frame}
+
+%--------------------------------------------------------------------------------
+
+\section{Resultados e Discuss\~oes}
+
+\begin{frame}{Resultados e Discuss\~oes}
+
+Xxx:
+
+\end{frame}
+
+%--------------------------------------------------------------------------------
+
+\section{Conclus\~oes}
+
+\begin{frame}{Conclus\~oes}
+
+Xxx:
+
+\end{frame}
+
+%--------------------------------------------------------------------------------
+
+\end{document}

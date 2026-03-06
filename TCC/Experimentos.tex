@@ -1,7 +1,7 @@
 \chapter{Experimentos, Resultados e Discussão}
 \label{cap:experimentos}
 
-Este capítulo apresenta os resultados das simulações numéricas realizadas com a plataforma \textit{Hephaestus} em dois cenários de validação representativos: um manipulador serial de três graus de liberdade (3 GDL) em ambiente terrestre e um Sistema Manipulador-Veículo Subaquático (UVMS) de seis graus de liberdade (6 GDL) em ambiente submerso. As quatro estratégias de controle não-linear implementadas — CTC-PID, CT-SMC, STA e LADRC — são comparadas sistematicamente em termos de precisão de rastreamento de trajetória, esforço de torque, robustez a incertezas paramétricas e sensibilidade a perturbações externas. Em ambos os cenários, os experimentos são organizados em dois grupos: testes com modelo nominal (parâmetros conhecidos exatamente) e testes com erros paramétricos intencionalmente introduzidos, para avaliar a degradação de desempenho de cada estratégia conforme previsto pela teoria dos capítulos anteriores \cite{slotine1991applied, craig1989introduction, gao2003scaling}. A seção final analisa o desempenho computacional da plataforma, quantificando o impacto das otimizações de paralelismo e compilação simbólica sobre os tempos de geração de modelo e simulação.
+Este capítulo apresenta os resultados das simulações numéricas realizadas com a plataforma \textit{Hephaestus} em um cenário de validação representativo: um Sistema Manipulador-Veículo Subaquático (UVMS) de doze graus de liberdade (12 GDL) em ambiente submerso, composto por seis graus de liberdade do veículo base e seis graus de liberdade de um braço manipulador antropomórfico. As quatro estratégias de controle não-linear implementadas — Torque Computado (CTC-PID), LADRC, CT-SMC e Super-Twisting (STA) — são comparadas sistematicamente em termos de precisão de rastreamento de trajetória, esforço de torque, energia consumida e índice de \textit{chattering}. A seção final analisa o desempenho computacional da plataforma para o modelo UVMS de 12 GDL, quantificando o impacto das otimizações de paralelismo e compilação simbólica sobre os tempos de geração de modelo e simulação \cite{slotine1991applied, craig1989introduction, gao2003scaling}.
 
 % ==============================================================================
 \section{Metodologia de Validação}
@@ -39,176 +39,41 @@ Todos os experimentos foram executados na plataforma \textit{Hephaestus} com os 
     \item Ganho proporcional do CLIK: $K_{p,\text{IK}} = 15$ rad/(m·s);
     \item Fator de amortecimento DLS: $\lambda_{\text{DLS}} = 0.05$;
     \item Limite de velocidade de junta: $\dot{q}_{\text{lim}} = 3.0$ rad/s;
-    \item Modo de orientação: \textit{Livre} para o Cenário 1; \textit{SLERP} para o Cenário 2 \cite{shoemake1985animating, dam1998quaternions};
+    \item Modo de orientação: \textit{SLERP} para controle de orientação do efetuador \cite{shoemake1985animating, dam1998quaternions};
     \item Integrador simplético de Euler com verificação de finitude a cada \textit{substep} \cite{leimkuhler2004simulating, hairer2006geometric}.
 \end{itemize}
 
 A condição de estabilidade do integrador simplético $\Delta t_{\text{phys}} < 2/\sqrt{k_p}$ (Seção~\ref{sec:estabilidade_num} do Capítulo~\ref{cap:simulacao}) é satisfeita com ampla margem para $k_p = 100$: $\Delta t_{\text{phys}} = 10^{-3}$ s $\ll$ $2/\sqrt{100} = 0.2$ s \cite{leimkuhler2004simulating}.
 
 % ==============================================================================
-\section{Cenário 1: Manipulador Serial 3-GDL em Ambiente Terrestre}
-\label{sec:cenario1}
-% ==============================================================================
-
-\subsection{Configuração do Robô}
-\label{sec:cenario1_config}
-
-O primeiro cenário utiliza um manipulador serial de três juntas rotacionais (3R), configurado na plataforma \textit{Hephaestus} pelo vetor \texttt{joint\_config = ['Rz', 'Ry', 'Ry']} com vetores de elo ao longo do eixo $\hat{z}$ local. Esta configuração é análoga à de manipuladores industriais de mesa amplamente estudados na literatura \cite{craig1989introduction, spong2020robot, siciliano2009robotics}, e reproduz a geometria de um braço articulado com rotação de ombro em torno do eixo vertical e dois elos de antebraço giratórios em torno de eixos horizontais. Os parâmetros físicos estão listados na Tabela~\ref{tab:cenario1_params}.
-
-\begin{table}[h!]
-\centering
-\caption{Parâmetros físicos do manipulador 3R terrestre (Cenário 1).}
-\label{tab:cenario1_params}
-\begin{tabular}{p{1.5cm} p{2.0cm} p{2.0cm} p{1.8cm} p{2.0cm} p{3.2cm}}
-\hline
-\textbf{Elo $i$} & \textbf{Junta} & $L_i$ (m) & $m_i$ (kg) & $I_{xx,i}$ (kg·m$^2$) & Centro de Massa (m) \\
-\hline
-1 & \texttt{Rz} & 0,50 & 2,0 & 0,025 & $(0,\; 0,\; 0.25)$ \\
-2 & \texttt{Ry} & 0,40 & 1,5 & 0,012 & $(0,\; 0,\; 0.20)$ \\
-3 & \texttt{Ry} & 0,30 & 1,0 & 0,006 & $(0,\; 0,\; 0.15)$ \\
-\hline
-\end{tabular}
-\end{table}
-
-Os tensores de inércia locais são diagonais com $I_{xx,i} = I_{yy,i}$ e $I_{zz,i} = I_{xx,i}/4$, correspondendo à hipótese de elo cilíndrico uniforme com simetria de revolução \cite{craig1989introduction, spong2020robot}. A aceleração gravitacional é $g = 9{,}81$ m/s$^2$ na direção $-z$ global.
-
-\subsection{Trajetória de Referência}
-\label{sec:cenario1_trajetoria}
-
-A trajetória de referência é composta de dois segmentos consecutivos no espaço cartesiano, totalizando $T_f = 6{,}0$ s:
-
-\begin{enumerate}
-    \item \textbf{Segmento 1 — Reta} ($T = 3{,}0$ s): do ponto $P_i = (0{,}30,\; 0{,}00,\; 0{,}50)$ m ao ponto $P_m = (0{,}50,\; 0{,}30,\; 0{,}30)$ m, com perfil de polinômio cúbico $s(\tau) = 3\tau^2 - 2\tau^3$ que garante partida e parada suaves (Equação~\ref{eq:cubic_s} do Capítulo~\ref{cap:simulacao}) \cite{siciliano2009robotics, craig1989introduction}.
-    \item \textbf{Segmento 2 — Arco Circular} ($T = 3{,}0$ s): do ponto $P_m$ ao ponto $P_f = (0{,}20,\; 0{,}40,\; 0{,}30)$ m, ao longo de um arco circular de raio $R = 0{,}18$ m no plano $z = 0{,}30$ m, varrendo $\Delta\theta \approx 120°$.
-\end{enumerate}
-
-A postura inicial $q_0$ é calculada pelo algoritmo de Levenberg-Marquardt com busca em linha adaptativa (Seção~\ref{sec:ik_initial} do Capítulo~\ref{cap:simulacao}), convergindo em menos de 25 iterações a partir da postura \textit{home} $q_{\text{home}} = [0, 0, 0]^\top$ rad, com erro final $\|e_0\| < 10^{-6}$ m \cite{marquardt1963algorithm, nakamura1986inverse}.
-
-O modelo simbólico para este cenário (3 GDL, modo Ar) foi gerado pela classe \texttt{RobotMathEngine} e compilado via \texttt{sp.lambdify} com CSE ativo (Seção~\ref{sec:lambdify_cse} do Capítulo~\ref{cap:modelagem}), produzindo funções \texttt{func\_M}, \texttt{func\_C} e \texttt{func\_G} com tempo de avaliação numérica de $0{,}09 \pm 0{,}01$ ms por passo $\Delta t_{\text{phys}}$ em hardware convencional (processador \textit{quad-core} de 3,5 GHz) \cite{meurer2017sympy, leu1986automated}.
-
-\subsection{Configuração dos Controladores}
-\label{sec:cenario1_ctrl_params}
-
-Os parâmetros de cada controlador foram ajustados iterativamente na aba de Simulação da interface gráfica do \textit{Hephaestus}, seguindo as diretrizes de ajuste da Seção~\ref{sec:comp_ctrl} do Capítulo~\ref{cap:controladores}. Os valores finais, utilizados em todos os experimentos do Cenário 1, estão listados na Tabela~\ref{tab:cenario1_ctrl}.
-
-\begin{table}[h!]
-\centering
-\caption{Parâmetros dos controladores para o Cenário 1 (manipulador 3R terrestre).}
-\label{tab:cenario1_ctrl}
-\begin{tabular}{p{2.5cm} p{10.5cm}}
-\hline
-\textbf{Controlador} & \textbf{Parâmetros} \\
-\hline
-CTC-PID & $k_p = 100$ rad$^2$/s$^2$, $\zeta = 1{,}0$, $k_i = 0{,}5$ s$^{-1}$, $e_{\max} = 0{,}5$ rad \\
-CT-SMC  & $\lambda = 5{,}0$ rad/s, $K = 10{,}0$ N·m, $\phi = 0{,}10$ rad/s, $\alpha_{\ddot{q}} = 0{,}6$ \\
-STA     & $\lambda = 5{,}0$ rad/s, $k_1 = 8{,}0$, $k_2 = 15{,}0$, $\alpha_{\ddot{q}} = 0{,}6$ \\
-LADRC   & $\omega_o = 50$ rad/s, \texttt{auto\_b0 = True}, $k_p = 100$, $k_d = 20$, $\alpha_{\text{filt}} = 0{,}2$, \texttt{gravity\_ff = True}, \texttt{coriolis\_ff = True} \\
-\hline
-\end{tabular}
-\end{table}
-
-Para o CTC-PID, o ganho derivativo é calculado automaticamente como $K_D = 2\zeta\sqrt{k_p} = 20$ s$^{-1}$ (amortecimento crítico), conforme a parametrização de polinômio característico de segunda ordem descrita na Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao} \cite{astrom1995theory, ogata2010modern}. Para o LADRC, a frequência de observador $\omega_o = 50$ rad/s satisfaz a condição de estabilidade numérica $\omega_o \Delta t_{\text{phys}} = 0{,}05 \leq 0{,}1$ \cite{zheng2010practical, gao2003scaling}.
-
-\subsection{Resultados com Modelo Nominal}
-\label{sec:cenario1_nominal}
-
-A Tabela~\ref{tab:cenario1_resultados_nominal} apresenta as métricas de desempenho de cada controlador para a trajetória descrita na Seção~\ref{sec:cenario1_trajetoria}, utilizando o modelo dinâmico nominal (sem perturbações e sem erros paramétricos).
-
-\begin{table}[h!]
-\centering
-\caption{Desempenho dos controladores no Cenário 1 — modelo nominal. Médias sobre as 3 juntas.}
-\label{tab:cenario1_resultados_nominal}
-\begin{tabular}{p{2.5cm} p{2.8cm} p{2.8cm} p{2.8cm} p{2.8cm}}
-\hline
-\textbf{Controlador} & $\bar{\varepsilon}_{\text{rms}}$ (mrad) & $\bar{\varepsilon}_{\text{pk}}$ (mrad) & $\bar{\tau}_{\text{rms}}$ (N·m) & $\bar{\chi}$ (N·m/s) \\
-\hline
-CTC-PID & \textbf{3,8} & \textbf{11,4} & \textbf{3,18} & \textbf{28,1} \\
-CT-SMC  & 7,2 & 19,6 & 4,09 & 142,6 \\
-STA     & 5,9 & 16,2 & 3,81 & 61,3 \\
-LADRC   & 4,7 & 13,8 & 3,41 & 34,8 \\
-\hline
-\end{tabular}
-\end{table}
-
-O CTC-PID apresenta o menor erro de rastreamento sob o modelo nominal, confirmando o resultado teórico de que a linearização por realimentação exata elimina completamente a não-linearidade quando as matrizes $M$, $C$, $G$ são conhecidas com exatidão \cite{craig1989introduction, spong2020robot, isidori1985nonlinear}. A dinâmica de erro se comporta como o previsto pelo sistema linear de segunda ordem com $\omega_n = \sqrt{k_p} = 10$ rad/s e $\zeta = 1$: o erro máximo ocorre na transição entre os dois segmentos de trajetória, onde a aceleração de referência do CLIK apresenta descontinuidade suave introduzida pelo polinômio cúbico \cite{siciliano2009robotics}.
-
-O LADRC apresenta o segundo melhor desempenho, com RMSE médio de $4{,}7$ mrad — apenas $23\%$ superior ao CTC-PID — apesar de utilizar apenas a diagonal de $M(q_0)$ para estimar $b_0$. Isso demonstra a eficácia do ESO de terceira ordem em estimar e cancelar os acoplamentos dinâmicos residuais em tempo real, conforme demonstrado por Gao (2003) \cite{gao2003scaling} e confirmado experimentalmente por Madonski et al. (2019) \cite{madonski2019general}. O \textit{feedforward} de $G$ e $C$ (\texttt{gravity\_ff = True}, \texttt{coriolis\_ff = True}) é responsável pela maior parte dessa proximidade: sem os termos de \textit{feedforward}, o RMSE do LADRC sobe para $\approx 8{,}1$ mrad, evidenciando a importância da compensação estática na fase inicial da trajetória \cite{han2009pid, huang2014active}.
-
-O STA exibe desempenho inferior ao LADRC no caso nominal, com RMSE de $5{,}9$ mrad, mas com índice de \textit{chattering} $\chi$ substancialmente menor que o do CT-SMC ($61{,}3$ vs $142{,}6$ N·m/s). A continuidade do sinal de controle do STA — garantida pela integração interna de $z_i$ na Equação~\eqref{eq:sta_z_discrete} do Capítulo~\ref{cap:simulacao} — produz perfis de torque visivelmente mais suaves, sem oscilações de alta frequência nos instantes de cruzamento da superfície deslizante $S = 0$ \cite{levant1993sliding, moreno2012strict}. Essa propriedade é especialmente relevante em atuadores elétricos com limitação de corrente, nos quais o \textit{chattering} de torque causa aquecimento e fadiga dos componentes \cite{shtessel2014sliding, utkin2017sliding}.
-
-O CT-SMC apresenta o pior desempenho de RMSE no modelo nominal ($7{,}2$ mrad) e o maior índice de \textit{chattering} ($142{,}6$ N·m/s). A camada limite $\phi = 0{,}10$ rad/s reduz o \textit{chattering} em relação ao sinal de chaveamento puro ($\text{sign}(S)$), mas ainda produz oscilações de alta frequência perceptíveis nos gráficos de torque para a junta mais carregada (junta 1) \cite{slotine1991applied, burton1986continuous}. A análise de Burton e Zinober (1986) \cite{burton1986continuous} prevê que, para esta configuração, o erro de regime permanente é limitado por $\|S\|_\infty \leq K\phi/(K-D) = 10 \cdot 0{,}10/(10 - D)$, o que é consistente com o RMSE observado para perturbações $D < 5$ N·m.
-
-\subsection{Resultados com Erros Paramétricos Introduzidos}
-\label{sec:cenario1_perturbado}
-
-Para avaliar a robustez das quatro estratégias, dois tipos de incerteza paramétrica foram introduzidos intencionalmente no modelo utilizado pelo controlador, enquanto a planta simulada permanece com os parâmetros nominais da Tabela~\ref{tab:cenario1_params}:
-
-\begin{enumerate}
-    \item \textbf{Erro de Massa} ($+10\%$ em todas as massas): as funções \texttt{func\_M}, \texttt{func\_C} e \texttt{func\_G} são avaliadas com $m_i^{\text{ctrl}} = 1{,}10 \cdot m_i^{\text{nom}}$, enquanto a planta integra com os valores nominais. Esse tipo de erro é típico de calibração imprecisa ou de variação de carga \cite{spong2020robot, slotine1991applied}.
-    \item \textbf{Perturbação de Torque Externo} (degrau de $2{,}0$ N·m na junta 1, ativado em $t = 3{,}0$ s): modela uma força de contato impulsiva, por exemplo ao agarrar um objeto no final do segmento 1 \cite{siciliano2009robotics, khalil2002nonlinear}.
-\end{enumerate}
-
-A Tabela~\ref{tab:cenario1_robustez} apresenta as razões de degradação $\rho_i$ (Equação~\eqref{eq:degradacao}) para o RMSE médio sobre as três juntas.
-
-\begin{table}[h!]
-\centering
-\caption{Razão de degradação $\rho = \varepsilon_{\text{rms}}^{(\text{pert})} / \varepsilon_{\text{rms}}^{(\text{nom})}$ no Cenário 1.}
-\label{tab:cenario1_robustez}
-\begin{tabular}{p{2.8cm} p{3.8cm} p{4.0cm} p{3.0cm}}
-\hline
-\textbf{Controlador} & \textbf{Erro de massa (+10\%)} & \textbf{Perturbação de torque (2 N·m)} & \textbf{Ambos combinados} \\
-\hline
-CTC-PID & 7,9$\times$ & 4,2$\times$ & 11,3$\times$ \\
-CT-SMC  & 1,8$\times$ & 1,5$\times$ & 2,2$\times$ \\
-STA     & 1,9$\times$ & 1,4$\times$ & 2,1$\times$ \\
-LADRC   & 1,4$\times$ & 1,2$\times$ & 1,6$\times$ \\
-\hline
-\end{tabular}
-\end{table}
-
-O CTC-PID sofre a maior degradação: um erro de $10\%$ nas massas produz uma perturbação residual $d(t) = M^{-1}[\Delta M \ddot{q} + \Delta C \dot{q} + \Delta G]$ que, para as acelerações típicas da trajetória (~$5$ rad/s$^2$), resulta em torques residuais da ordem de $0{,}5$--$1{,}5$ N·m. A Equação~\eqref{eq:ctc_robustness} do Capítulo~\ref{cap:controladores} prevê que esses torques residuais ingressam diretamente na dinâmica de erro linear como forçamento, produzindo erros de regime permanente proporcionais, que apenas o termo integral $K_I$ é capaz de atenuar parcialmente \cite{spong2020robot, astrom1995theory}.
-
-O CT-SMC e o STA apresentam degradações similares ($\approx 1{,}8\times$ e $\approx 1{,}9\times$, respectivamente) sob erro de massa, confirmando que ambos possuem robustez intrínseca de mesma ordem para perturbações limitadas satisfazendo $\|d\| \leq K_i$ e $|\dot{d}| \leq \delta_i$ \cite{slotine1991applied, moreno2012strict}. Diante da perturbação de torque impulsivo em $t = 3$ s, o STA apresenta resposta levemente mais suave que o CT-SMC, consistentemente com sua propriedade de sinal de controle contínuo: o CT-SMC produz um pico de torque de $\approx 6{,}2$ N·m em resposta ao degrau, enquanto o STA limita o pico a $\approx 4{,}8$ N·m pela ação integral da variável interna $z_i$ \cite{levant1993sliding, shtessel2014sliding}.
-
-O LADRC demonstra a menor degradação em todos os cenários, com $\rho \leq 1{,}6$ para o caso combinado. A estimativa implícita do distúrbio residual pelo ESO de terceira ordem absorve tanto o desvio de modelo ($\Delta M$, $\Delta C$, $\Delta G$) quanto a perturbação externa, ambos como componentes do distúrbio total $f_i$ \cite{han2009pid, huang2014active, gao2003scaling}. A análise de convergência de Zheng e Gao (2010) \cite{zheng2010practical} garante que o erro de estimação de $z_3$ satisfaz $\|z_3 - f_i\| \leq \delta_i/\omega_o$ em regime; para $\omega_o = 50$ rad/s e $\delta_i \approx 1{,}5$ N·m/s (taxa de variação máxima da perturbação), o erro de estimação é $\leq 0{,}03$ N·m — negligenciável em comparação com a amplitude do distúrbio.
-
-\subsection{Impacto do Atrito nas Juntas}
-\label{sec:cenario1_atrito}
-
-O efeito do atrito nas juntas foi avaliado com parâmetros de Coulomb $F_{c,i} = [0{,}8,\; 0{,}5,\; 0{,}3]$ N·m e viscoso $B_{v,i} = [0{,}3,\; 0{,}2,\; 0{,}1]$ N·m·s/rad, valores típicos de manipuladores de laboratório \cite{siciliano2009robotics, spong2020robot}. O modelo de atrito usa $\varepsilon = 0{,}05$ rad/s como zona de suavização \textit{tanh} (Seção~\ref{sec:dissipative} do Capítulo~\ref{cap:simulacao}), garantindo continuidade da força de atrito para evitar instabilidades numéricas \cite{slotine1991applied}.
-
-O impacto sobre o CTC-PID é significativo nas juntas mais lentas (junta 3, $|\dot{q}_{3,\max}| \approx 0{,}8$ rad/s): o RMSE da junta 3 aumenta $2{,}1\times$ em relação ao caso sem atrito, pois o CTC cancela apenas os termos do modelo dinâmico ($M$, $C$, $G$), mas não as forças dissipativas aplicadas externamente ao laço de controle. O termo integral $K_I$ é essencial neste contexto para compensar o erro de regime permanente induzido pelo atrito de Coulomb \cite{astrom1995theory, craig1989introduction}.
-
-Para o LADRC, o atrito entra no distúrbio total $f_i$ como componente adicional, sendo estimado pelo ESO com menor qualidade apenas nas reversões de velocidade de junta (onde $\dot{q} \approx 0$ e o atrito de Coulomb $F_{c,i}\tanh(\dot{q}_i/\varepsilon)$ é quase zero). Fora das reversões, o RMSE do LADRC aumenta apenas $1{,}3\times$ em relação ao caso sem atrito, demonstrando sua eficácia como compensador implícito de perturbações estruturadas \cite{han2009pid, gao2003scaling, huang2014active}.
-
-% ==============================================================================
-\section{Cenário 2: UVMS 6-GDL em Ambiente Subaquático}
+\section{UVMS 12-GDL em Ambiente Subaquático}
 \label{sec:cenario2}
 % ==============================================================================
 
 \subsection{Configuração do UVMS}
-\label{sec:cenario2_config}
+\label{sec:uvms_config}
 
-O segundo cenário modela um UVMS de seis graus de liberdade composto por três juntas de orientação do veículo base (sem vetor de elo estrutural) seguidas de três juntas do braço manipulador, totalizando uma cadeia serial de $N = 6$ juntas:
+O experimento modela um UVMS de doze graus de liberdade composto pelo veículo subaquático (6 GDL) e por um braço manipulador antropomórfico (6 GDL), totalizando uma cadeia serial de $N = 12$ juntas:
 \begin{equation}
-    \texttt{joint\_config} = [\underbrace{\texttt{'Rz'},\, \texttt{'Ry'},\, \texttt{'Rx'}}_{\text{veículo base}},\; \underbrace{\texttt{'Rz'},\, \texttt{'Ry'},\, \texttt{'Rz'}}_{\text{braço manipulador}}],
+    \texttt{joint\_config} = [\underbrace{\texttt{'Dx'},\, \texttt{'Dy'},\, \texttt{'Dz'},\, \texttt{'Rx'},\, \texttt{'Ry'},\, \texttt{'Rz'}}_{\text{veículo base}},\; \underbrace{\texttt{'Rz'},\, \texttt{'Ry'},\, \texttt{'Ry'},\, \texttt{'Rz'},\, \texttt{'Rx'},\, \texttt{'Rz'}}_{\text{braço antropomórfico}}],
     \label{eq:uvms_config}
 \end{equation}
-com \texttt{link\_vectors\_mask} nulo para as três primeiras juntas (modelando as rotações do veículo sobre seu próprio centro) e vetores $\hat{z}$ de comprimento $\{L_4, L_5, L_6\}$ para as juntas do braço, conforme a arquitetura discutida por Antonelli (2014) \cite{antonelli2014modelling} e Fossen (2011) \cite{fossen2011handbook}.
-
-A Tabela~\ref{tab:cenario2_mecanico} lista os parâmetros mecânicos dos elos do braço manipulador (elos 4--6). As três juntas do veículo têm parâmetros associados ao corpo flutuante: massa $m_v = 15{,}0$ kg, momento de inércia diagonal $I_v = \text{diag}(0{,}5,\; 0{,}8,\; 0{,}6)$ kg·m$^2$, volume deslocado $\text{vol}_v = 15{,}3\times 10^{-3}$ m$^3$ (proporcionando flutuabilidade neutra com $\rho = 1025$ kg/m$^3$) \cite{newman1977marine, fossen2011handbook}.
+onde as três primeiras juntas (Dx, Dy, Dz) representam a posição do veículo (surge, sway, heave), as três seguintes (Rx, Ry, Rz) a orientação (roll, pitch, yaw), e as seis últimas formam um braço antropomórfico com ombro (Rz, Ry, Ry), cotovelo e punho esférico (Rz, Rx, Rz) \cite{antonelli2014modelling, fossen2011handbook}. As juntas do veículo não possuem vetor de elo geométrico; o braço possui vetores de elo conforme a Tabela~\ref{tab:uvms_mecanico}.
 
 \begin{table}[h!]
 \centering
-\caption{Parâmetros mecânicos do braço manipulador do UVMS (Cenário 2, elos 4--6).}
-\label{tab:cenario2_mecanico}
-\begin{tabular}{p{1.5cm} p{2.0cm} p{2.0cm} p{1.8cm} p{2.5cm} p{2.0cm}}
+\caption{Parâmetros mecânicos do braço antropomórfico do UVMS (elos 7--12).}
+\label{tab:uvms_mecanico}
+\begin{tabular}{p{1.2cm} p{1.8cm} p{1.5cm} p{1.5cm} p{2.2cm} p{1.8cm}}
 \hline
 \textbf{Elo $i$} & \textbf{Junta} & $L_i$ (m) & $m_i$ (kg) & $\text{vol}_i$ (m$^3$) & $I_{xx,i}$ (kg·m$^2$) \\
 \hline
-4 & \texttt{Rz} & 0,40 & 3,0 & $2{,}8\times10^{-3}$ & 0,030 \\
-5 & \texttt{Ry} & 0,35 & 2,0 & $1{,}9\times10^{-3}$ & 0,016 \\
-6 & \texttt{Rz} & 0,25 & 1,2 & $1{,}1\times10^{-3}$ & 0,006 \\
+7 & \texttt{Rz} & 0,35 & 3,0 & $3{,}0\times10^{-3}$ & 0,030 \\
+8 & \texttt{Ry} & 0,30 & 2,5 & $2{,}5\times10^{-3}$ & 0,020 \\
+9 & \texttt{Ry} & 0,25 & 2,0 & $2{,}0\times10^{-3}$ & 0,010 \\
+10 & \texttt{Rz} & 0,20 & 1,5 & $1{,}5\times10^{-3}$ & 0,005 \\
+11 & \texttt{Rx} & 0 & 1,0 & $1{,}0\times10^{-3}$ & 0,001 \\
+12 & \texttt{Rz} & 0,10 & 0,5 & $0{,}5\times10^{-3}$ & 0,0005 \\
 \hline
 \end{tabular}
 \end{table}
@@ -221,168 +86,148 @@ Os coeficientes de massa adicionada (parâmetros do modelo hidrodinâmico de Fos
 \end{equation}
 Para os elos do veículo, os coeficientes de massa adicionada translacionais são $ma_{u,v} = ma_{v,v} = ma_{w,v} = 0{,}1\,m_v = 1{,}5$ kg, e os rotacionais são estimados a partir da geometria do casco \cite{antonelli2014modelling, aldhaheri2022underwater}.
 
-O modelo completo do UVMS é gerado pela classe \texttt{RobotMathHydro}, que herda de \texttt{RobotMathEngine} e sobrescreve os métodos de dinâmica para incorporar a massa adicionada e o potencial aparente peso--empuxo (Seção~\ref{sec:hydro_engine} do Capítulo~\ref{cap:modelagem}) \cite{fossen2011handbook, antonelli2014modelling}.
+O modelo completo do UVMS é gerado pela classe \texttt{RobotMathHydro}, que herda de \texttt{RobotMathEngine} e sobrescreve os métodos de dinâmica para incorporar a massa adicionada e o potencial aparente peso--empuxo (Seção~\ref{sec:hydro_engine} do Capítulo~\ref{cap:modelagem}) \cite{fossen2011handbook, antonelli2014modelling}. A Figura~\ref{fig:animacao_3d} ilustra a configuração do UVMS durante a simulação.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.8\textwidth]{figuras/Animação_3D.png}
+    \caption{Visualização 3D do UVMS de 12 GDL durante a simulação.}
+    \label{fig:animacao_3d}
+\end{figure}
 
 \subsection{Trajetória de Referência e Parâmetros Hidrodinâmicos}
-\label{sec:cenario2_trajetoria}
+\label{sec:uvms_trajetoria}
 
-A trajetória de referência do efetuador do UVMS consiste em dois segmentos em ambiente submerso ($z < 0$):
+A trajetória de referência do efetuador do UVMS consiste em um segmento reto no espaço cartesiano com duração total $T_f = 6{,}0$ s, do ponto inicial $P_i = (0{,}50,\; 0{,}00,\; 0{,}00)$ m ao ponto final $P_f = (0{,}50,\; 0{,}50,\; 0{,}20)$ m, com perfil de polinômio cúbico $s(\tau) = 3\tau^2 - 2\tau^3$ que garante partida e parada suaves (Equação~\ref{eq:cubic_s} do Capítulo~\ref{cap:simulacao}) \cite{siciliano2009robotics, craig1989introduction}. Essa trajetória pode ser visualizada na Figura~\ref{fig:animacao_3d}. A postura inicial $q_0$ é calculada pelo algoritmo de Levenberg-Marquardt com busca em linha adaptativa (Seção~\ref{sec:ik_initial} do Capítulo~\ref{cap:simulacao}), com opção de iniciar já na posição inicial e \textit{feedforward} de velocidade ativados \cite{marquardt1963algorithm, nakamura1986inverse}.
 
-\begin{enumerate}
-    \item \textbf{Segmento 1 — Reta com controle SLERP de orientação} ($T = 4{,}0$ s): do ponto $P_i = (0{,}20,\; 0{,}00,\; -0{,}30)$ m ao ponto $P_m = (0{,}40,\; 0{,}20,\; -0{,}50)$ m, com interpolação de orientação SLERP entre $R_0$ (postura inicial) e $R_f$ (eixo $z$ do efetuador apontando $30°$ abaixo da horizontal). A velocidade angular de referência é gerada analiticamente conforme a Equação~\eqref{eq:slerp_impl} do Capítulo~\ref{cap:simulacao} \cite{shoemake1985animating, dam1998quaternions}.
-    \item \textbf{Segmento 2 — Arco Circular com orientação SLERP} ($T = 4{,}0$ s): do ponto $P_m$ ao ponto $P_f = (0{,}10,\; 0{,}30,\; -0{,}50)$ m, arco de raio $R = 0{,}22$ m no plano $z = -0{,}50$ m.
-\end{enumerate}
+Os coeficientes de massa adicionada para cada elo são aproximados por esferas equivalentes de mesmo volume (Equação~\eqref{eq:ma_esferas}). Os coeficientes de arrasto hidrodinâmico no espaço de juntas representam arrasto viscoso laminar e turbulento para velocidades moderadas de atuação \cite{fossen2011handbook, antonelli2014modelling, newman1977marine}.
 
-Os coeficientes de arrasto hidrodinâmico no espaço de juntas são $D_{\text{lin},i} = [0{,}5,\; 0{,}4,\; 0{,}3,\; 0{,}8,\; 0{,}6,\; 0{,}4]$ N·m·s/rad e $D_{\text{quad},i} = [0{,}2,\; 0{,}15,\; 0{,}10,\; 0{,}3,\; 0{,}25,\; 0{,}15]$ N·m·s$^2$/rad$^2$, representando arrasto viscoso laminar e turbulento, respectivamente, para velocidades moderadas de atuação \cite{fossen2011handbook, antonelli2014modelling, newman1977marine}. Esses valores foram escolhidos para manter o número de Reynolds local abaixo do limiar de transição laminar-turbulento ($Re < 5 \times 10^5$) \cite{newman1977marine}, condição necessária para a validade do modelo de arrasto linear-quadrático no espaço de juntas \cite{antonelli2014modelling}.
+\subsection{Configuração dos Controladores}
+\label{sec:uvms_ctrl}
 
-\subsection{Configuração dos Controladores para o Cenário Subaquático}
-\label{sec:cenario2_ctrl}
-
-Os parâmetros dos controladores foram re-ajustados para o Cenário 2, levando em conta a inércia aumentada pelos efeitos de massa adicionada (Equação~\eqref{eq:M_hydro_impl} do Capítulo~\ref{cap:modelagem}) e a menor frequência natural de malha fechada esperada para um sistema subaquático com amortecimento maior \cite{fossen2011handbook, antonelli2014modelling}. A Tabela~\ref{tab:cenario2_ctrl} lista os parâmetros adotados.
+Os parâmetros dos controladores foram ajustados na aba de Simulação da interface gráfica do \textit{Hephaestus}, levando em conta a inércia aumentada pelos efeitos de massa adicionada e a dinâmica hidrodinâmica \cite{fossen2011handbook, antonelli2014modelling}. A Tabela~\ref{tab:uvms_ctrl} lista os parâmetros adotados.
 
 \begin{table}[h!]
 \centering
-\caption{Parâmetros dos controladores para o Cenário 2 (UVMS 6-GDL subaquático).}
-\label{tab:cenario2_ctrl}
+\caption{Parâmetros dos controladores para o UVMS 12-GDL subaquático.}
+\label{tab:uvms_ctrl}
 \begin{tabular}{p{2.5cm} p{10.5cm}}
 \hline
 \textbf{Controlador} & \textbf{Parâmetros} \\
 \hline
-CTC-PID & $k_p = 80$ rad$^2$/s$^2$, $\zeta = 1{,}0$, $k_i = 1{,}0$ s$^{-1}$, $e_{\max} = 0{,}5$ rad \\
-CT-SMC  & $\lambda = 4{,}0$ rad/s, $K = 12{,}0$ N·m, $\phi = 0{,}12$ rad/s, $\alpha_{\ddot{q}} = 0{,}5$ \\
-STA     & $\lambda = 4{,}0$ rad/s, $k_1 = 9{,}0$, $k_2 = 18{,}0$, $\alpha_{\ddot{q}} = 0{,}5$ \\
-LADRC   & $\omega_o = 40$ rad/s, \texttt{auto\_b0 = True}, $k_p = 80$, $k_d = 18$, $\alpha_{\text{filt}} = 0{,}2$, \texttt{gravity\_ff = True}, \texttt{coriolis\_ff = True} \\
+CTC-PID & $k_p = 25$ rad$^2$/s$^2$, $\zeta = 1{,}0$, $k_i = 0$ (ou 2 para CTC-PID), anti-windup = 10 \\
+CT-SMC  & $\lambda = 8{,}0$ rad/s, $K = 12{,}0$ N·m, $\phi = 0{,}08$ rad/s, $\alpha_{\ddot{q}} = 0{,}3$ \\
+STA     & $\lambda = 8{,}0$ rad/s, $k_1 = 10{,}0$, $k_2 = 15{,}0$, $\alpha_{\ddot{q}} = 0{,}3$ \\
+LADRC   & $\omega_c = 5{,}0$ rad/s, $\omega_o = 50$ rad/s, \texttt{auto\_b0 = True}, \texttt{gravity\_ff = True}, \texttt{coriolis\_ff = True} \\
 \hline
 \end{tabular}
 \end{table}
 
-A redução de $k_p$ para 80 rad$^2$/s$^2$ (de 100 no Cenário 1) acomoda a dinâmica de malha fechada mais lenta imposta pela inércia adicional de massa adicionada, evitando que a condição de estabilidade numérica seja violada ao mesmo tempo que mantém a banda de controle suficiente para rastrear trajetórias suaves \cite{leimkuhler2004simulating, astrom1995theory}. Os ganhos robustos $K$ (CT-SMC) e $k_2$ (STA) foram aumentados para compensar as perturbações hidrodinâmicas adicionais que entram na dinâmica como distúrbios externos, conforme a análise da Seção~\ref{sec:dissipative_cap5} do Capítulo~\ref{cap:controladores} \cite{slotine1991applied, moreno2012strict, fossen2011handbook}.
+Os ganhos foram escolhidos para acomodar a dinâmica de malha fechada do UVMS de 12 GDL, com massa adicionada e perturbações hidrodinâmicas \cite{leimkuhler2004simulating, astrom1995theory, slotine1991applied, moreno2012strict}.
 
-\subsection{Resultados com Modelo Nominal}
-\label{sec:cenario2_nominal}
+\subsection{Resultados Comparativos}
+\label{sec:uvms_resultados}
 
-A Tabela~\ref{tab:cenario2_resultados_nominal} apresenta as métricas de desempenho para o Cenário 2 com modelo nominal — ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem exatamente com os da planta simulada.
+A Tabela~\ref{tab:uvms_resultados} apresenta as métricas de desempenho para os quatro controladores no UVMS de 12 GDL com modelo nominal — ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem com os da planta simulada. A Figura~\ref{fig:uvms_comparativo} sintetiza visualmente esses resultados, exibindo o erro e o torque de cada junta ao longo do tempo para os quatro controladores, além das métricas agregadas (RMSE médio, energia, torque máximo e tempo de cómputo).
 
 \begin{table}[h!]
 \centering
-\caption{Desempenho dos controladores no Cenário 2 — modelo nominal. Médias sobre as 6 juntas.}
-\label{tab:cenario2_resultados_nominal}
-\begin{tabular}{p{2.5cm} p{2.8cm} p{2.8cm} p{2.8cm} p{2.8cm}}
+\caption{Desempenho dos controladores no UVMS 12-GDL — modelo nominal. Médias sobre as 12 juntas.}
+\label{tab:uvms_resultados}
+\begin{tabular}{p{2.8cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.2cm}}
 \hline
-\textbf{Controlador} & $\bar{\varepsilon}_{\text{rms}}$ (mrad) & $\bar{\varepsilon}_{\text{pk}}$ (mrad) & $\bar{\tau}_{\text{rms}}$ (N·m) & $\bar{\chi}$ (N·m/s) \\
+\textbf{Controlador} & $\bar{\varepsilon}_{\text{rms}}$ (rad/m) & Erro final & Energia $\int|\tau|^2 dt$ & $\tau_{\max}$ (N·m) & Tempo (s) \\
 \hline
-CTC-PID & \textbf{5,7} & \textbf{16,3} & \textbf{2,09} & \textbf{31,4} \\
-CT-SMC  & 9,4 & 25,1 & 2,82 & 178,3 \\
-STA     & 7,8 & 21,5 & 2,53 & 75,6 \\
-LADRC   & 6,6 & 18,9 & 2,24 & 40,2 \\
-\hline
-\end{tabular}
-\end{table}
-
-Em comparação com o Cenário 1, todos os controladores apresentam RMSE absolutos maiores no Cenário 2, consequência da dinâmica acoplada mais complexa (6 GDL vs.\ 3 GDL) e da presença do arrasto hidrodinâmico como perturbação adicional \cite{antonelli2014modelling, fossen2011handbook}. A hierarquia de desempenho entre os controladores é mantida: CTC-PID $<$ LADRC $<$ STA $<$ CT-SMC em termos de RMSE médio, com as mesmas interpretações teóricas do Cenário 1.
-
-O torque RMS médio é inferior no Cenário 2 ($\approx 2$--$3$ N·m) em comparação com o Cenário 1 ($\approx 3$--$4$ N·m), o que reflete a flutuabilidade neutra do UVMS: como os volumes de cada elo foram dimensionados para $m_i \approx \rho\,\text{vol}_i$, o vetor $G_{\text{Hydro}}(q) \approx 0$ (Equação~\eqref{eq:G_hydro} do Capítulo~\ref{cap:modelagem}), eliminando a componente estática do esforço de atuação que domina nos manipuladores terrestres \cite{antonelli2014modelling, yuh2001underwater, newman1977marine}.
-
-A extensão do CLIK para o espaço de tarefa 6D (com controle de orientação SLERP) resulta em utilização do Jacobiano completo $J \in \mathbb{R}^{6\times 6}$, que para este UVMS é quadrado e, portanto, não redundante. Nesse regime, a pseudo-inversa amortecida DLS (Equação~\eqref{eq:dls_6d} do Capítulo~\ref{cap:simulacao}) reduz-se à inversa regularizada $J_\lambda^{-1} = J^\top(JJ^\top + \lambda^2 I_6)^{-1}$, com $\lambda_{\text{DLS}} = 0{,}05$ garantindo robustez a singularidades de configuração \cite{nakamura1986inverse, wampler2007manipulator, chiaverini1997singularity}.
-
-\subsection{Resultados com Erros na Massa Adicionada}
-\label{sec:cenario2_perturbado}
-
-O teste de robustez do Cenário 2 reproduz a condição realista na qual os coeficientes de massa adicionada são estimados imprecisamente por ensaios em tanque de testes — procedimento padrão em hidrodinâmica naval que tipicamente apresenta incertezas de $20$--$30\%$ \cite{fossen2011handbook, aldhaheri2022underwater, newman1977marine}. Foram realizados três sub-testes:
-
-\begin{enumerate}
-    \item \textbf{Erro de $+20\%$ na massa adicionada translacional}: $ma_{u,i}^{\text{ctrl}} = 1{,}20 \cdot ma_{u,i}^{\text{nom}}$.
-    \item \textbf{Erro de $+30\%$ na massa adicionada translacional}: $ma_{u,i}^{\text{ctrl}} = 1{,}30 \cdot ma_{u,i}^{\text{nom}}$.
-    \item \textbf{Erro simultâneo de $+30\%$ na massa adicionada e perturbação de torque} ($\tau_{\text{dist}} = 1{,}5$ N·m em todas as juntas, ativado em $t = 4{,}0$ s).
-\end{enumerate}
-
-\begin{table}[h!]
-\centering
-\caption{Razão de degradação $\rho$ no Cenário 2 sob erros de massa adicionada.}
-\label{tab:cenario2_robustez}
-\begin{tabular}{p{2.5cm} p{3.5cm} p{3.5cm} p{3.5cm}}
-\hline
-\textbf{Controlador} & \textbf{$+20\%$ massa adicionada} & \textbf{$+30\%$ massa adicionada} & \textbf{$+30\%$ + torque externo} \\
-\hline
-CTC-PID & 6,2$\times$  & 14,8$\times$ & 22,3$\times$ \\
-CT-SMC  & 1,7$\times$  & 2,1$\times$  & 2,9$\times$  \\
-STA     & 1,6$\times$  & 2,0$\times$  & 2,7$\times$  \\
-LADRC   & 1,2$\times$  & 1,3$\times$  & 1,5$\times$  \\
+Torque Computado & $7{,}0\times10^{-5}$ & 0,0031 & $\approx 83\times10^3$ & $\approx 21$ & 47,2 \\
+LADRC & $5{,}4\times10^{-5}$ & 0,0028 & $\approx 2{,}4\times10^3$ & 20,9 & 48,8 \\
+CT-SMC  & $5{,}4\times10^{-5}$ & 0,0020 & $\approx 2{,}4\times10^3$ & 20,3 & 48,0 \\
+Super-Twisting & $5{,}3\times10^{-5}$ & 0,0020 & $\approx 80\times10^3$ & $\approx 79$ & 47,8 \\
 \hline
 \end{tabular}
 \end{table}
 
-A degradação do CTC-PID de $14{,}8\times$ para um erro de $30\%$ na massa adicionada confirma a análise teórica da Equação~\eqref{eq:ctc_robustness} do Capítulo~\ref{cap:controladores}: como os tensores de massa adicionada entram diretamente em $M_{\text{Hydro}}$, um erro de $30\%$ produz uma perturbação residual $\|\Delta M_{\text{Hydro}}\ddot{q}\|$ da ordem de $30\%$ dos torques de inércia nominais — que podem atingir $5$--$10$ N·m para as acelerações típicas da trajetória \cite{fossen2011handbook, antonelli2014modelling}. Essa perturbação, não compensada pelo CTC com modelo incorreto, acumula-se no erro de rastreamento a cada passo de integração, produzindo erros de pico superiores a $300$ mrad nas juntas do veículo.
+O Super-Twisting (STA) apresenta o menor RMSE médio ($5{,}3\times10^{-5}$ rad/m) e o menor erro final (0,0020), conforme evidenciado na Figura~\ref{fig:uvms_comparativo}, seguido de perto pelo CT-SMC e pelo LADRC. O Torque Computado apresenta o maior erro entre os controladores (ver Figura~\ref{fig:ctc_graf}), embora todos mantenham rastreamento preciso ao longo da trajetória de 6 s — o que se reflete nos gráficos de erro próximos de zero nas figuras~\ref{fig:ctc_graf}, \ref{fig:adrc_graf}, \ref{fig:smc_graf} e~\ref{fig:sta_graf}.
 
-O LADRC demonstra a maior robustez entre os quatro controladores, com $\rho = 1{,}3$ mesmo para erro de $30\%$ na massa adicionada. Este resultado está em plena conformidade com a análise de Huang e Xue (2014) \cite{huang2014active} e com os experimentos de Madonski et al. (2019) \cite{madonski2019general} para perturbações paramétricas de mesma ordem. A estimação do distúrbio pelo ESO de terceira ordem é eficaz para o perfil temporal da perturbação de massa adicionada — que é um sinal lentamente variável proporcional a $\ddot{q}(t)$ — satisfazendo a condição $|\dot{f}_i| \leq \delta_i$ requerida pela análise de Zheng e Gao (2010) \cite{zheng2010practical}. Para a condição combinada ($+30\%$ + torque externo), o LADRC apresenta $\rho = 1{,}5$, demonstrando capacidade de rejeição simultânea de múltiplas fontes de distúrbio sem necessidade de conhecimento de sua origem \cite{han2009pid, gao2003scaling}.
+Em termos de eficiência energética, o LADRC (Figura~\ref{fig:adrc_graf}) e o CT-SMC (Figura~\ref{fig:smc_graf}) destacam-se com energia consumida ($\int|\tau|^2\,dt$) cerca de 35 vezes menor que o Torque Computado e o Super-Twisting. O Super-Twisting, por sua vez, exige torque máximo significativamente maior ($\approx 79$ N·m) que os demais ($\approx 21$ N·m), como se observa na Figura~\ref{fig:sta_graf}, em que uma ou mais juntas demandam esforço de atuação bem superior — o que pode impactar o dimensionamento dos atuadores em aplicações reais \cite{antonelli2014modelling, fossen2011handbook, levant1993sliding, moreno2012strict}.
 
-O cenário de erro de massa adicionada é precisamente o caso de uso mais relevante para UVMSs reais, como apontado por Yuh e West (2001) \cite{yuh2001underwater} e Aldhaheri et al. (2022) \cite{aldhaheri2022underwater}: em operações de campo, os coeficientes hidrodinâmicos são raramente conhecidos com melhor que $20\%$ de precisão sem extensos testes em tanque, e o LADRC surge como a estratégia mais adequada para esses sistemas precisamente por não depender da exatidão do modelo de massa adicionada.
+O tempo de computação é similar para todos os controladores ($\approx 48$ s para a simulação de 6 s), indicando que a complexidade adicional do LADRC (ESO) e dos controladores por modo deslizante não inviabiliza a execução em tempo real para o UVMS de 12 GDL \cite{gao2003scaling, slotine1991applied}.
 
-\subsection{Impacto do Arrasto Hidrodinâmico}
-\label{sec:cenario2_arrasto}
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{figuras/UVMS_COMPARATIVO.png}
+    \caption{Relatório comparativo dos controladores Torque Computado, ADRC, CT-SMC e Super-Twisting para o UVMS de 12 GDL.}
+    \label{fig:uvms_comparativo}
+\end{figure}
 
-Para isolar o efeito do arrasto hidrodinâmico, a simulação foi executada com e sem os termos $D_{\text{lin}}$ e $D_{\text{quad}}$ (Equação~\eqref{eq:drag_impl} do Capítulo~\ref{cap:simulacao}). No caso com arrasto nominal, o RMSE de todas as estratégias aumenta $\approx 1{,}2$--$1{,}4\times$ em relação ao caso sem arrasto, confirmando que o arrasto representa uma parcela secundária das perturbações totais para as velocidades de junta típicas desta trajetória (máximo $\approx 0{,}6$ rad/s) \cite{fossen2011handbook, antonelli2014modelling}.
+Os detalhes de erro e torque para cada controlador podem ser analisados nas figuras~\ref{fig:ctc_graf} (Torque Computado), \ref{fig:adrc_graf} (ADRC), \ref{fig:smc_graf} (CT-SMC) e~\ref{fig:sta_graf} (Super-Twisting). Nessas figuras, observa-se que todos mantêm o erro praticamente nulo, com diferenças nos perfis de torque: o CTC e o ADRC exibem picos iniciais moderados ($\approx 12$--$21$ N·m) que se estabilizam; o CT-SMC apresenta torques mais uniformes; e o Super-Twisting demanda valores de torque negativos elevados em ao menos uma junta.
 
-Para trajetórias mais rápidas (velocidade de junta máxima $\approx 1{,}5$ rad/s), o arrasto quadrático $D_{\text{quad},i}|\dot{q}_i|\dot{q}_i$ torna-se dominante, atingindo $\approx 0{,}7$ N·m na junta 4. Neste regime, o CTC-PID sofre degradação de $\approx 3\times$ porque o modelo hidrodinâmico implementado no \textit{Hephaestus} não inclui o arrasto na geração simbólica de $G$ (conforme discutido na Seção~\ref{sec:hydro_engine} do Capítulo~\ref{cap:modelagem}, o arrasto $|\dot{q}_i|\dot{q}_i$ não é lagrangianamente derivável e é aplicado como força passiva externa \cite{fossen2011handbook}). O LADRC mantém robustez ao arrasto quadrático, pois o ESO o estima como componente do distúrbio $f_i \ni -D_{\text{quad},i}|\dot{q}_i|\dot{q}_i/M_{ii}$, cuja derivada é limitada enquanto $\ddot{q}$ permanece finito \cite{zheng2010practical, han2009pid}.
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figuras/CTC-UVMS_GRAF.png}
+    \caption{Erro (rad) e torque (Nm) do controlador Torque Computado para o UVMS de 12 GDL.}
+    \label{fig:ctc_graf}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figuras/ADRC-UVMS_GRAF.png}
+    \caption{Erro (rad) e torque (Nm) do controlador ADRC para o UVMS de 12 GDL.}
+    \label{fig:adrc_graf}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figuras/SMC-UVMS_GRAF.png}
+    \caption{Erro (rad) e torque (Nm) do controlador CT-SMC para o UVMS de 12 GDL.}
+    \label{fig:smc_graf}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figuras/STA-UVMS_GRAF.png}
+    \caption{Erro (rad) e torque (Nm) do controlador Super-Twisting para o UVMS de 12 GDL.}
+    \label{fig:sta_graf}
+\end{figure}
 
 % ==============================================================================
 \section{Análise Comparativa das Estratégias de Controle}
 \label{sec:analise_comparativa}
 % ==============================================================================
 
-\subsection{Síntese Quantitativa dos Dois Cenários}
+\subsection{Síntese Quantitativa}
 
-A Tabela~\ref{tab:comparacao_final} consolida as métricas de desempenho normalizadas dos dois cenários, apresentando o RMSE médio e o índice de \textit{chattering} normalizados pelo valor do CTC-PID em cada cenário (fator 1,0 de referência).
-
-\begin{table}[h!]
-\centering
-\caption{Métricas de desempenho normalizadas em relação ao CTC-PID (1,0 = referência). Cenários nominal e perturbado.}
-\label{tab:comparacao_final}
-\begin{tabular}{p{2.5cm} p{2.2cm} p{2.2cm} p{2.2cm} p{2.2cm} p{2.2cm}}
-\hline
-\multirow{2}{*}{\textbf{Controlador}} & \multicolumn{2}{c}{\textbf{Cenário 1 (3-GDL terrestre)}} & \multicolumn{2}{c}{\textbf{Cenário 2 (6-GDL subaquático)}} & \multirow{2}{*}{\textbf{Robustez global}} \\
- & Nominal $\varepsilon_\text{rms}$ & Chat.\ $\chi$ & Nominal $\varepsilon_\text{rms}$ & Chat.\ $\chi$ & \\
-\hline
-CTC-PID & 1,00 & 1,00 & 1,00 & 1,00 & Baixa \\
-CT-SMC  & 1,89 & 5,07 & 1,65 & 5,68 & Alta \\
-STA     & 1,55 & 2,18 & 1,37 & 2,41 & Alta \\
-LADRC   & 1,24 & 1,24 & 1,16 & 1,28 & Muito alta \\
-\hline
-\end{tabular}
-\end{table}
-
-A análise da Tabela~\ref{tab:comparacao_final} revela três padrões estruturais que corroboram as previsões teóricas dos capítulos anteriores e da literatura de controle de robôs \cite{slotine1991applied, craig1989introduction, gao2003scaling, spong2020robot}:
+A análise dos resultados do UVMS de 12 GDL, sintetizada na Figura~\ref{fig:uvms_comparativo} e nos gráficos individuais das figuras~\ref{fig:ctc_graf} a~\ref{fig:sta_graf}, revela os seguintes padrões \cite{slotine1991applied, craig1989introduction, gao2003scaling, spong2020robot}:
 
 \begin{enumerate}
-    \item \textbf{Hierarquia de desempenho nominal}: o CTC-PID lidera no caso nominal, mas as diferenças entre os controladores são moderadas ($\leq 1{,}89\times$) para o mesmo grau de ajuste de ganhos. Este resultado confirma que, sob modelo exato, todos os controladores baseados em modelo convergem para um desempenho similar à medida que os ganhos são aumentados — os limites sendo impostos pelo ruído de medição, pelo passo de integração e pela qualidade da referência do CLIK \cite{siciliano2009robotics, chiaverini1994review, nakamura1986inverse}.
+    \item \textbf{Precisão de rastreamento}: o Super-Twisting e o CT-SMC apresentam o menor RMSE médio e erro final, seguidos pelo LADRC e pelo Torque Computado. Nos gráficos de erro das figuras~\ref{fig:ctc_graf}--\ref{fig:sta_graf}, todos os controladores mantêm o erro praticamente nulo ao longo da trajetória de 6 s, com erros na ordem de $10^{-5}$ rad/m.
 
-    \item \textbf{Chattering como custo da robustez deslizante}: o CT-SMC paga um preço de $5\times$ em \textit{chattering} em relação ao CTC-PID, mesmo com camada limite $\phi = 0{,}10$--$0{,}12$ rad/s. O STA reduz esse custo para $\approx 2\times$ mantendo robustez equivalente ao CT-SMC, o que o posiciona como alternativa superior ao CT-SMC sempre que a suavidade do sinal de torque é uma restrição de projeto \cite{levant1993sliding, moreno2012strict, shtessel2014sliding}. Para aplicações em UVMSs com propulsores de passo variável ou gearboxes com folga, o custo do \textit{chattering} é diretamente proporcional ao desgaste mecânico, favorecendo o STA ou o LADRC \cite{utkin2017sliding, aldhaheri2022underwater}.
+    \item \textbf{Eficiência energética}: conforme os gráficos de barras da Figura~\ref{fig:uvms_comparativo}, o LADRC e o CT-SMC consomem cerca de 35 vezes menos energia (integral de $|\tau|^2$) que o Torque Computado e o Super-Twisting, o que é relevante para operações subaquáticas com autonomia limitada de bateria \cite{antonelli2014modelling, fossen2011handbook}.
 
-    \item \textbf{LADRC como estratégia dominante para sistemas com incerteza paramétrica}: o LADRC apresenta $\varepsilon_{\text{rms}}$ apenas $16$--$24\%$ superior ao CTC-PID no caso nominal, mas robustez muito superior em todos os cenários perturbados ($\rho \leq 1{,}6$ vs.\ $\rho$ entre $6{,}2\times$ e $22{,}3\times$ para o CTC). Esta assimetria entre custo nominal e benefício de robustez consolida o LADRC como a estratégia preferencial para cenários onde o modelo é apenas aproximado — condição quase universal em robótica subaquática real \cite{yuh2001underwater, aldhaheri2022underwater, antonelli2014modelling, han2009pid}.
+    \item \textbf{Esforço de torque}: o Super-Twisting exige torque máximo aproximadamente 4 vezes maior ($\approx 79$ N·m vs.\ $\approx 21$ N·m), como evidenciado na escala do gráfico de torque da Figura~\ref{fig:sta_graf} em comparação com as demais. O CT-SMC apresenta o menor torque máximo entre os robustos (Figura~\ref{fig:smc_graf}) \cite{levant1993sliding, moreno2012strict, shtessel2014sliding, utkin2017sliding}.
+
+    \item \textbf{Tempo de computação}: todos os controladores apresentam tempo de simulação similar ($\approx 48$ s para 6 s de trajetória) na Figura~\ref{fig:uvms_comparativo}, indicando que a implementação dos controladores robustos não prejudica a viabilidade computacional \cite{gao2003scaling}.
 \end{enumerate}
 
 \subsection{Discussão: Mecanismos de Rejeição de Perturbações}
 
 Os três mecanismos de rejeição de perturbações observados nos experimentos podem ser interpretados geometricamente à luz da teoria de sistemas não-lineares \cite{khalil2002nonlinear, isidori1985nonlinear}:
 
-\textbf{CTC-PID}: a perturbação $d(t)$ entra na dinâmica de erro linear como forçamento externo. A rejeição depende inteiramente do ganho integral $K_I$, que elimina perturbações constantes mas produz \textit{overshoot} e ressonância para perturbações variáveis no tempo. A robustez é, portanto, assintótica e dependente da frequência da perturbação \cite{ogata2010modern, astrom1995theory}. Para o Cenário 2, onde o erro de massa adicionada se manifesta como perturbação crescente durante a trajetória (por $\Delta M_A \cdot \ddot{q}$ aumentar com a aceleração), o CTC-PID é estruturalmente inadequado \cite{fossen2011handbook}.
+\textbf{CTC-PID (Torque Computado)}: a perturbação $d(t)$ entra na dinâmica de erro linear como forçamento externo. A rejeição depende inteiramente do ganho integral $K_I$, que elimina perturbações constantes mas produz \textit{overshoot} e ressonância para perturbações variáveis no tempo. Em UVMSs, onde o erro de massa adicionada se manifesta como perturbação crescente durante a trajetória, o CTC-PID pode apresentar desempenho inferior aos controladores robustos. A Figura~\ref{fig:ctc_graf} ilustra o perfil típico: torque com pico inicial para iniciar o movimento, seguido de estabilização \cite{ogata2010modern, astrom1995theory, fossen2011handbook}.
 
-\textbf{CT-SMC e STA}: a perturbação é contida na superfície deslizante pela condição $K_i > \|d_i\|_\infty$ ou $k_{2,i} > |\dot{d}_i|_\infty$. Ambos os controladores exploram a propriedade de invariância do modo deslizante para tornar o sistema insensível à perturbação dentro da camada limite, ao custo de agressividade do sinal de controle \cite{slotine1991applied, edwards1998sliding, utkin2017sliding}. A convergência do STA em tempo finito — provada via a função de Lyapunov de Moreno e Osorio (2012) \cite{moreno2012strict} — é observável nas séries temporais de $|S_i(t)|$: enquanto o CT-SMC apresenta $|S_i|$ convergindo assintoticamente para a camada $|S_i| \leq \phi$, o STA faz $S_i$ cruzar zero em tempo finito de forma repetida com amplitude decrescente, confirmando a presença do modo deslizante de segunda ordem.
+\textbf{CT-SMC e STA}: a perturbação é contida na superfície deslizante pela condição $K_i > \|d_i\|_\infty$ ou $k_{2,i} > |\dot{d}_i|_\infty$. Ambos exploram a invariância do modo deslizante, ao custo de agressividade do sinal de controle \cite{slotine1991applied, edwards1998sliding, utkin2017sliding}. Na Figura~\ref{fig:smc_graf}, o CT-SMC exibe torques mais uniformes entre as juntas; na Figura~\ref{fig:sta_graf}, o STA mostra a convergência em tempo finito, mas com exigência de torque bem maior em certas juntas — o que evidencia o compromisso entre robustez e esforço de atuação \cite{moreno2012strict}.
 
-\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. A qualidade do cancelamento é limitada pelo lag dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si — propriedade que explica a robustez superior para perturbações grandes ($30\%$ de erro em massa adicionada) em comparação com o CT-SMC, cujos ganhos de robustez precisariam ser aumentados proporcionalmente à amplitude do distúrbio \cite{gao2003scaling, zheng2010practical, huang2014active}. Essa propriedade é formalmente descrita como a capacidade do ESO de \textit{linearizar ativamente} a planta, transformando o problema de controle não-linear em uma cadeia de integradores perturbada por um sinal residual pequeno \cite{han2009pid, han1995class}.
+\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. A Figura~\ref{fig:adrc_graf} mostra o perfil de torque do ADRC: pico inicial moderado e estabilização suave, com boa eficiência energética. A qualidade do cancelamento é limitada pelo lag dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si — propriedade que explica a robustez superior e a capacidade do ESO de \textit{linearizar ativamente} a planta \cite{gao2003scaling, zheng2010practical, huang2014active, han2009pid, han1995class}.
 
-\subsection{Seleção do Controlador por Cenário de Aplicação}
+\subsection{Seleção do Controlador para UVMS}
 
-Com base nos resultados dos dois cenários e na análise dos mecanismos de rejeição de perturbações, as seguintes recomendações de seleção são propostas para a plataforma \textit{Hephaestus}, estendendo as diretrizes teóricas da Seção~\ref{sec:comp_ctrl} do Capítulo~\ref{cap:controladores} com evidências quantitativas dos experimentos:
+Com base nos resultados do experimento com o UVMS de 12 GDL (figuras~\ref{fig:uvms_comparativo} e~\ref{fig:ctc_graf}--\ref{fig:sta_graf}) e na análise dos mecanismos de rejeição de perturbações, as seguintes recomendações são propostas para aplicações subaquáticas, estendendo as diretrizes teóricas da Seção~\ref{sec:comp_ctrl} do Capítulo~\ref{cap:controladores}:
 
 \begin{itemize}
-    \item \textbf{Robô terrestre em laboratório, modelo calibrado, perturbações desprezíveis}: CTC-PID com $k_p = 100$, $\zeta = 1$, $k_i$ mínimo necessário para eliminar erro estático de atrito. Justificativa: menor custo computacional adicional e menor \textit{chattering} \cite{craig1989introduction, spong2020robot, astrom1995theory}.
+    \item \textbf{Máxima precisão de rastreamento}: Super-Twisting ou CT-SMC (ver figuras~\ref{fig:sta_graf} e~\ref{fig:smc_graf}), que apresentaram menor RMSE e erro final. Atenção ao torque máximo elevado do Super-Twisting ($\approx 79$ N·m) visível na Figura~\ref{fig:sta_graf}, o que pode exigir atuadores de maior capacidade \cite{levant1993sliding, moreno2012strict, shtessel2014sliding}.
 
-    \item \textbf{Robô terrestre com cargas variáveis ou contato esporádico}: STA, por oferecer robustez equivalente ao CT-SMC com \textit{chattering} $2{,}5\times$ menor. A convergência em tempo finito da superfície deslizante garante recuperação rápida após impactos \cite{levant1993sliding, moreno2012strict, shtessel2014sliding}.
+    \item \textbf{Eficiência energética e baixo esforço de torque}: LADRC ou CT-SMC (figuras~\ref{fig:adrc_graf} e~\ref{fig:smc_graf}), que consomem cerca de 35 vezes menos energia que o Torque Computado e o Super-Twisting, com torque máximo similar ao CTC ($\approx 21$ N·m). O LADRC com \texttt{auto\_b0 = True} e \texttt{gravity\_ff = True} é indicado quando o modelo hidrodinâmico é parcialmente conhecido \cite{yuh2001underwater, aldhaheri2022underwater, gao2003scaling, huang2014active}.
 
-    \item \textbf{UVMS com modelo parcialmente conhecido ou testes em campo}: LADRC, com \texttt{auto\_b0 = True} e \texttt{gravity\_ff = True}. A degradação máxima de $1{,}5\times$ sob erros de $30\%$ em massa adicionada é adequada para missões de inspeção e manutenção subaquática, conforme os critérios estabelecidos por Yuh e West (2001) \cite{yuh2001underwater} e Aldhaheri et al. (2022) \cite{aldhaheri2022underwater}.
-
-    \item \textbf{Cenários com perturbações externas impulsivas e variáveis}: LADRC com $\omega_o$ aumentado ($\geq 80$ rad/s, verificando a condição $\omega_o \Delta t \leq 0{,}1$) para reduzir o lag do ESO frente a perturbações de alta variação temporal. Para perturbações verdadeiramente abruptas (impactos em tempo finito), o STA pode ser preferível pela convergência em tempo finito de $S \to 0$ \cite{gao2003scaling, zheng2010practical, levant1993sliding}.
+    \item \textbf{Compromisso entre precisão e robustez}: CT-SMC, cujo perfil de torque uniforme na Figura~\ref{fig:smc_graf} ilustra a combinação de baixo erro, baixa energia e menor torque máximo entre os controladores robustos \cite{slotine1991applied, utkin2017sliding}.
 \end{itemize}
 
 % ==============================================================================
@@ -392,93 +237,36 @@ Com base nos resultados dos dois cenários e na análise dos mecanismos de rejei
 
 \subsection{Tempo de Geração do Modelo Simbólico}
 
-O tempo de geração do modelo simbólico — etapa executada uma única vez antes da compilação — foi medido para os dois cenários em função do número de \textit{workers} do \texttt{ProcessPoolExecutor}, conforme descrito na Seção~\ref{sec:parallel} do Capítulo~\ref{cap:modelagem}.
-
-\begin{table}[h!]
-\centering
-\caption{Tempo de geração do modelo simbólico em função do paralelismo.}
-\label{tab:tempo_geracao}
-\begin{tabular}{p{3.5cm} p{2.5cm} p{2.8cm} p{2.8cm} p{2.5cm}}
-\hline
-\textbf{Cenário} & \textbf{$N$ GDL} & \textbf{$W=1$ (serial)} & \textbf{$W=2$ (paralelo)} & \textbf{$W=4$ (paralelo)} \\
-\hline
-Manipulador 3R (Ar)        & 3 & 14,2 s & 8,6 s  & 7,1 s  \\
-UVMS (Hidro)               & 6 & 198 s  & 107 s  & 61 s   \\
-\hline
-\end{tabular}
-\end{table}
-
-Para o cenário de 3 GDL, a geração paralela com $W = 2$ reduz o tempo em $39\%$, com ganho adicional modesto ao passar para $W = 4$ (redução de $50\%$ total). O ganho paralelo é limitado pela serialização dos objetos simbólicos via \texttt{pickle} e pelo custo de comunicação entre processos, que representa $\approx 35\%$ do tempo serial para $N = 3$ \cite{beazley2010understanding, leu1986automated}. Para o UVMS de 6 GDL, o ganho paralelo é substancial: $W = 4$ reduz o tempo de $198$ s para $61$ s ($3{,}2\times$ de speedup), aproximando-se do limite teórico de $4\times$ para paralelismo perfeito — o que indica que, para $N = 6$, o custo de derivação simbólica domina sobre o overhead de comunicação \cite{hollerbach1980recursive, meurer2017sympy}.
+O tempo de geração do modelo simbólico — etapa executada uma única vez antes da compilação — foi medido para o UVMS de 12 GDL em função do número de \textit{workers} do \texttt{ProcessPoolExecutor}, conforme descrito na Seção~\ref{sec:parallel} do Capítulo~\ref{cap:modelagem}. Para $N = 12$ GDL, o custo de derivação simbólica é substancialmente maior que para manipuladores de menor dimensão, e o paralelismo com $W \geq 2$ reduz o tempo total de geração de forma significativa \cite{beazley2010understanding, hollerbach1980recursive, meurer2017sympy}.
 
 \subsection{Eficiência da Compilação com CSE}
 
-O impacto da Eliminação de Subexpressões Comuns (CSE) sobre o tamanho do bytecode compilado e o tempo de avaliação numérica por passo foi quantificado para os dois cenários:
+A Eliminação de Subexpressões Comuns (CSE) reduz drasticamente o número de operações primitivas na compilação simbólico-numérica para modelos hidrodinâmicos de alto grau de liberdade. Para o UVMS de 12 GDL, a redução típica supera $80\%$, eliminando avaliações repetidas de $\sin(q_i)$, $\cos(q_i)$ e expressões compostas que aparecem em $M$, $C$ e $G$ \cite{meurer2017sympy, alfred2007compilers}. Sem CSE, o tempo de avaliação numérica por passo poderia exceder o passo de integração $\Delta t_{\text{phys}} = 1{,}0$ ms, inviabilizando a simulação em tempo real \cite{leu1986automated}.
 
-\begin{table}[h!]
-\centering
-\caption{Impacto da CSE na compilação simbólico-numérica.}
-\label{tab:impacto_cse}
-\begin{tabular}{p{3.5cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.5cm}}
-\hline
-\textbf{Cenário} & \textbf{Ops.\ sem CSE} & \textbf{Ops.\ com CSE} & \textbf{Redução} & \textbf{Speedup} \\
-\hline
-Manipulador 3R (Ar)   & 3\,840  & 1\,241  & 67,7\% & 2,8$\times$ \\
-UVMS (Hidro)          & 58\,200 & 7\,460  & 87,2\% & 4,9$\times$ \\
-\hline
-\end{tabular}
-\end{table}
+\subsection{Executor Paralelo e Tempo de Simulação}
 
-O \textit{speedup} de avaliação de $4{,}9\times$ para o UVMS de 6 GDL é consistente com os valores reportados por Meurer et al. (2017) \cite{meurer2017sympy} para expressões trigonométricas com alto grau de repetição (típico de cinemática de manipuladores com múltiplas juntas de mesmo tipo). A redução de $87{,}2\%$ no número de operações primitivas elimina grande parte das avaliações repetidas de $\sin(q_1)$, $\cos(q_1)$, $\sin(q_1+q_2)$, etc., que aparecem em todos os termos de $M$, $C$ e $G$ \cite{alfred2007compilers, meurer2017sympy}. Sem CSE, o tempo de avaliação numérica por substep para o UVMS seria de $\approx 3{,}9$ ms — superior ao passo de integração $\Delta t_{\text{phys}} = 1{,}0$ ms, tornando a simulação em tempo real impossível mesmo com o executor paralelo. Com CSE, o tempo de avaliação cai para $0{,}80$ ms por passo (sequencial) ou $0{,}28$ ms (paralelo), viabilizando a simulação \cite{leu1986automated}.
+O experimento com o UVMS de 12 GDL resultou em tempo de computação de aproximadamente 48 s para 6 s de trajetória simulada (cerca de 8 s de tempo real por segundo simulado), indicando que a simulação é viável em hardware convencional. O executor persistente (\texttt{warm\_up\_workers()}) e a compilação com CSE são essenciais para manter o custo de avaliação de $M$, $C$ e $G$ dentro de limites que permitam a integração numérica estável \cite{beazley2010understanding, leu1986automated}.
 
-\subsection{Executor Paralelo Persistente e Custo de Avaliação Numérica}
+\subsection{Integrador Simplético}
 
-A Tabela~\ref{tab:executor_persistente} compara o custo de avaliação de $M$, $C$, $G$ por passo de integração nas modalidades sequencial e paralela, com e sem o executor persistente.
-
-\begin{table}[h!]
-\centering
-\caption{Custo de avaliação numérica de $M$, $C$, $G$ por passo $\Delta t_{\text{phys}}$.}
-\label{tab:executor_persistente}
-\begin{tabular}{p{4.0cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.5cm}}
-\hline
-\textbf{Modalidade} & \multicolumn{2}{c}{\textbf{Cenário 1 (3 GDL)}} & \multicolumn{2}{c}{\textbf{Cenário 2 (6 GDL)}} \\
- & Tempo/passo & Total (6 s) & Tempo/passo & Total (8 s) \\
-\hline
-Sequencial               & 0,09 ms & 0,54 s & 0,80 ms & 6,40 s \\
-Paralelo (sem persist.)  & 0,06 ms & 0,36 s & 0,52 ms & 4,16 s \\
-Paralelo (persistente)   & 0,04 ms & 0,24 s & 0,28 ms & 2,24 s \\
-\hline
-\end{tabular}
-\end{table}
-
-O executor persistente (\texttt{warm\_up\_workers()}) elimina o custo de instanciação de processos a cada simulação: sem persistência, o overhead de \textit{spawn} de $W = 3$ processos seria de $2{,}1$--$3{,}8$ s por simulação em hardware Windows convencional, tornando a execução mais lenta que a avaliação sequencial para $N = 3$ GDL. Com o executor persistente, o overhead é amortizado sobre toda a sessão e o \textit{speedup} real de $3{,}2\times$ é obtido para $N = 6$ GDL \cite{beazley2010understanding, leu1986automated}. Para $N \leq 4$ GDL, o \textit{overhead} de IPC (\textit{Inter-Process Communication}) supera o ganho de paralelismo, confirmando a recomendação da Seção~\ref{sec:parallel_sim} do Capítulo~\ref{cap:simulacao} de utilizar avaliação sequencial para sistemas pequenos.
-
-\subsection{Integrador Simplético vs.\ Euler Explícito: Impacto na Fidelidade}
-
-A vantagem do integrador simplético de Euler sobre o Euler explícito padrão foi verificada experimentalmente para o Cenário 1 com $\Delta t_{\text{phys}} = 10^{-2}$ s (passo 10$\times$ maior que o padrão) e controlador CTC-PID com $k_p = 100$:
-
-\begin{itemize}
-    \item \textbf{Euler explícito}: energia mecânica do sistema cresce monotonicamente ao longo da trajetória de 6 s, com aumento acumulado de $\approx 12\%$ da energia cinética máxima. O RMSE médio aumenta $3{,}4\times$ em relação a $\Delta t_{\text{phys}} = 10^{-3}$ s.
-    \item \textbf{Euler simplético}: energia mecânica oscila dentro de uma banda de $\pm 0{,}3\%$ da energia cinética máxima, sem crescimento secular. O RMSE médio aumenta apenas $1{,}8\times$ em relação a $\Delta t_{\text{phys}} = 10^{-3}$ s.
-\end{itemize}
-
-Esta comparação confirma o resultado teórico de Leimkuhler e Reich (2004) \cite{leimkuhler2004simulating} e Hairer et al. (2006) \cite{hairer2006geometric}: o Euler simplético preserva a energia hamiltoniana modificada do sistema, impedindo a acumulação secular de erro de energia que o Euler explícito exibe. Para simulações de controle de longa duração ($> 10$ s) ou com passos maiores ($\Delta t_{\text{phys}} \geq 5 \times 10^{-3}$ s), a diferença entre os dois integradores é determinante para a validade quantitativa dos resultados \cite{leimkuhler2004simulating, hairer2006geometric, spong2020robot}.
+O integrador simplético de Euler foi utilizado em todos os experimentos, preservando a energia hamiltoniana modificada do sistema e evitando a acumulação secular de erro característica do Euler explícito \cite{leimkuhler2004simulating, hairer2006geometric}. Para o passo de integração $\Delta t_{\text{phys}} = 10^{-3}$ s, a condição de estabilidade numérica é satisfeita com ampla margem \cite{leimkuhler2004simulating, hairer2006geometric, spong2020robot}.
 
 % ==============================================================================
 \section{Síntese do Capítulo}
 % ==============================================================================
 
-Este capítulo apresentou uma avaliação experimental sistemática da plataforma \textit{Hephaestus} em dois cenários representativos: um manipulador serial 3R terrestre e um UVMS de 6 GDL subaquático. Os principais achados podem ser consolidados nas seguintes afirmações:
+Este capítulo apresentou uma avaliação experimental da plataforma \textit{Hephaestus} em um cenário representativo: um UVMS de 12 GDL subaquático (6 GDL do veículo + 6 GDL do braço antropomórfico), cuja configuração e resultados foram ilustrados nas figuras~\ref{fig:animacao_3d}--\ref{fig:sta_graf}. Os principais achados podem ser consolidados nas seguintes afirmações:
 
 \begin{itemize}
-    \item \textbf{Hierarquia de desempenho nominal}: o CTC-PID lidera em precisão de rastreamento sob modelo exato, com RMSE de $3{,}8$--$5{,}7$ mrad para os dois cenários. O LADRC aproxima-se a $\approx 20\%$ com menor custo de \textit{chattering}, enquanto o STA e o CT-SMC apresentam desempenhos inferiores mas com robustez intrínseca \cite{craig1989introduction, gao2003scaling, slotine1991applied, moreno2012strict}.
+    \item \textbf{Precisão de rastreamento}: o Super-Twisting e o CT-SMC apresentam o menor RMSE médio ($\approx 5{,}3\times10^{-5}$ rad/m) e erro final (0,0020), seguidos pelo LADRC e pelo Torque Computado. Todos os controladores alcançam rastreamento preciso ao longo da trajetória de 6 s \cite{levant1993sliding, slotine1991applied, moreno2012strict, gao2003scaling}.
 
-    \item \textbf{Robustez diferenciada}: sob erros paramétricos de $10\%$ (terrestre) e $30\%$ (subaquático), o CTC-PID degrada-se de $7{,}9\times$ a $14{,}8\times$, enquanto o LADRC mantém $\rho \leq 1{,}4\times$ em todos os casos. Este contraste quantifica a vantagem do paradigma de estimação de distúrbio em tempo real sobre o cancelamento de modelo exato para aplicações reais \cite{han2009pid, huang2014active, zheng2010practical}.
+    \item \textbf{Eficiência energética}: o LADRC e o CT-SMC consomem cerca de 35 vezes menos energia que o Torque Computado e o Super-Twisting, o que é relevante para operações subaquáticas com autonomia limitada \cite{antonelli2014modelling, fossen2011handbook}.
 
-    \item \textbf{STA como alternativa superior ao CT-SMC}: para o mesmo nível de robustez, o STA reduz o \textit{chattering} em $2{,}5\times$ pela integração interna da variável $z_i$, tornando-o preferível ao CT-SMC em qualquer cenário onde a suavidade do torque seja uma restrição \cite{levant1993sliding, shtessel2014sliding, utkin2017sliding}.
+    \item \textbf{Trade-off torque máximo}: o Super-Twisting exige torque máximo aproximadamente 4 vezes maior ($\approx 79$ N·m) que os demais controladores ($\approx 21$ N·m), impactando o dimensionamento dos atuadores \cite{levant1993sliding, shtessel2014sliding, utkin2017sliding}.
 
-    \item \textbf{Desempenho computacional}: a combinação de CSE (redução de $68$--$87\%$ no bytecode), paralelismo de derivação ($3{,}2\times$ speedup para 6 GDL) e executor persistente ($2{,}9\times$ vs.\ sem persistência) torna a simulação em tempo real viável para manipuladores de até 8 GDL em hardware convencional, cumprindo o objetivo de desempenho computacional descrito na Introdução \cite{meurer2017sympy, leu1986automated, beazley2010understanding}.
+    \item \textbf{Desempenho computacional}: o tempo de simulação de $\approx 48$ s para 6 s de trajetória indica que a implementação dos quatro controladores é viável para o UVMS de 12 GDL em hardware convencional, com CSE e executor persistente \cite{meurer2017sympy, leu1986automated, beazley2010understanding}.
 
-    \item \textbf{Fidelidade do integrador simplético}: a preservação da energia modificada pelo integrador de Euler simplético é essencial para a validade dos resultados comparativos, especialmente para passos de integração $\geq 5 \times 10^{-3}$ s \cite{leimkuhler2004simulating, hairer2006geometric}.
+    \item \textbf{Integrador simplético}: a preservação da energia modificada pelo integrador de Euler simplético é essencial para a validade dos resultados comparativos \cite{leimkuhler2004simulating, hairer2006geometric}.
 \end{itemize}
 
 O Capítulo~\ref{cap:conclusoes} consolida essas observações experimentais com as contribuições teóricas dos capítulos anteriores, apresentando as conclusões do trabalho e as direções de desenvolvimento futuro para a plataforma \textit{Hephaestus}.
