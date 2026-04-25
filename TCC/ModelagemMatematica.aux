@@ -1,0 +1,218 @@
+\relax 
+\providecommand{\transparent@use}[1]{}
+\providecommand\hyper@newdestlabel[2]{}
+\citation{meurer2017sympy}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {chapter}{\numberline {3}Modelagem Matemática e Geração Simbólica}{22}{chapter.3}\protected@file@percent }
+\@writefile{lof}{\addvspace {10\p@ }}
+\@writefile{lot}{\addvspace {10\p@ }}
+\newlabel{cap:modelagem}{{3}{22}{Modelagem Matemática e Geração Simbólica}{chapter.3}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.1}Visão Geral da Arquitetura}{22}{section.3.1}\protected@file@percent }
+\citation{corke2021toolbox}
+\citation{antonelli2014modelling,fossen2011handbook}
+\citation{denavit1955kinematic}
+\citation{craig1989introduction,spong2020robot}
+\citation{meurer2017sympy,leu1986automated}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {3.2}Representação da Cadeia Cinemática}{23}{section.3.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2.1}Configuração de Juntas e Máscara de Vetores de Elo}{23}{subsection.3.2.1}\protected@file@percent }
+\citation{meurer2017sympy}
+\citation{meurer2017sympy}
+\citation{hollerbach1980recursive}
+\citation{craig1989introduction,siciliano2009robotics}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.2.2}Símbolos Dinâmicos e Parâmetros}{24}{subsection.3.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.3}Cinemática Simbólica Direta}{24}{section.3.3}\protected@file@percent }
+\newlabel{sec:cinematica_simbolica}{{3.3}{24}{Cinemática Simbólica Direta}{section.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.1}Transformações Homogêneas Acumuladas}{24}{subsection.3.3.1}\protected@file@percent }
+\newlabel{eq:rot_local}{{3.1}{24}{Transformações Homogêneas Acumuladas}{equation.3.1}{}}
+\newlabel{eq:prism_local}{{3.2}{24}{Transformações Homogêneas Acumuladas}{equation.3.2}{}}
+\citation{spong2020robot}
+\citation{siciliano2009robotics,spong2020robot}
+\citation{craig1989introduction,luh1980online}
+\citation{siciliano2009robotics}
+\citation{siciliano2009robotics}
+\def\@LN@column{1}
+\newlabel{eq:T_acumulada}{{3.3}{25}{Transformações Homogêneas Acumuladas}{equation.3.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.2}Posições dos Centros de Massa no Referencial Global}{25}{subsection.3.3.2}\protected@file@percent }
+\newlabel{eq:pcm_global}{{3.4}{25}{Posições dos Centros de Massa no Referencial Global}{equation.3.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.3.3}Velocidades Angulares Simbólicas}{25}{subsection.3.3.3}\protected@file@percent }
+\newlabel{eq:omega_rec}{{3.5}{25}{Velocidades Angulares Simbólicas}{equation.3.5}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3.1}{\ignorespaces Fluxo de cinemática simbólica implementado em \texttt  {step\_1\_kinematics}: da especificação de \texttt  {joint\_config} e \texttt  {link\_vectors\_mask} à construção das transformações homogêneas acumuladas $T_i$, das posições dos centros de massa $\vec  {p}_{\text  {cm},i}$, das velocidades angulares $\vec  {\omega }_i$ e do Jacobiano geométrico completo $J(q) \in \mathbb  {R}^{6 \times N}$.}}{26}{figure.caption.10}\protected@file@percent }
+\newlabel{fig:cinem_simbolica}{{3.1}{26}{Fluxo de cinemática simbólica implementado em \texttt {step\_1\_kinematics}: da especificação de \texttt {joint\_config} e \texttt {link\_vectors\_mask} à construção das transformações homogêneas acumuladas $T_i$, das posições dos centros de massa $\vec {p}_{\text {cm},i}$, das velocidades angulares $\vec {\omega }_i$ e do Jacobiano geométrico completo $J(q) \in \mathbb {R}^{6 \times N}$}{figure.caption.10}{}}
+\citation{spong2020robot,siciliano2009robotics}
+\citation{craig1989introduction,spong2020robot}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {3.4}Derivação Simbólica da Matriz de Inércia e do Vetor de Gravidade}{27}{section.3.4}\protected@file@percent }
+\newlabel{sec:M_G}{{3.4}{27}{Derivação Simbólica da Matriz de Inércia e do Vetor de Gravidade}{section.3.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.1}Método do Jacobiano da Inércia}{27}{subsection.3.4.1}\protected@file@percent }
+\newlabel{eq:T_total}{{3.6}{27}{Método do Jacobiano da Inércia}{equation.3.6}{}}
+\newlabel{eq:M_jacobian}{{3.7}{27}{Método do Jacobiano da Inércia}{equation.3.7}{}}
+\newlabel{eq:jacobs}{{3.8}{27}{Método do Jacobiano da Inércia}{equation.3.8}{}}
+\newlabel{eq:I_global}{{3.9}{27}{Método do Jacobiano da Inércia}{equation.3.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.2}Vetor de Gradiente de Potencial Gravitacional}{27}{subsection.3.4.2}\protected@file@percent }
+\newlabel{eq:V_grav}{{3.10}{27}{Vetor de Gradiente de Potencial Gravitacional}{equation.3.10}{}}
+\newlabel{eq:G_vec}{{3.11}{27}{Vetor de Gradiente de Potencial Gravitacional}{equation.3.11}{}}
+\citation{chiaverini1997singularity,siciliano2009robotics}
+\citation{spong2020robot,siciliano2009robotics}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.4.3}Jacobiano Geométrico Completo}{28}{subsection.3.4.3}\protected@file@percent }
+\newlabel{eq:jacobian_full}{{3.12}{28}{Jacobiano Geométrico Completo}{equation.3.12}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {3.2}{\ignorespaces Fluxo de derivação simbólica da matriz de inércia $M(q)$, do vetor de gradiente de potencial $G(q)$ e dos coeficientes de Coriolis pelo método dos símbolos de Christoffel, implementado em \texttt  {step\_2\_jacobian\_M\_G} e \texttt  {step\_3\_coriolis\_combined}.}}{28}{figure.caption.11}\protected@file@percent }
+\newlabel{fig:dinam_simbolica}{{3.2}{28}{Fluxo de derivação simbólica da matriz de inércia $M(q)$, do vetor de gradiente de potencial $G(q)$ e dos coeficientes de Coriolis pelo método dos símbolos de Christoffel, implementado em \texttt {step\_2\_jacobian\_M\_G} e \texttt {step\_3\_coriolis\_combined}}{figure.caption.11}{}}
+\citation{hollerbach1980recursive}
+\citation{hollerbach1980recursive,leu1986automated}
+\citation{beazley2010understanding}
+\citation{meurer2017sympy}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {3.5}Cálculo Simbólico do Vetor de Coriolis}{29}{section.3.5}\protected@file@percent }
+\newlabel{sec:coriolis}{{3.5}{29}{Cálculo Simbólico do Vetor de Coriolis}{section.3.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5.1}Formulação pelos Símbolos de Christoffel}{29}{subsection.3.5.1}\protected@file@percent }
+\newlabel{eq:C_vec}{{3.13}{29}{Formulação pelos Símbolos de Christoffel}{equation.3.13}{}}
+\newlabel{eq:christoffel_impl}{{3.14}{29}{Formulação pelos Símbolos de Christoffel}{equation.3.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5.2}Estratégia de Paralelização da Derivação}{29}{subsection.3.5.2}\protected@file@percent }
+\newlabel{eq:dMdq_parallel}{{3.15}{29}{Estratégia de Paralelização da Derivação}{equation.3.15}{}}
+\citation{alfred2007compilers,meurer2017sympy}
+\citation{leu1986automated}
+\citation{fossen2011handbook}
+\citation{antonelli2014modelling}
+\def\@LN@column{1}
+\newlabel{eq:C_parallel}{{3.16}{30}{Estratégia de Paralelização da Derivação}{equation.3.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.5.3}Modo Serial para Ambientes Executáveis}{30}{subsection.3.5.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.6}Extensão Hidrodinâmica: \texttt  {RobotMathHydro}}{30}{section.3.6}\protected@file@percent }
+\newlabel{sec:hydro_engine}{{3.6}{30}{Extensão Hidrodinâmica: \texttt {RobotMathHydro}}{section.3.6}{}}
+\citation{newman1977marine}
+\citation{fossen2011handbook}
+\citation{fossen2011handbook}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.1}Parâmetros Adicionais: Volumes e Massa Adicionada}{31}{subsection.3.6.1}\protected@file@percent }
+\newlabel{eq:empuxo_por_elo}{{3.17}{31}{Parâmetros Adicionais: Volumes e Massa Adicionada}{equation.3.17}{}}
+\newlabel{eq:MA_syms}{{3.18}{31}{Parâmetros Adicionais: Volumes e Massa Adicionada}{equation.3.18}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.2}Matriz de Inércia com Massa Adicionada}{31}{subsection.3.6.2}\protected@file@percent }
+\newlabel{eq:M_hydro_impl}{{3.19}{31}{Matriz de Inércia com Massa Adicionada}{equation.3.19}{}}
+\newlabel{eq:MA_global}{{3.20}{31}{Matriz de Inércia com Massa Adicionada}{equation.3.20}{}}
+\citation{antonelli2014modelling,yuh2001underwater}
+\citation{fossen2011handbook}
+\citation{fossen2011handbook}
+\citation{fossen2011handbook}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.3}Vetor de Potencial Aparente: Peso menos Empuxo}{32}{subsection.3.6.3}\protected@file@percent }
+\newlabel{eq:V_aparente}{{3.21}{32}{Vetor de Potencial Aparente: Peso menos Empuxo}{equation.3.21}{}}
+\newlabel{eq:G_hydro}{{3.22}{32}{Vetor de Potencial Aparente: Peso menos Empuxo}{equation.3.22}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.6.4}Modelo Dinâmico Unificado}{32}{subsection.3.6.4}\protected@file@percent }
+\newlabel{eq:EOM_hydro}{{3.23}{32}{Modelo Dinâmico Unificado}{equation.3.23}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.7}Preparação e Exportação do Modelo Simbólico}{32}{section.3.7}\protected@file@percent }
+\newlabel{sec:export}{{3.7}{32}{Preparação e Exportação do Modelo Simbólico}{section.3.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.7.1}Substituição de Símbolos Dinâmicos}{32}{subsection.3.7.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.3}{\ignorespaces Extensão hidrodinâmica implementada em \texttt  {RobotMathHydro}: herança de \texttt  {RobotMathEngine} com sobrescrita dos métodos de cinemática e dinâmica para incorporar o tensor de massa adicionada $M_A^{(g)}$ (Equação~\eqref  {eq:M_hydro_impl}) e o potencial aparente Peso--Empuxo (Equação~\eqref  {eq:V_aparente}) segundo a formulação de Fossen~\cite  {fossen2011handbook}.}}{33}{figure.caption.12}\protected@file@percent }
+\newlabel{fig:hydro_extensao}{{3.3}{33}{Extensão hidrodinâmica implementada em \texttt {RobotMathHydro}: herança de \texttt {RobotMathEngine} com sobrescrita dos métodos de cinemática e dinâmica para incorporar o tensor de massa adicionada $M_A^{(g)}$ (Equação~\eqref {eq:M_hydro_impl}) e o potencial aparente Peso--Empuxo (Equação~\eqref {eq:V_aparente}) segundo a formulação de Fossen~\cite {fossen2011handbook}}{figure.caption.12}{}}
+\citation{meurer2017sympy}
+\citation{leu1986automated,hollerbach1980recursive}
+\citation{meurer2017sympy}
+\def\@LN@column{1}
+\newlabel{eq:subs_dynamic}{{3.24}{34}{Substituição de Símbolos Dinâmicos}{equation.3.24}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.7.2}Exportação do Dicionário de Resultados}{34}{subsection.3.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {3.8}Compilação Simbólico-Numérica com \textit  {lambdify} e CSE}{34}{section.3.8}\protected@file@percent }
+\newlabel{sec:lambdify_cse}{{3.8}{34}{Compilação Simbólico-Numérica com \textit {lambdify} e CSE}{section.3.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.8.1}A Interface \textit  {lambdify}}{34}{subsection.3.8.1}\protected@file@percent }
+\citation{alfred2007compilers}
+\citation{moses1971algebraic}
+\citation{meurer2017sympy,alfred2007compilers}
+\citation{leu1986automated}
+\citation{meurer2017sympy}
+\def\@LN@column{1}
+\newlabel{eq:lambdify_signature}{{3.25}{35}{A Interface \textit {lambdify}}{equation.3.25}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.8.2}Eliminação de Subexpressões Comuns}{35}{subsection.3.8.2}\protected@file@percent }
+\newlabel{eq:cse_example}{{3.26}{35}{Eliminação de Subexpressões Comuns}{equation.3.26}{}}
+\citation{leu1986automated}
+\citation{meurer2017sympy,alfred2007compilers}
+\citation{meurer2017sympy,alfred2007compilers}
+\citation{hollerbach1980recursive,beazley2010understanding}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.8.3}Compilação das Funções por Módulo}{36}{subsection.3.8.3}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.4}{\ignorespaces Fluxo de compilação simbólico-numérica via \texttt  {sp.lambdify()} com CSE ativo: as expressões SymPy de $M$, $C$, $G$ e $J$ passam pela Eliminação de Subexpressões Comuns antes de gerar código Python/NumPy compilado, reduzindo em 60--90\% o número de operações primitivas e viabilizando a avaliação em tempo de simulação \cite  {meurer2017sympy, alfred2007compilers}.}}{36}{figure.caption.13}\protected@file@percent }
+\newlabel{fig:compilacao_simbolica}{{3.4}{36}{Fluxo de compilação simbólico-numérica via \texttt {sp.lambdify()} com CSE ativo: as expressões SymPy de $M$, $C$, $G$ e $J$ passam pela Eliminação de Subexpressões Comuns antes de gerar código Python/NumPy compilado, reduzindo em 60--90\% o número de operações primitivas e viabilizando a avaliação em tempo de simulação \cite {meurer2017sympy, alfred2007compilers}}{figure.caption.13}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.9}Paralelismo em Dois Níveis e Executor Persistente}{36}{section.3.9}\protected@file@percent }
+\newlabel{sec:parallel}{{3.9}{36}{Paralelismo em Dois Níveis e Executor Persistente}{section.3.9}{}}
+\citation{beazley2010understanding}
+\citation{craig1989introduction}
+\citation{siciliano2009robotics}
+\citation{hollerbach1980recursive}
+\citation{spong2020robot}
+\citation{alfred2007compilers,meurer2017sympy}
+\citation{golub2013matrix}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.9.1}Nível 1: Paralelismo na Derivação Simbólica}{37}{subsection.3.9.1}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {3.9.2}Nível 2: Paralelismo na Avaliação Numérica}{37}{subsection.3.9.2}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {3.5}{\ignorespaces Paralelismo em dois níveis no \textit  {Hephaestus}: (Nível~1) derivação paralela de $\partial M/\partial q_k$ e das linhas de $C$ por \texttt  {ProcessPoolExecutor} durante a geração \textit  {offline} do modelo; (Nível~2) avaliação paralela e persistente de \texttt  {func\_M}, \texttt  {func\_C} e \texttt  {func\_G} a cada passo de integração física durante a simulação \textit  {online}.}}{38}{figure.caption.14}\protected@file@percent }
+\newlabel{fig:paralelismo_2niveis}{{3.5}{38}{Paralelismo em dois níveis no \textit {Hephaestus}: (Nível~1) derivação paralela de $\partial M/\partial q_k$ e das linhas de $C$ por \texttt {ProcessPoolExecutor} durante a geração \textit {offline} do modelo; (Nível~2) avaliação paralela e persistente de \texttt {func\_M}, \texttt {func\_C} e \texttt {func\_G} a cada passo de integração física durante a simulação \textit {online}}{figure.caption.14}{}}
+\citation{luh1980online,hollerbach1980recursive}
+\citation{corke2021toolbox}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {3.10}Considerações sobre a Complexidade Computacional}{39}{section.3.10}\protected@file@percent }
+\newlabel{sec:complexidade}{{3.10}{39}{Considerações sobre a Complexidade Computacional}{section.3.10}{}}
+\@writefile{lot}{\contentsline {table}{\numberline {3.1}{\ignorespaces Complexidade computacional das etapas de modelagem e simulação.}}{39}{table.caption.15}\protected@file@percent }
+\newlabel{tab:complexidade}{{3.1}{39}{Complexidade computacional das etapas de modelagem e simulação}{table.caption.15}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {3.11}Síntese do Capítulo}{39}{section.3.11}\protected@file@percent }
+\def\@LN@column{1}
+\@setckpt{ModelagemMatematica}{
+\setcounter{page}{41}
+\setcounter{equation}{26}
+\setcounter{enumi}{4}
+\setcounter{enumii}{0}
+\setcounter{enumiii}{0}
+\setcounter{enumiv}{0}
+\setcounter{footnote}{0}
+\setcounter{mpfootnote}{0}
+\setcounter{part}{0}
+\setcounter{chapter}{3}
+\setcounter{section}{11}
+\setcounter{subsection}{0}
+\setcounter{subsubsection}{0}
+\setcounter{paragraph}{0}
+\setcounter{subparagraph}{0}
+\setcounter{figure}{5}
+\setcounter{table}{1}
+\setcounter{NAT@ctr}{0}
+\setcounter{lastpagecount}{0}
+\setcounter{keywords}{3}
+\setcounter{parentequation}{0}
+\setcounter{section@level}{1}
+\setcounter{Item}{11}
+\setcounter{Hfootnote}{0}
+\setcounter{bookmark@seq@number}{77}
+\setcounter{caption@flags}{2}
+\setcounter{continuedfloat}{0}
+\setcounter{float@type}{32}
+\setcounter{subfigure}{0}
+\setcounter{lofdepth}{1}
+\setcounter{subtable}{0}
+\setcounter{lotdepth}{1}
+\setcounter{LT@tables}{0}
+\setcounter{LT@chunks}{0}
+\setcounter{linenumber}{1}
+\setcounter{LN@truepage}{59}
+\setcounter{AM@survey}{0}
+\setcounter{lstnumber}{1}
+\setcounter{svg@param@lastpage}{0}
+\setcounter{svg@param@currpage}{-1}
+\setcounter{tcbbreakpart}{0}
+\setcounter{tcblayer}{0}
+\setcounter{tcolorbox@number}{0}
+\setcounter{tcblisting}{0}
+\setcounter{FancyVerbLine}{0}
+\setcounter{FancyVerbWriteLine}{0}
+\setcounter{FancyVerbBufferLine}{0}
+\setcounter{FV@TrueTabGroupLevel}{0}
+\setcounter{FV@TrueTabCounter}{0}
+\setcounter{FV@HighlightLinesStart}{0}
+\setcounter{FV@HighlightLinesStop}{0}
+\setcounter{FancyVerbLineBreakLast}{0}
+\setcounter{FV@BreakBufferDepth}{0}
+\setcounter{minted@FancyVerbLineTemp}{0}
+\setcounter{listing}{0}
+\setcounter{definition}{0}
+\setcounter{ejemplo}{0}
+\setcounter{remark}{0}
+\setcounter{lstlisting}{0}
+}

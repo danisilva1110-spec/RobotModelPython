@@ -1,7 +1,7 @@
 \chapter{Experimentos, Resultados e Discussão}
 \label{cap:experimentos}
 
-Este capítulo apresenta os resultados das simulações numéricas realizadas com a plataforma \textit{Hephaestus} em um cenário de validação representativo: um Sistema Manipulador-Veículo Subaquático (UVMS) de doze graus de liberdade (12 GDL) em ambiente submerso, composto por seis graus de liberdade do veículo base e seis graus de liberdade de um braço manipulador antropomórfico. As quatro estratégias de controle não-linear implementadas — Torque Computado (CTC-PID), LADRC, CT-SMC e Super-Twisting (STA) — são comparadas sistematicamente em termos de precisão de rastreamento de trajetória, esforço de torque, energia consumida e índice de \textit{chattering}. A seção final analisa o desempenho computacional da plataforma para o modelo UVMS de 12 GDL, quantificando o impacto das otimizações de paralelismo e compilação simbólica sobre os tempos de geração de modelo e simulação \cite{slotine1991applied, craig1989introduction, gao2003scaling}.
+Este capítulo apresenta os resultados das simulações numéricas realizadas com a plataforma \textit{Hephaestus} em um cenário de validação representativo: um Sistema Manipulador-Veículo Subaquático (UVMS) de doze graus de liberdade (12 GDL) em ambiente submerso, composto por seis graus de liberdade do veículo base e seis graus de liberdade de um braço manipulador antropomórfico. As quatro estratégias de controle não-linear implementadas, Torque Computado (CTC-PID), LADRC, CT-SMC e Super-Twisting (STA), são comparadas sistematicamente em termos de precisão de rastreamento de trajetória, esforço de torque, energia consumida e índice de \textit{chattering}. A seção final analisa o desempenho computacional da plataforma para o modelo UVMS de 12 GDL, quantificando o impacto das otimizações de paralelismo e compilação simbólica sobre os tempos de geração de modelo e simulação \cite{slotine1991applied, craig1989introduction, gao2003scaling}.
 
 % ==============================================================================
 \section{Metodologia de Validação}
@@ -128,11 +128,11 @@ Os ganhos foram escolhidos para acomodar a dinâmica de malha fechada do UVMS de
 \subsection{Resultados Comparativos}
 \label{sec:uvms_resultados}
 
-A Tabela~\ref{tab:uvms_resultados} apresenta as métricas de desempenho para os quatro controladores no UVMS de 12 GDL com modelo nominal — ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem com os da planta simulada. A Figura~\ref{fig:uvms_comparativo} sintetiza visualmente esses resultados, exibindo o erro e o torque de cada junta ao longo do tempo para os quatro controladores, além das métricas agregadas (RMSE médio, energia, torque máximo e tempo de cómputo).
+A Tabela~\ref{tab:uvms_resultados} apresenta as métricas de desempenho para os quatro controladores no UVMS de 12 GDL com modelo nominal, ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem com os da planta simulada. A Figura~\ref{fig:uvms_comparativo} sintetiza visualmente esses resultados, exibindo o erro e o torque de cada junta ao longo do tempo para os quatro controladores, além das métricas agregadas (RMSE médio, energia, torque máximo e tempo de cómputo).
 
 \begin{table}[h!]
 \centering
-\caption{Desempenho dos controladores no UVMS 12-GDL — modelo nominal. Médias sobre as 12 juntas.}
+\caption{Desempenho dos controladores no UVMS 12-GDL , modelo nominal. Médias sobre as 12 juntas.}
 \label{tab:uvms_resultados}
 \begin{tabular}{p{2.8cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.2cm}}
 \hline
@@ -146,9 +146,9 @@ Super-Twisting & $5{,}3\times10^{-5}$ & 0,0020 & $\approx 80\times10^3$ & $\appr
 \end{tabular}
 \end{table}
 
-O Super-Twisting (STA) apresenta o menor RMSE médio ($5{,}3\times10^{-5}$ rad/m) e o menor erro final (0,0020), conforme evidenciado na Figura~\ref{fig:uvms_comparativo}, seguido de perto pelo CT-SMC e pelo LADRC. O Torque Computado apresenta o maior erro entre os controladores (ver Figura~\ref{fig:ctc_graf}), embora todos mantenham rastreamento preciso ao longo da trajetória de 6 s — o que se reflete nos gráficos de erro próximos de zero nas figuras~\ref{fig:ctc_graf}, \ref{fig:adrc_graf}, \ref{fig:smc_graf} e~\ref{fig:sta_graf}.
+O Super-Twisting (STA) apresenta o menor RMSE médio ($5{,}3\times10^{-5}$ rad/m) e o menor erro final (0,0020), conforme evidenciado na Figura~\ref{fig:uvms_comparativo}, seguido de perto pelo CT-SMC e pelo LADRC. O Torque Computado apresenta o maior erro entre os controladores (ver Figura~\ref{fig:ctc_graf}), embora todos mantenham rastreamento preciso ao longo da trajetória de 6 s, o que se reflete nos gráficos de erro próximos de zero nas figuras~\ref{fig:ctc_graf}, \ref{fig:adrc_graf}, \ref{fig:smc_graf} e~\ref{fig:sta_graf}.
 
-Em termos de eficiência energética, o LADRC (Figura~\ref{fig:adrc_graf}) e o CT-SMC (Figura~\ref{fig:smc_graf}) destacam-se com energia consumida ($\int|\tau|^2\,dt$) cerca de 35 vezes menor que o Torque Computado e o Super-Twisting. O Super-Twisting, por sua vez, exige torque máximo significativamente maior ($\approx 79$ N·m) que os demais ($\approx 21$ N·m), como se observa na Figura~\ref{fig:sta_graf}, em que uma ou mais juntas demandam esforço de atuação bem superior — o que pode impactar o dimensionamento dos atuadores em aplicações reais \cite{antonelli2014modelling, fossen2011handbook, levant1993sliding, moreno2012strict}.
+Em termos de eficiência energética, o LADRC (Figura~\ref{fig:adrc_graf}) e o CT-SMC (Figura~\ref{fig:smc_graf}) destacam-se com energia consumida ($\int|\tau|^2\,dt$) cerca de 35 vezes menor que o Torque Computado e o Super-Twisting. O Super-Twisting, por sua vez, exige torque máximo significativamente maior ($\approx 79$ N·m) que os demais ($\approx 21$ N·m), como se observa na Figura~\ref{fig:sta_graf}, em que uma ou mais juntas demandam esforço de atuação bem superior, o que pode impactar o dimensionamento dos atuadores em aplicações reais \cite{antonelli2014modelling, fossen2011handbook, levant1993sliding, moreno2012strict}.
 
 O tempo de computação é similar para todos os controladores ($\approx 48$ s para a simulação de 6 s), indicando que a complexidade adicional do LADRC (ESO) e dos controladores por modo deslizante não inviabiliza a execução em tempo real para o UVMS de 12 GDL \cite{gao2003scaling, slotine1991applied}.
 
@@ -214,9 +214,9 @@ Os três mecanismos de rejeição de perturbações observados nos experimentos 
 
 \textbf{CTC-PID (Torque Computado)}: a perturbação $d(t)$ entra na dinâmica de erro linear como forçamento externo. A rejeição depende inteiramente do ganho integral $K_I$, que elimina perturbações constantes mas produz \textit{overshoot} e ressonância para perturbações variáveis no tempo. Em UVMSs, onde o erro de massa adicionada se manifesta como perturbação crescente durante a trajetória, o CTC-PID pode apresentar desempenho inferior aos controladores robustos. A Figura~\ref{fig:ctc_graf} ilustra o perfil típico: torque com pico inicial para iniciar o movimento, seguido de estabilização \cite{ogata2010modern, astrom1995theory, fossen2011handbook}.
 
-\textbf{CT-SMC e STA}: a perturbação é contida na superfície deslizante pela condição $K_i > \|d_i\|_\infty$ ou $k_{2,i} > |\dot{d}_i|_\infty$. Ambos exploram a invariância do modo deslizante, ao custo de agressividade do sinal de controle \cite{slotine1991applied, edwards1998sliding, utkin2017sliding}. Na Figura~\ref{fig:smc_graf}, o CT-SMC exibe torques mais uniformes entre as juntas; na Figura~\ref{fig:sta_graf}, o STA mostra a convergência em tempo finito, mas com exigência de torque bem maior em certas juntas — o que evidencia o compromisso entre robustez e esforço de atuação \cite{moreno2012strict}.
+\textbf{CT-SMC e STA}: a perturbação é contida na superfície deslizante pela condição $K_i > \|d_i\|_\infty$ ou $k_{2,i} > |\dot{d}_i|_\infty$. Ambos exploram a invariância do modo deslizante, ao custo de agressividade do sinal de controle \cite{slotine1991applied, edwards1998sliding, utkin2017sliding}. Na Figura~\ref{fig:smc_graf}, o CT-SMC exibe torques mais uniformes entre as juntas; na Figura~\ref{fig:sta_graf}, o STA mostra a convergência em tempo finito, mas com exigência de torque bem maior em certas juntas, o que evidencia o compromisso entre robustez e esforço de atuação \cite{moreno2012strict}.
 
-\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. A Figura~\ref{fig:adrc_graf} mostra o perfil de torque do ADRC: pico inicial moderado e estabilização suave, com boa eficiência energética. A qualidade do cancelamento é limitada pelo lag dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si — propriedade que explica a robustez superior e a capacidade do ESO de \textit{linearizar ativamente} a planta \cite{gao2003scaling, zheng2010practical, huang2014active, han2009pid, han1995class}.
+\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. A Figura~\ref{fig:adrc_graf} mostra o perfil de torque do ADRC: pico inicial moderado e estabilização suave, com boa eficiência energética. A qualidade do cancelamento é limitada pelo lag dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si, propriedade que explica a robustez superior e a capacidade do ESO de \textit{linearizar ativamente} a planta \cite{gao2003scaling, zheng2010practical, huang2014active, han2009pid, han1995class}.
 
 \subsection{Seleção do Controlador para UVMS}
 
@@ -237,7 +237,7 @@ Com base nos resultados do experimento com o UVMS de 12 GDL (figuras~\ref{fig:uv
 
 \subsection{Tempo de Geração do Modelo Simbólico}
 
-O tempo de geração do modelo simbólico — etapa executada uma única vez antes da compilação — foi medido para o UVMS de 12 GDL em função do número de \textit{workers} do \texttt{ProcessPoolExecutor}, conforme descrito na Seção~\ref{sec:parallel} do Capítulo~\ref{cap:modelagem}. Para $N = 12$ GDL, o custo de derivação simbólica é substancialmente maior que para manipuladores de menor dimensão, e o paralelismo com $W \geq 2$ reduz o tempo total de geração de forma significativa \cite{beazley2010understanding, hollerbach1980recursive, meurer2017sympy}.
+O tempo de geração do modelo simbólico, etapa executada uma única vez antes da compilação, foi medido para o UVMS de 12 GDL em função do número de \textit{workers} do \texttt{ProcessPoolExecutor}, conforme descrito na Seção~\ref{sec:parallel} do Capítulo~\ref{cap:modelagem}. Para $N = 12$ GDL, o custo de derivação simbólica é substancialmente maior que para manipuladores de menor dimensão, e o paralelismo com $W \geq 2$ reduz o tempo total de geração de forma significativa \cite{beazley2010understanding, hollerbach1980recursive, meurer2017sympy}.
 
 \subsection{Eficiência da Compilação com CSE}
 

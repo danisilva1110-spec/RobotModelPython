@@ -19,7 +19,7 @@ A interface pública principal é o método \texttt{run()}, cuja assinatura unif
     \item \textbf{Retorno}: o método retorna as séries temporais $\{t_i, e_i, \tau_i\}$ e a lista de frames de animação, que são consumidos pela interface gráfica para plotagem e renderização interativa.
 \end{enumerate}
 
-A detecção automática da fronteira veículo/braço — pela contagem das juntas iniciais sem vetor de elo estrutural nulo — permite que o simulador opere tanto em manipuladores terrestres puros quanto em UVMSs, compilando separadamente a matriz de rotação do frame do veículo (\texttt{func\_R\_vehicle}) para visualização da orientação do corpo base \cite{antonelli2014modelling, fossen2011handbook}. As Figuras~\ref{fig:loop_init} e~\ref{fig:loop_controle} detalham o fluxo interno do método \texttt{run()}: a fase de inicialização (Figura~\ref{fig:loop_init}) e o passo de controle repetido a cada substep físico (Figura~\ref{fig:loop_controle}).
+A detecção automática da fronteira veículo/braço , pela contagem das juntas iniciais sem vetor de elo estrutural nulo , permite que o simulador opere tanto em manipuladores terrestres puros quanto em UVMSs, compilando separadamente a matriz de rotação do frame do veículo (\texttt{func\_R\_vehicle}) para visualização da orientação do corpo base \cite{antonelli2014modelling, fossen2011handbook}. As Figuras~\ref{fig:loop_init} e~\ref{fig:loop_controle} detalham o fluxo interno do método \texttt{run()}: a fase de inicialização (Figura~\ref{fig:loop_init}) e o passo de controle repetido a cada substep físico (Figura~\ref{fig:loop_controle}).
 
 \begin{figure}[htbp]
     \centering
@@ -56,7 +56,7 @@ com derivadas:
     \label{eq:cubic_ds}
 \end{equation}
 
-Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ — ou seja, partida e parada suaves — e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1989introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. \cite{siciliano2009robotics}.
+Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ , ou seja, partida e parada suaves , e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1989introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. \cite{siciliano2009robotics}.
 
 \subsection{Segmento de Reta}
 
@@ -240,7 +240,7 @@ Para sistemas com $N > 6$ graus de liberdade (ou $N > 3$ no modo posicional), o 
     \dot{q}_0 = K_n\,(q_{\text{home}} - q_{\text{curr}}),
     \label{eq:null_space}
 \end{equation}
-onde $K_n$ é o ganho de espaço nulo (ajustável pelo usuário). Esta abordagem, introduzida por Liegeois \cite{liegeois1977automatic} e consolidada por Chiaverini et al. \cite{chiaverini1997singularity}, garante que o robô tenda à postura de maior manipulabilidade ou com limites de junta mais distantes, melhorando a qualidade do rastreamento ao longo de trajetórias extensas. O fluxo completo do CLIK — incluindo DLS, feedforward de velocidade e aceleração, correção de deriva do Jacobiano e projeção no espaço nulo — é esquematizado na Figura~\ref{fig:clik_cinematica}.
+onde $K_n$ é o ganho de espaço nulo (ajustável pelo usuário). Esta abordagem, introduzida por Liegeois \cite{liegeois1977automatic} e consolidada por Chiaverini et al. \cite{chiaverini1997singularity}, garante que o robô tenda à postura de maior manipulabilidade ou com limites de junta mais distantes, melhorando a qualidade do rastreamento ao longo de trajetórias extensas. O fluxo completo do CLIK , incluindo DLS, feedforward de velocidade e aceleração, correção de deriva do Jacobiano e projeção no espaço nulo , é esquematizado na Figura~\ref{fig:clik_cinematica}.
 
 \begin{figure}[htbp]
     \centering
@@ -277,7 +277,7 @@ A integração das equações de movimento \eqref{eq:motion_equation} (Capítulo
     \ddot{q}^n = M^{-1}\!\left(q^n\right)\left[\tau^n_{\text{ctrl}} + \tau^n_{\text{dist}} - C^n - G^n - \tau^n_{\text{pass}}\right],
     \label{eq:dyn_direct}
 \end{equation}
-onde $\tau^n_{\text{ctrl}}$ é o torque do controlador, $\tau^n_{\text{dist}}$ é o torque de distúrbio externo (opcional), $\tau^n_{\text{pass}}$ reúne as forças passivas (atrito + arrasto, descritos na Seção~\ref{sec:dissipative}), e $C^n$, $G^n$ são avaliados na configuração atual $(q^n, \dot{q}^n)$. A inversão de $M$ é realizada por \texttt{np.linalg.solve}, que utiliza decomposição LU — numericamente mais estável e eficiente que o cálculo explícito da inversa \cite{golub2013matrix}.
+onde $\tau^n_{\text{ctrl}}$ é o torque do controlador, $\tau^n_{\text{dist}}$ é o torque de distúrbio externo (opcional), $\tau^n_{\text{pass}}$ reúne as forças passivas (atrito + arrasto, descritos na Seção~\ref{sec:dissipative}), e $C^n$, $G^n$ são avaliados na configuração atual $(q^n, \dot{q}^n)$. A inversão de $M$ é realizada por \texttt{np.linalg.solve}, que utiliza decomposição LU , numericamente mais estável e eficiente que o cálculo explícito da inversa \cite{golub2013matrix}.
 
 A atualização do estado segue a sequência simplética:
 \begin{align}
@@ -285,21 +285,21 @@ A atualização do estado segue a sequência simplética:
     q^{n+1} &= q^n + \dot{q}^{n+1}\,\Delta t_{\text{phys}}. \label{eq:symplectic2}
 \end{align}
 
-A ordem em que velocidade e posição são atualizadas — velocidade \emph{antes} da posição — distingue o integrador simplético do Euler explícito padrão. Enquanto o Euler explícito acumula energia seculamente (instabilidade numérica suave), o Euler Simplético preserva uma ``energia modificada'' próxima da hamiltoniana real do sistema, garantindo estabilidade de longo prazo \cite{leimkuhler2004simulating, hairer2006geometric}. Para simulações de controle em malha fechada com duração moderada (tipicamente $< 30$ s), essa diferença é crítica para a fidelidade dos torques calculados e da resposta do controlador.
+A ordem em que velocidade e posição são atualizadas , velocidade \emph{antes} da posição , distingue o integrador simplético do Euler explícito padrão. Enquanto o Euler explícito acumula energia seculamente (instabilidade numérica suave), o Euler Simplético preserva uma ``energia modificada'' próxima da hamiltoniana real do sistema, garantindo estabilidade de longo prazo \cite{leimkuhler2004simulating, hairer2006geometric}. Para simulações de controle em malha fechada com duração moderada (tipicamente $< 30$ s), essa diferença é crítica para a fidelidade dos torques calculados e da resposta do controlador.
 
 Após cada atualização, as coordenadas de juntas rotacionais são restritas ao intervalo $(-\pi, \pi]$ pelo operador de envolvimento (\textit{wrap}):
 \begin{equation}
     q_i \leftarrow (q_i + \pi) \bmod 2\pi - \pi, \quad \forall i \text{ tal que a junta } i \text{ é rotacional},
     \label{eq:wrap}
 \end{equation}
-assegurando que os erros de junta $e_i = q_{d,i} - q_i$ representem sempre o menor caminho angular — condição necessária para a estabilidade de controladores com ganho proporcional \cite{spong2020robot}. Uma verificação de finitude (\texttt{np.isfinite}) é aplicada a $q$ e $\dot{q}$ após cada substep; caso valores NaN ou Inf sejam detectados, a simulação é interrompida com uma exceção descritiva, prevenindo propagação silenciosa de instabilidades numéricas.
+assegurando que os erros de junta $e_i = q_{d,i} - q_i$ representem sempre o menor caminho angular , condição necessária para a estabilidade de controladores com ganho proporcional \cite{spong2020robot}. Uma verificação de finitude (\texttt{np.isfinite}) é aplicada a $q$ e $\dot{q}$ após cada substep; caso valores NaN ou Inf sejam detectados, a simulação é interrompida com uma exceção descritiva, prevenindo propagação silenciosa de instabilidades numéricas.
 
 % ==============================================================================
 \section{Estratégias de Controle Não-Linear}
 \label{sec:controle_impl}
 % ==============================================================================
 
-Quatro estratégias de controle não-linear são implementadas no \textit{Hephaestus}, todas recebendo como entrada as referências de junta $\{q_d, \dot{q}_d, \ddot{q}_d\}$ geradas pelo CLIK e as matrizes dinâmicas avaliadas numericamente. Uma única interface unificada — o parâmetro \texttt{ctrl\_params} do método \texttt{run()} — seleciona e configura o controlador ativo, permitindo a comparação direta das estratégias sob condições idênticas de trajetória, modelo e perturbações.
+Quatro estratégias de controle não-linear são implementadas no \textit{Hephaestus}, todas recebendo como entrada as referências de junta $\{q_d, \dot{q}_d, \ddot{q}_d\}$ geradas pelo CLIK e as matrizes dinâmicas avaliadas numericamente. Uma única interface unificada , o parâmetro \texttt{ctrl\_params} do método \texttt{run()} , seleciona e configura o controlador ativo, permitindo a comparação direta das estratégias sob condições idênticas de trajetória, modelo e perturbações.
 
 \subsection{Controle por Torque Computado com PID (CTC-PID)}
 
@@ -329,7 +329,7 @@ e a lei de controle baseada em modelo:
     \tau_{\text{SMC}} = M(q)\left[\ddot{q}_{d,f} - \lambda\dot{e} - K\tanh(S/\phi)\right] + C(q,\dot{q}) + G(q),
     \label{eq:smc_impl}
 \end{equation}
-onde $\ddot{q}_{d,f} = \alpha\,\ddot{q}_d + (1-\alpha)\,\ddot{q}_{d,f}^{\text{prev}}$ é um filtro passa-baixas da aceleração de referência com coeficiente $\alpha \in (0,1]$. O filtro atenua picos de aceleração oriundos das derivadas do CLIK, que seriam amplificados pelo ganho $\lambda$ na lei de controle — uma instabilidade prática frequentemente não mencionada nas formulações teóricas do CT-SMC \cite{slotine1991applied, edwards1998sliding}.
+onde $\ddot{q}_{d,f} = \alpha\,\ddot{q}_d + (1-\alpha)\,\ddot{q}_{d,f}^{\text{prev}}$ é um filtro passa-baixas da aceleração de referência com coeficiente $\alpha \in (0,1]$. O filtro atenua picos de aceleração oriundos das derivadas do CLIK, que seriam amplificados pelo ganho $\lambda$ na lei de controle , uma instabilidade prática frequentemente não mencionada nas formulações teóricas do CT-SMC \cite{slotine1991applied, edwards1998sliding}.
 
 A função $\tanh(S/\phi)$ substitui o sinal descontínuo $\text{sign}(S)$ pela camada limite de espessura $\phi > 0$, eliminando o \textit{chattering} (oscilações de alta frequência) ao custo de uma robustez assintótica dentro da camada \cite{slotine1991applied}. A análise formal da robustez com camada limite foi conduzida por Burton e Zinober \cite{burton1986continuous}: para perturbações $|d| \leq D$, o erro de regime permanente é limitado por $\|S\|_\infty \leq \phi \cdot D / K$, o que permite ao projetista estabelecer um compromisso explícito entre \textit{chattering} e precisão de rastreamento.
 
@@ -352,7 +352,7 @@ O filtro de $\ddot{q}_{d,f}$ é compartilhado com a implementação do CT-SMC, s
 
 \subsection{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}
 
-O LADRC (Linear Active Disturbance Rejection Control), proposto por Han \cite{han1995class} e formalizado em versão linear por Gao \cite{gao2003scaling}, é implementado de forma descentralizada — um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
+O LADRC (Linear Active Disturbance Rejection Control), proposto por Han \cite{han1995class} e formalizado em versão linear por Gao \cite{gao2003scaling}, é implementado de forma descentralizada , um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
 \begin{equation}
     \ddot{q}_i = b_{0,i}\,\tau_i + f_i, \qquad f_i = \text{distúrbio total},
     \label{eq:adrc_plant_impl}
@@ -384,7 +384,7 @@ A lei de controle cancela o distúrbio estimado e acrescenta \textit{feedforward
     \label{eq:ladrc_u0}
 \end{equation}
 
-O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas — sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao \cite{zheng2010practical}.
+O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas , sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao \cite{zheng2010practical}.
 
 % ==============================================================================
 \section{Modelos de Forças Dissipativas}
@@ -414,7 +414,7 @@ Ambas as forças dissipativas são aplicadas na equação de dinâmica direta co
     \ddot{q}^n = M^{-1}\!\left(\tau_{\text{ctrl}}^n - C^n - G^n - \tau_{\text{fric}}^n - \tau_{\text{drag}}^n\right),
     \label{eq:dyn_complete}
 \end{equation}
-fora do laço do controlador. Essa separação é fisicamente correta: os torques dissipativos são forças do ambiente (não cancelas pelo controlador a priori) e devem ser observados ou estimados para serem compensados — papel que o ESO do LADRC desempenha implicitamente \cite{han2009pid, huang2014active}.
+fora do laço do controlador. Essa separação é fisicamente correta: os torques dissipativos são forças do ambiente (não cancelas pelo controlador a priori) e devem ser observados ou estimados para serem compensados , papel que o ESO do LADRC desempenha implicitamente \cite{han2009pid, huang2014active}.
 
 % ==============================================================================
 \section{Paralelismo na Avaliação Numérica}
@@ -426,7 +426,7 @@ A avaliação numérica das funções $f_M$, $f_C$ e $f_G$ a cada passo de integ
 O executor \texttt{ProcessPoolExecutor} é inicializado uma única vez após a compilação (método \texttt{warm\_up\_workers()}), com cada \textit{worker} executando o inicializador \texttt{\_init\_worker} que compila localmente as três funções via \texttt{lambdify} e as armazena no dicionário de módulo \texttt{\_WORKER\_FUNCS}. A cada passo físico, três tarefas são submetidas em paralelo:
 \begin{equation}
     \texttt{futures} = \left\{
-        M: \texttt{executor.submit}(\texttt{\_eval\_worker}, (\text{"M"}, \textbf{args})), \;
+        M: \texttt{executor.submit}(\texttt{\_eval\_worker}, (\texttt{``M''}, \textbf{args})), \;
         C: \texttt{executor.submit}(\ldots), \;
         G: \texttt{executor.submit}(\ldots)
     \right\},
@@ -436,7 +436,7 @@ e os resultados são coletados por \texttt{Future.result()} após o despacho das
 
 A chave da eficiência é a \textbf{persistência} do executor: ao contrário de uma implementação ingênua que instancia e destrói um \textit{pool} por simulação (custo de 2--8 s por instância, conforme medido nos testes), o executor é instanciado uma única vez e reutilizado em todas as chamadas subsequentes a \texttt{run()}. A detecção de mudança no número de \textit{workers} solicita reinicialização automática do executor, garantindo flexibilidade sem custo desnecessário \cite{leu1986automated}.
 
-Quando o paralelismo não está habilitado (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal — comportamento padrão seguro para executáveis PyInstaller, máquinas com um único núcleo ou ambientes de depuração. Esta opção também é preferida para sistemas com $N \leq 4$ GDL, onde o \textit{overhead} de IPC supera o ganho de paralelismo \cite{beazley2010understanding}.
+Quando o paralelismo não está habilitado (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal , comportamento padrão seguro para executáveis PyInstaller, máquinas com um único núcleo ou ambientes de depuração. Esta opção também é preferida para sistemas com $N \leq 4$ GDL, onde o \textit{overhead} de IPC supera o ganho de paralelismo \cite{beazley2010understanding}.
 
 % ==============================================================================
 \section{Verificação de Estabilidade Numérica}
@@ -448,7 +448,7 @@ A estabilidade numérica do integrador simplético é governada pela relação e
     \Delta t_{\text{phys}} < \frac{2}{\omega_n} = \frac{2}{\sqrt{k_p}},
     \label{eq:stability_condition}
 \end{equation}
-ou seja, ao menos dois passos por período de oscilação de malha fechada. Para $k_p = 100$ rad$^2$/s$^2$ (ganho típico), $\omega_n = 10$ rad/s e $\Delta t_{\text{phys}} < 0.2$ s — condição satisfeita com folga para $\Delta t_{\text{phys}} = 10^{-3}$ s \cite{hairer2006geometric}. Avisos automáticos são emitidos quando $\Delta t_{\text{phys}} > 10^{-2}$ s ou $\Delta t_{\text{vis}} > 0.1$ s, alertando o usuário sobre potencial instabilidade.
+ou seja, ao menos dois passos por período de oscilação de malha fechada. Para $k_p = 100$ rad$^2$/s$^2$ (ganho típico), $\omega_n = 10$ rad/s e $\Delta t_{\text{phys}} < 0.2$ s , condição satisfeita com folga para $\Delta t_{\text{phys}} = 10^{-3}$ s \cite{hairer2006geometric}. Avisos automáticos são emitidos quando $\Delta t_{\text{phys}} > 10^{-2}$ s ou $\Delta t_{\text{vis}} > 0.1$ s, alertando o usuário sobre potencial instabilidade.
 
 Para o LADRC, a condição adicional de estabilidade do ESO discreto é $\omega_o \Delta t_{\text{phys}} \leq 0.1$, correspondente à frequência de observador máxima $\omega_o^{\max} = 0.1/\Delta t_{\text{phys}} = 100$ rad/s para $\Delta t_{\text{phys}} = 10^{-3}$ s. Este limite é imposto automaticamente pela verificação \texttt{max\_wo\_dt} no construtor do LADRC \cite{zheng2010practical}.
 

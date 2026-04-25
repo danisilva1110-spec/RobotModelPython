@@ -24,11 +24,11 @@ A cinemática diferencial relaciona as velocidades no espaço de juntas às velo
 \end{equation}
 onde $\dot{x} = [\dot{p}^\top, \omega^\top]^\top$ reúne a velocidade linear $\dot{p}$ e a angular $\omega$ do efetuador. A decomposição de $J$ em linhas translacionais $J_v$ e rotacionais $J_\omega$ é fundamental para o projeto dos controladores em espaço de tarefa \cite{siciliano2009robotics}.
 
-As singularidades cinemáticas — configurações em que $J$ perde posto — representam pontos de degeneração do mapeamento diferencial, causando velocidades de junta ilimitadas para movimentos cartesianos finitos. Sua análise e tratamento, seja por critério do determinante de $JJ^\top$, por decomposição em valores singulares (SVD) \cite{golub2013matrix} ou por regularização do tipo Mínimos Quadrados Amortecidos (DLS), é abordada em detalhe por Nakamura e Hanafusa \cite{nakamura1986inverse} e Wampler \cite{wampler2007manipulator}.
+As singularidades cinemáticas , configurações em que $J$ perde posto , representam pontos de degeneração do mapeamento diferencial, causando velocidades de junta ilimitadas para movimentos cartesianos finitos. Sua análise e tratamento, seja por critério do determinante de $JJ^\top$, por decomposição em valores singulares (SVD) \cite{golub2013matrix} ou por regularização do tipo Mínimos Quadrados Amortecidos (DLS), é abordada em detalhe por Nakamura e Hanafusa \cite{nakamura1986inverse} e Wampler \cite{wampler2007manipulator}.
 
 \subsection{Dinâmica de Manipuladores: Formulação de Euler-Lagrange}
 
-A modelagem dinâmica de manipuladores pode ser abordada por dois formalismos clássicos: Newton-Euler e Euler-Lagrange. A formulação de Newton-Euler é recursiva e numericamente eficiente — sua versão recursiva, proposta por Luh, Walker e Paul, tem complexidade $O(N)$ no número de elos \cite{luh1980online}. Já a formulação de Euler-Lagrange, adotada neste trabalho, deriva equações explícitas e simbólicas, tornando-a especialmente adequada para plataformas didáticas e para a síntese de controladores baseados em modelo.
+A modelagem dinâmica de manipuladores pode ser abordada por dois formalismos clássicos: Newton-Euler e Euler-Lagrange. A formulação de Newton-Euler é recursiva e numericamente eficiente , sua versão recursiva, proposta por Luh, Walker e Paul, tem complexidade $O(N)$ no número de elos \cite{luh1980online}. Já a formulação de Euler-Lagrange, adotada neste trabalho, deriva equações explícitas e simbólicas, tornando-a especialmente adequada para plataformas didáticas e para a síntese de controladores baseados em modelo.
 
 O Lagrangiano $\mathcal{L} = T - V$, diferença entre a energia cinética $T$ e a potencial $V$ do sistema, conduz às equações de movimento de Euler-Lagrange:
 \begin{equation}
@@ -75,7 +75,7 @@ A estrutura da Equação \eqref{eq:motion_equation} exibe propriedades que são 
 
 \subsection{Contexto e Motivação}
 
-Os robôs subaquáticos representam uma das fronteiras mais ativas da engenharia mecatrônica e oceânica. Desde os primeiros estudos sistemáticos de Yuh \cite{yuh1990modeling}, a modelagem de Veículos Subaquáticos Não Tripulados (UUVs) evoluiu para incorporar a análise de sistemas acoplados veículo-manipulador, os UVMSs. A revisão abrangente de Yuh e West \cite{yuh2001underwater} cataloga as aplicações práticas — inspeção de dutos, manutenção de plataformas \textit{offshore}, arqueologia submarina e pesquisa oceanográfica — que motivam a crescente demanda por autonomia e precisão.
+Os robôs subaquáticos representam uma das fronteiras mais ativas da engenharia mecatrônica e oceânica. Desde os primeiros estudos sistemáticos de Yuh \cite{yuh1990modeling}, a modelagem de Veículos Subaquáticos Não Tripulados (UUVs) evoluiu para incorporar a análise de sistemas acoplados veículo-manipulador, os UVMSs. A revisão abrangente de Yuh e West \cite{yuh2001underwater} cataloga as aplicações práticas , inspeção de dutos, manutenção de plataformas \textit{offshore}, arqueologia submarina e pesquisa oceanográfica , que motivam a crescente demanda por autonomia e precisão.
 
 Trabalhos mais recentes, como a revisão de Sivčev et al. \cite{sivcev2018underwater}, confirmam que a principal barreira para a automação plena de UVMSs reside na complexidade da interação dinâmica veículo-braço e nas incertezas do meio aquático. Aldhaheri et al. \cite{aldhaheri2022underwater} fornecem uma revisão atualizada dos avanços em controle e navegação, reforçando a necessidade de simuladores de alta fidelidade para o desenvolvimento e validação de estratégias de controle antes do ensaio físico.
 
@@ -84,7 +84,7 @@ Trabalhos mais recentes, como a revisão de Sivčev et al. \cite{sivcev2018under
 A modelagem hidrodinâmica de corpos submersos tem como referência fundamental o livro de Thor I. Fossen, \textit{Handbook of Marine Craft Hydrodynamics and Motion Control} \cite{fossen2011handbook}. Fossen sistematiza a modelagem baseada na formulação SNAME, onde as forças e momentos hidrodinâmicos atuantes sobre um corpo rígido submerso são decompostos em três categorias principais:
 
 \paragraph{Massa Adicionada (\textit{Added Mass}).}
-Ao acelerar um corpo submerso, é necessário acelerar também o fluido ao seu redor. Esse efeito é modelado como uma inércia adicional — a massa adicionada — capturada pelo tensor $M_A \in \mathbb{R}^{6 \times 6}$ \cite{fossen2011handbook, newman1977marine}:
+Ao acelerar um corpo submerso, é necessário acelerar também o fluido ao seu redor. Esse efeito é modelado como uma inércia adicional , a massa adicionada , capturada pelo tensor $M_A \in \mathbb{R}^{6 \times 6}$ \cite{fossen2011handbook, newman1977marine}:
 \begin{equation}
     M_A = -\frac{\partial}{\partial \dot{\nu}}\left[\text{forças e momentos hidrodinâmicos}\right],
     \label{eq:added_mass_def}
@@ -125,7 +125,7 @@ Antonelli \cite{antonelli2014modelling} apresenta o modelo dinâmico unificado d
     M_{\text{Hydro}}(q)\ddot{q} + C_{\text{Hydro}}(q,\dot{q})\dot{q} + D(q,\dot{q})\dot{q} + G_{\text{Hydro}}(q) = \tau + J^\top f_{\text{ext}},
     \label{eq:uvms_model}
 \end{equation}
-onde $D$ reúne os efeitos de arrasto, $f_{\text{ext}}$ são as forças externas aplicadas ao efetuador (e.g., interação com o ambiente) e $J^\top$ é o Jacobiano que projeta essas forças no espaço de juntas. Esta estrutura é idêntica à da Equação \eqref{eq:motion_equation}, com os termos $M$, $C$ e $G$ modificados pela contribuição hidrodinâmica — o que permite que a mesma \textit{engine} seja reutilizada em ambos os modos (ar e água) com a simples extensão implementada em \texttt{RobotMathHydro}.
+onde $D$ reúne os efeitos de arrasto, $f_{\text{ext}}$ são as forças externas aplicadas ao efetuador (e.g., interação com o ambiente) e $J^\top$ é o Jacobiano que projeta essas forças no espaço de juntas. Esta estrutura é idêntica à da Equação \eqref{eq:motion_equation}, com os termos $M$, $C$ e $G$ modificados pela contribuição hidrodinâmica , o que permite que a mesma \textit{engine} seja reutilizada em ambos os modos (ar e água) com a simples extensão implementada em \texttt{RobotMathHydro}.
 
 % ==============================================================================
 \section{Cinemática Inversa Numérica}
@@ -133,7 +133,7 @@ onde $D$ reúne os efeitos de arrasto, $f_{\text{ext}}$ são as forças externas
 
 \subsection{Formulação do Problema}
 
-A cinemática inversa (IK) — determinação das variáveis de junta $q$ que posicionam o efetuador em uma configuração cartesiana desejada $x_d$ — é um problema central em robótica. Para cadeias seriais não-redundantes ($N = 6$), soluções analíticas fechadas são, em geral, possíveis \cite{craig1989introduction}. Para sistemas redundantes ($N > 6$) ou com geometrias genéricas, as abordagens numéricas iterativas são necessárias \cite{siciliano2009robotics}.
+A cinemática inversa (IK) , determinação das variáveis de junta $q$ que posicionam o efetuador em uma configuração cartesiana desejada $x_d$ , é um problema central em robótica. Para cadeias seriais não-redundantes ($N = 6$), soluções analíticas fechadas são, em geral, possíveis \cite{craig1989introduction}. Para sistemas redundantes ($N > 6$) ou com geometrias genéricas, as abordagens numéricas iterativas são necessárias \cite{siciliano2009robotics}.
 
 \subsection{Cinemática Inversa em Malha Fechada (CLIK)}
 
@@ -153,7 +153,7 @@ O CLIK implementado no \textit{Hephaestus} opera no espaço de tarefa completo d
 
 \subsection{Tratamento de Singularidades: Mínimos Quadrados Amortecidos (DLS)}
 
-Próximo às singularidades, os valores singulares de $J$ se aproximam de zero, tornando a pseudo-inversa $J^+ = J^\top(JJ^\top)^{-1}$ numericamente instável. Nakamura e Hanafusa \cite{nakamura1986inverse} propuseram a pseudo-inversa amortecida (DLS — \textit{Damped Least Squares}):
+Próximo às singularidades, os valores singulares de $J$ se aproximam de zero, tornando a pseudo-inversa $J^+ = J^\top(JJ^\top)^{-1}$ numericamente instável. Nakamura e Hanafusa \cite{nakamura1986inverse} propuseram a pseudo-inversa amortecida (DLS , \textit{Damped Least Squares}):
 \begin{equation}
     J^{\dagger}_{\lambda} = J^\top\left(JJ^\top + \lambda^2 I\right)^{-1},
     \label{eq:dls}
@@ -237,7 +237,7 @@ com ganhos $\beta_1 = 3\omega_o$, $\beta_2 = 3\omega_o^2$, $\beta_3 = \omega_o^3
     \label{eq:adrc_control}
 \end{equation}
 
-A análise de estabilidade do LADRC foi formalizada por Zheng e Gao \cite{zheng2010practical}. A formulação descentralizada — um ESO por junta, ignorando o acoplamento dinâmico — é especialmente atraente para robótica: Huang e Xue \cite{huang2014active} e trabalhos subsequentes demonstraram sua eficácia em manipuladores, onde os termos de Coriolis e gravidade são tratados como distúrbios a serem estimados pelo ESO. O artigo de revisão de Han \cite{han2009pid} sintetiza a motivação filosófica da abordagem ADRC como extensão natural do controlador PID.
+A análise de estabilidade do LADRC foi formalizada por Zheng e Gao \cite{zheng2010practical}. A formulação descentralizada , um ESO por junta, ignorando o acoplamento dinâmico , é especialmente atraente para robótica: Huang e Xue \cite{huang2014active} e trabalhos subsequentes demonstraram sua eficácia em manipuladores, onde os termos de Coriolis e gravidade são tratados como distúrbios a serem estimados pelo ESO. O artigo de revisão de Han \cite{han2009pid} sintetiza a motivação filosófica da abordagem ADRC como extensão natural do controlador PID.
 
 No \textit{Hephaestus}, a implementação inclui feedforward explícito de $G(q)$ e $C(q,\dot{q})$, reduzindo o distúrbio residual que o ESO deve estimar para apenas erros de modelo e perturbações externas.
 
@@ -271,15 +271,15 @@ onde $\theta(t) = \theta_0 + (\theta_f - \theta_0)\,s(t)$ e $s(t)$ é o polinôm
 
 \subsection{Álgebra Computacional Simbólica com SymPy}
 
-O projeto \textit{SymPy} \cite{meurer2017sympy} é uma biblioteca Python de Álgebra Computacional Simbólica (\textit{Computer Algebra System}, CAS) inteiramente implementada em Python puro, o que a torna portável e integrável sem dependências externas de compilação. Meurer et al. \cite{meurer2017sympy} descrevem a arquitetura modular do SymPy, destacando o módulo \texttt{sympy.physics.mechanics}, que fornece o tipo \texttt{dynamicsymbols} — símbolos dependentes do tempo com diferenciação automática — e as funções do método de Lagrange que automatizam a derivação das equações de movimento a partir da energia cinética e potencial.
+O projeto \textit{SymPy} \cite{meurer2017sympy} é uma biblioteca Python de Álgebra Computacional Simbólica (\textit{Computer Algebra System}, CAS) inteiramente implementada em Python puro, o que a torna portável e integrável sem dependências externas de compilação. Meurer et al. \cite{meurer2017sympy} descrevem a arquitetura modular do SymPy, destacando o módulo \texttt{sympy.physics.mechanics}, que fornece o tipo \texttt{dynamicsymbols} , símbolos dependentes do tempo com diferenciação automática , e as funções do método de Lagrange que automatizam a derivação das equações de movimento a partir da energia cinética e potencial.
 
-A manipulação simbólica de expressões de grande porte — como as matrizes $M(q)$ de sistemas com 6 ou mais graus de liberdade — pode produzir expressões com dezenas de milhares de subexpressões primitivas. A gestão eficiente dessas expressões é crítica para viabilizar a simulação numérica subsequente \cite{leu1986automated}.
+A manipulação simbólica de expressões de grande porte , como as matrizes $M(q)$ de sistemas com 6 ou mais graus de liberdade , pode produzir expressões com dezenas de milhares de subexpressões primitivas. A gestão eficiente dessas expressões é crítica para viabilizar a simulação numérica subsequente \cite{leu1986automated}.
 
 \subsection{Eliminação de Subexpressões Comuns (CSE)}
 
 A Eliminação de Subexpressões Comuns (\textit{Common Subexpression Elimination}, CSE) é uma otimização clássica de compiladores \cite{alfred2007compilers} que identifica subexpressões repetidas em uma expressão aritmética e as substitui por variáveis temporárias, reduzindo o número total de operações elementares. No contexto da simulação robótica, Moses \cite{moses1971algebraic} demonstrou que a simplificação algébrica de expressões cinemáticas pode reduzir em mais de uma ordem de grandeza o número de operações necessárias.
 
-A função \texttt{sp.lambdify()} do SymPy com a flag \texttt{cse=True} aplica automaticamente a CSE antes de gerar o código Python/NumPy, detectando e fatorando subexpressões comuns nas matrizes $M$, $C$ e $G$ antes da geração do código numérico \cite{meurer2017sympy}. Isso reduz significativamente o tamanho do bytecode compilado — crítico para evitar \texttt{MemoryError} em sistemas de grande porte — e acelera a avaliação numérica por reutilização de subexpressões em cache.
+A função \texttt{sp.lambdify()} do SymPy com a flag \texttt{cse=True} aplica automaticamente a CSE antes de gerar o código Python/NumPy, detectando e fatorando subexpressões comuns nas matrizes $M$, $C$ e $G$ antes da geração do código numérico \cite{meurer2017sympy}. Isso reduz significativamente o tamanho do bytecode compilado , crítico para evitar \texttt{MemoryError} em sistemas de grande porte , e acelera a avaliação numérica por reutilização de subexpressões em cache.
 
 \subsection{Paralelismo na Derivação Simbólica}
 
@@ -294,7 +294,7 @@ A integração numérica das equações de movimento \eqref{eq:motion_equation} 
     \dot{q}^{n+1} &= \dot{q}^n + \ddot{q}^n \Delta t, \label{eq:symplectic_euler1}\\
     q^{n+1} &= q^n + \dot{q}^{n+1} \Delta t. \label{eq:symplectic_euler2}
 \end{align}
-Esta sequência é um método simplético de primeira ordem — pertence à família de integradores que preservam a estrutura Hamiltoniana do sistema \cite{leimkuhler2004simulating, hairer2006geometric}. Sua principal vantagem sobre o Euler Explícito é a preservação de energia a longo prazo: enquanto o Euler Explícito apresenta acúmulo secular de energia (instabilidade numérica suave), o Euler Simplético preserva uma ``energia modificada'' próxima da real \cite{leimkuhler2004simulating}. Para simulações de controle em malha fechada com duração moderada (tipicamente $< 30$ s), essa diferença é crítica para a fidelidade dos resultados.
+Esta sequência é um método simplético de primeira ordem , pertence à família de integradores que preservam a estrutura Hamiltoniana do sistema \cite{leimkuhler2004simulating, hairer2006geometric}. Sua principal vantagem sobre o Euler Explícito é a preservação de energia a longo prazo: enquanto o Euler Explícito apresenta acúmulo secular de energia (instabilidade numérica suave), o Euler Simplético preserva uma ``energia modificada'' próxima da real \cite{leimkuhler2004simulating}. Para simulações de controle em malha fechada com duração moderada (tipicamente $< 30$ s), essa diferença é crítica para a fidelidade dos resultados.
 
 % ==============================================================================
 \section{Ferramentas de Simulação para UVMS: Estado da Arte}
