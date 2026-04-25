@@ -19,14 +19,28 @@ A interface pública principal é o método \texttt{run()}, cuja assinatura unif
     \item \textbf{Retorno}: o método retorna as séries temporais $\{t_i, e_i, \tau_i\}$ e a lista de frames de animação, que são consumidos pela interface gráfica para plotagem e renderização interativa.
 \end{enumerate}
 
-A detecção automática da fronteira veículo/braço — pela contagem das juntas iniciais sem vetor de elo estrutural nulo — permite que o simulador opere tanto em manipuladores terrestres puros quanto em UVMSs, compilando separadamente a matriz de rotação do frame do veículo (\texttt{func\_R\_vehicle}) para visualização da orientação do corpo base \cite{antonelli2014modelling, fossen2011handbook}.
+A detecção automática da fronteira veículo/braço — pela contagem das juntas iniciais sem vetor de elo estrutural nulo — permite que o simulador opere tanto em manipuladores terrestres puros quanto em UVMSs, compilando separadamente a matriz de rotação do frame do veículo (\texttt{func\_R\_vehicle}) para visualização da orientação do corpo base \cite{antonelli2014modelling, fossen2011handbook}. As Figuras~\ref{fig:loop_init} e~\ref{fig:loop_controle} detalham o fluxo interno do método \texttt{run()}: a fase de inicialização (Figura~\ref{fig:loop_init}) e o passo de controle repetido a cada substep físico (Figura~\ref{fig:loop_controle}).
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.65\textwidth]{figuras/Diagramas/Diagrama 7a — Loop de Simulação Inicialização.png}
+    \caption{Fase de inicialização do simulador: resolução da IK estática por Levenberg-Marquardt com busca em linha (Seção~\ref{sec:ik_initial}), configuração do controlador e do executor paralelo, e verificação das condições de estabilidade numérica (Seção~\ref{sec:estabilidade_num}).}
+    \label{fig:loop_init}
+\end{figure}
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.88\textwidth]{figuras/Diagramas/Diagrama 7b — Loop de Simulação Passo de Controle.png}
+    \caption{Passo de controle físico executado a cada substep $\Delta t_{\text{phys}}$: planejamento de trajetória, CLIK 6D, avaliação paralela de $M$, $C$, $G$, cálculo do torque de controle, aplicação das forças dissipativas e integração simplética de Euler (Equações~\eqref{eq:symplectic1}--\eqref{eq:symplectic2}).}
+    \label{fig:loop_controle}
+\end{figure}
 
 % ==============================================================================
 \section{Planejamento de Trajetórias no Espaço Cartesiano}
 \label{sec:traj_planning}
 % ==============================================================================
 
-O planejamento de trajetórias define as referências de posição $P_{\text{ref}}(t)$, velocidade $\dot{P}_{\text{ref}}(t)$ e aceleração $\ddot{P}_{\text{ref}}(t)$ que o efetuador deve rastrear ao longo do tempo. Siciliano et al. (2009) \cite{siciliano2009robotics} e Craig (1987) \cite{craig1989introduction} distinguem o planejamento no espaço de juntas do planejamento no espaço cartesiano; este trabalho adota o segundo, em que as referências são geradas diretamente na posição do efetuador e convertidas para comandos de junta pelo CLIK a cada instante.
+O planejamento de trajetórias define as referências de posição $P_{\text{ref}}(t)$, velocidade $\dot{P}_{\text{ref}}(t)$ e aceleração $\ddot{P}_{\text{ref}}(t)$ que o efetuador deve rastrear ao longo do tempo. Siciliano et al. \cite{siciliano2009robotics} e Craig \cite{craig1989introduction} distinguem o planejamento no espaço de juntas do planejamento no espaço cartesiano; este trabalho adota o segundo, em que as referências são geradas diretamente na posição do efetuador e convertidas para comandos de junta pelo CLIK a cada instante.
 
 \subsection{Polinômio Cúbico de Interpolação}
 
@@ -42,7 +56,7 @@ com derivadas:
     \label{eq:cubic_ds}
 \end{equation}
 
-Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ — ou seja, partida e parada suaves — e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1989introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. (2009) \cite{siciliano2009robotics}.
+Este perfil garante $s(0) = 0$, $s(1) = 1$, $\dot{s}(0) = \dot{s}(1) = 0$ — ou seja, partida e parada suaves — e aceleração máxima $|\ddot{s}|_{\max} = 6/T^2$ no instante $T/2$ \cite{siciliano2009robotics}. A continuidade da velocidade nos extremos é essencial para evitar descontinuidades no sinal de referência do CLIK que seriam amplificadas pelos ganhos derivativos do controlador \cite{craig1989introduction}. O polinômio de grau 5 (que garantiria continuidade de aceleração nos extremos) não foi adotado por apresentar pico de aceleração levemente superior para o mesmo tempo de trajetória, conforme análise comparativa de Siciliano et al. \cite{siciliano2009robotics}.
 
 \subsection{Segmento de Reta}
 
@@ -77,7 +91,14 @@ com velocidade e aceleração obtidas por diferenciação analítica:
 \end{align}
 onde $\hat{t} = -\sin(\theta)\,e_1 + \cos(\theta)\,e_2$ é o vetor tangente e $\hat{n} = -\cos(\theta)\,e_1 - \sin(\theta)\,e_2$ é o vetor normal centrípeto. A componente centrípeta $\dot{\theta}^2\,\hat{n}$ da aceleração é frequentemente omitida em abordagens simplificadas, mas sua inclusão é necessária para que o \textit{feedforward} de aceleração no CLIK seja fisicamente correto em trajetórias circulares de alta velocidade \cite{siciliano2009robotics}.
 
-Uma verificação de segurança automática é aplicada: se a distância entre $P_i$ e $P_f$ excede o diâmetro $2R$, o raio é automaticamente estendido para $R = \|P_f - P_i\|/2 + \varepsilon$, garantindo geometria factível. Caso o vetor $(P_f - P_i) \times \hat{n}$ seja nulo (pontos colineares com a normal), a trajetória degrada graciosamente para um segmento de reta \cite{siciliano2009robotics}.
+Uma verificação de segurança automática é aplicada: se a distância entre $P_i$ e $P_f$ excede o diâmetro $2R$, o raio é automaticamente estendido para $R = \|P_f - P_i\|/2 + \varepsilon$, garantindo geometria factível. Caso o vetor $(P_f - P_i) \times \hat{n}$ seja nulo (pontos colineares com a normal), a trajetória degrada graciosamente para um segmento de reta \cite{siciliano2009robotics}. A Figura~\ref{fig:traj_planning} apresenta o fluxo de geração das referências de posição, velocidade e aceleração para os dois tipos de trajetória implementados e a integração com o polinômio cúbico.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.90\textwidth]{figuras/Diagramas/Diagrama 5 — Planejamento de Trajetória.png}
+    \caption{Fluxo de planejamento de trajetória no espaço cartesiano: o parâmetro cúbico $s(\tau)$ (Equação~\eqref{eq:cubic_s}) é aplicado ao segmento de reta (Equações~\eqref{eq:traj_line_P}--\eqref{eq:traj_line_A}) ou ao arco circular (Equações~\eqref{eq:circle_traj}--\eqref{eq:circle_A}), gerando triplas $\{P_{\text{ref}}, \dot{P}_{\text{ref}}, \ddot{P}_{\text{ref}}\}$ a cada passo de integração para o CLIK \cite{siciliano2009robotics, craig1989introduction}.}
+    \label{fig:traj_planning}
+\end{figure}
 
 \subsection{Modos de Referência de Orientação}
 \label{sec:orient_modes}
@@ -116,7 +137,14 @@ O \textit{Hephaestus} suporta seis modos distintos de referência de orientaçã
     \item \textbf{Normal à Superfície}: o eixo $z$ é mantido alinhado a um vetor normal fixo $\hat{n}$ fornecido pelo usuário, com $\omega_{\text{ref}} = 0$. Adequado para tarefas de usinagem ou inspeção perpendicular a superfícies planas \cite{siciliano2009robotics}.
 \end{enumerate}
 
-Os modos 2 a 6 ativam o Jacobiano completo $6 \times N$ no CLIK, descrito na Seção~\ref{sec:clik_6d}, combinando controle de posição e orientação no mesmo algoritmo.
+Os modos 2 a 6 ativam o Jacobiano completo $6 \times N$ no CLIK, descrito na Seção~\ref{sec:clik_6d}, combinando controle de posição e orientação no mesmo algoritmo. A Figura~\ref{fig:modos_orientacao} compara os seis modos de referência de orientação implementados, indicando o sinal de referência gerado por cada um e os casos de uso típicos.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.9\textwidth]{figuras/Diagramas/Diagrama 6b — Modos de Orientação do Efetuador.png}
+    \caption{Modos de referência de orientação do efetuador disponíveis no \textit{Hephaestus}: Livre (apenas controle posicional), Fixa, Tangente à Trajetória, Apontar para o Alvo, SLERP geodésico \cite{shoemake1985animating} e Normal à Superfície. Os modos 2--6 ativam o Jacobiano completo $J \in \mathbb{R}^{6 \times N}$ e o erro de orientação da Equação~\eqref{eq:orient_error_impl}.}
+    \label{fig:modos_orientacao}
+\end{figure}
 
 % ==============================================================================
 \section{Inicialização da Postura: Levenberg-Marquardt com Busca em Linha}
@@ -140,7 +168,7 @@ O algoritmo iterativo é descrito a seguir. A cada iteração $k$:
     \item Detecta estagnação: se $|\|e_{k-1}\| - \|e_k\|| < 0.1\,\varepsilon_{\text{tol}}$ por 10 iterações consecutivas, interrompe.
 \end{enumerate}
 
-A estratégia adaptativa de $\lambda$ é a essência do algoritmo de Levenberg-Marquardt: para erros grandes (longe do mínimo), $\lambda$ grande amortece o passo, comportando-se como o método do gradiente; próximo do mínimo, $\lambda$ pequeno permite convergência quadrática típica de Newton-Gauss \cite{more2006levenberg}. A combinação com a busca em linha de Armijo confere estabilidade adicional quando o Jacobiano é mal-condicionado, conforme demonstrado por Nakamura e Hanafusa (1986) \cite{nakamura1986inverse} e Wampler (1986) \cite{wampler2007manipulator} para IK de manipuladores com singularidades.
+A estratégia adaptativa de $\lambda$ é a essência do algoritmo de Levenberg-Marquardt: para erros grandes (longe do mínimo), $\lambda$ grande amortece o passo, comportando-se como o método do gradiente; próximo do mínimo, $\lambda$ pequeno permite convergência quadrática típica de Newton-Gauss \cite{more2006levenberg}. A combinação com a busca em linha de Armijo confere estabilidade adicional quando o Jacobiano é mal-condicionado, conforme demonstrado por Nakamura e Hanafusa \cite{nakamura1986inverse} e Wampler \cite{wampler2007manipulator} para IK de manipuladores com singularidades.
 
 % ==============================================================================
 \section{Cinemática Inversa em Malha Fechada (CLIK)}
@@ -212,7 +240,14 @@ Para sistemas com $N > 6$ graus de liberdade (ou $N > 3$ no modo posicional), o 
     \dot{q}_0 = K_n\,(q_{\text{home}} - q_{\text{curr}}),
     \label{eq:null_space}
 \end{equation}
-onde $K_n$ é o ganho de espaço nulo (ajustável pelo usuário). Esta abordagem, introduzida por Liegeois (1977) \cite{liegeois1977automatic} e consolidada por Chiaverini et al. (1997) \cite{chiaverini1997singularity}, garante que o robô tenda à postura de maior manipulabilidade ou com limites de junta mais distantes, melhorando a qualidade do rastreamento ao longo de trajetórias extensas.
+onde $K_n$ é o ganho de espaço nulo (ajustável pelo usuário). Esta abordagem, introduzida por Liegeois \cite{liegeois1977automatic} e consolidada por Chiaverini et al. \cite{chiaverini1997singularity}, garante que o robô tenda à postura de maior manipulabilidade ou com limites de junta mais distantes, melhorando a qualidade do rastreamento ao longo de trajetórias extensas. O fluxo completo do CLIK — incluindo DLS, feedforward de velocidade e aceleração, correção de deriva do Jacobiano e projeção no espaço nulo — é esquematizado na Figura~\ref{fig:clik_cinematica}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.7\textwidth]{figuras/Diagramas/Diagrama 6a — CLIK Cinemática Inversa Numérica.png}
+    \caption{Fluxo do algoritmo CLIK (\textit{Closed-Loop Inverse Kinematics}) implementado no \textit{Hephaestus}: recebe as referências cartesianas $\{P_{\text{ref}}, \dot{P}_{\text{ref}}, \ddot{P}_{\text{ref}}\}$ e produz as referências de junta $\{q_d, \dot{q}_d, \ddot{q}_d\}$ por pseudo-inversão amortecida DLS (Equação~\eqref{eq:dls_pos}) com gestão de redundância por projeção no espaço nulo \cite{chiaverini1994review, nakamura1986inverse, chiaverini1997singularity}.}
+    \label{fig:clik_cinematica}
+\end{figure}
 
 % ==============================================================================
 \section{Integrador Simplético de Euler com Substeps}
@@ -296,11 +331,11 @@ e a lei de controle baseada em modelo:
 \end{equation}
 onde $\ddot{q}_{d,f} = \alpha\,\ddot{q}_d + (1-\alpha)\,\ddot{q}_{d,f}^{\text{prev}}$ é um filtro passa-baixas da aceleração de referência com coeficiente $\alpha \in (0,1]$. O filtro atenua picos de aceleração oriundos das derivadas do CLIK, que seriam amplificados pelo ganho $\lambda$ na lei de controle — uma instabilidade prática frequentemente não mencionada nas formulações teóricas do CT-SMC \cite{slotine1991applied, edwards1998sliding}.
 
-A função $\tanh(S/\phi)$ substitui o sinal descontínuo $\text{sign}(S)$ pela camada limite de espessura $\phi > 0$, eliminando o \textit{chattering} (oscilações de alta frequência) ao custo de uma robustez assintótica dentro da camada \cite{slotine1991applied}. A análise formal da robustez com camada limite foi conduzida por Burton e Zinober (1986) \cite{burton1986continuous}: para perturbações $|d| \leq D$, o erro de regime permanente é limitado por $\|S\|_\infty \leq \phi \cdot D / K$, o que permite ao projetista estabelecer um compromisso explícito entre \textit{chattering} e precisão de rastreamento.
+A função $\tanh(S/\phi)$ substitui o sinal descontínuo $\text{sign}(S)$ pela camada limite de espessura $\phi > 0$, eliminando o \textit{chattering} (oscilações de alta frequência) ao custo de uma robustez assintótica dentro da camada \cite{slotine1991applied}. A análise formal da robustez com camada limite foi conduzida por Burton e Zinober \cite{burton1986continuous}: para perturbações $|d| \leq D$, o erro de regime permanente é limitado por $\|S\|_\infty \leq \phi \cdot D / K$, o que permite ao projetista estabelecer um compromisso explícito entre \textit{chattering} e precisão de rastreamento.
 
 \subsection{Super-Twisting (STA)}
 
-O algoritmo Super-Twisting (STA), proposto por Levant (1993) \cite{levant1993sliding}, é um modo deslizante de segunda ordem que elimina o \textit{chattering} intrinsecamente ao produzir um sinal de controle contínuo. A superfície deslizante é idêntica à Equação~\eqref{eq:sliding_surface}, e a parcela de modo deslizante é:
+O algoritmo Super-Twisting (STA), proposto por Levant \cite{levant1993sliding}, é um modo deslizante de segunda ordem que elimina o \textit{chattering} intrinsecamente ao produzir um sinal de controle contínuo. A superfície deslizante é idêntica à Equação~\eqref{eq:sliding_surface}, e a parcela de modo deslizante é:
 \begin{align}
     v_{\text{sw}} &= -k_1\,|S|^{1/2}\,\text{sign}(S) + z, \label{eq:sta1_impl}\\
     \dot{z} &= -k_2\,\text{sign}(S), \label{eq:sta2_impl}
@@ -311,13 +346,13 @@ onde $z$ é uma variável interna integrada numericamente por Euler explícito: 
     \label{eq:sta_ctrl}
 \end{equation}
 
-O sinal $v_{\text{sw}}$ é contínuo porque $z$ integra o sinal descontínuo, fazendo $v_{\text{sw}}$ variar continuamente mesmo que $\text{sign}(S)$ seja descontínuo. Moreno e Osorio (2012) \cite{moreno2012strict} forneceram uma função de Lyapunov estrita para o STA, estabelecendo condições de ganho suficientes para convergência em tempo finito com distúrbio de derivada limitada $|\dot{d}| \leq \delta$: $k_2 > \delta$ e $k_1 > 2\sqrt{k_2\,\delta}$. A convergência em tempo finito de $S \to 0$ e $\dot{S} \to 0$ diferencia qualitativamente o STA do CT-SMC de primeira ordem, cuja convergência é assintótica \cite{levant1993sliding, utkin2017sliding}.
+O sinal $v_{\text{sw}}$ é contínuo porque $z$ integra o sinal descontínuo, fazendo $v_{\text{sw}}$ variar continuamente mesmo que $\text{sign}(S)$ seja descontínuo. Moreno e Osorio \cite{moreno2012strict} forneceram uma função de Lyapunov estrita para o STA, estabelecendo condições de ganho suficientes para convergência em tempo finito com distúrbio de derivada limitada $|\dot{d}| \leq \delta$: $k_2 > \delta$ e $k_1 > 2\sqrt{k_2\,\delta}$. A convergência em tempo finito de $S \to 0$ e $\dot{S} \to 0$ diferencia qualitativamente o STA do CT-SMC de primeira ordem, cuja convergência é assintótica \cite{levant1993sliding, utkin2017sliding}.
 
 O filtro de $\ddot{q}_{d,f}$ é compartilhado com a implementação do CT-SMC, sendo parametrizado pelo mesmo coeficiente $\alpha$, o que garante comparabilidade direta das duas estratégias quando $\lambda$, $K$ (CT-SMC) e $k_1$, $k_2$ (STA) são ajustados para desempenhos nominais equivalentes.
 
 \subsection{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}
 
-O LADRC (Linear Active Disturbance Rejection Control), proposto por Han (1995) \cite{han1995class} e formalizado em versão linear por Gao (2003) \cite{gao2003scaling}, é implementado de forma descentralizada — um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
+O LADRC (Linear Active Disturbance Rejection Control), proposto por Han \cite{han1995class} e formalizado em versão linear por Gao \cite{gao2003scaling}, é implementado de forma descentralizada — um ESO e uma lei de controle por junta, ignorando o acoplamento dinâmico \cite{huang2014active}. Para a junta $i$, a dinâmica nominal é reescrita como:
 \begin{equation}
     \ddot{q}_i = b_{0,i}\,\tau_i + f_i, \qquad f_i = \text{distúrbio total},
     \label{eq:adrc_plant_impl}
@@ -349,7 +384,7 @@ A lei de controle cancela o distúrbio estimado e acrescenta \textit{feedforward
     \label{eq:ladrc_u0}
 \end{equation}
 
-O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas — sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao (2010) \cite{zheng2010practical}.
+O \textit{feedforward} de $G$ e $C$ é especialmente crítico em manipuladores terrestres (onde $G \neq 0$) e no início de trajetórias rápidas (onde $C \propto \dot{q}^2$ cresce rapidamente): sem esses termos, o ESO deve perseguir um distúrbio crescente com lag dinâmico, introduzindo um transiente oscilatório nos primeiros instantes da trajetória. A inclusão do feedforward reduz o distúrbio residual a apenas erros de modelo e perturbações externas — sinais pequenos e quase constantes que o ESO estima com precisão \cite{han2009pid}. A análise de estabilidade do LADRC com esta formulação foi formalizada por Zheng e Gao \cite{zheng2010practical}.
 
 % ==============================================================================
 \section{Modelos de Forças Dissipativas}

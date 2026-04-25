@@ -1,0 +1,133 @@
+\usepackage{xcolor}
+\usepackage{tcolorbox}
+\tcbuselibrary{listings, skins}
+\usepackage{listings}
+
+\definecolor{arduino}{HTML}{00A3A9}
+\definecolor{structure}{HTML}{818A42}
+\definecolor{variables}{HTML}{128F8F}
+\definecolor{functions}{HTML}{DB6B21}
+\definecolor{back}{HTML}{E0E0E2}
+\definecolor{myblue}{rgb}{0.01,0.61,0.98}
+\definecolor{mygray}{rgb}{0.47,0.47,0.33}
+
+\newcommand*{\FormatDigit}[1]{\ttfamily\textcolor{black}{#1}}
+%% http://tex.stackexchange.com/questions/32174/listings-package-how-can-i-format-all-numbers
+%% Correção de erros em acentos e caracteres especiais da língua portuguesa:
+\lstdefinestyle{FormattedNumber}{%
+    literate={á}{{\'a}}{1}%
+            {à}{{\`a}}{1}%
+            {ã}{{\~a}}{1}%
+            {â}{{\^a}}{1}%
+            {é}{{\'e}}{1}%
+            {è}{{\`e}}{1}%
+            {ê}{{\^e}}{1}%
+            {í}{{\'i}}{1}%
+            {ó}{{\'o}}{1}%
+            {ô}{{\^o}}{1}%
+            {ò}{{\`o}}{1}%
+            {õ}{{\~o}}{1}%
+            {ú}{{\'u}}{1}%
+            {ç}{{\c{c}}}{1}%
+            {Á}{{\'A}}{1}%
+            {À}{{\`A}}{1}%
+            {Â}{{\^A}}{1}%
+            {Ã}{{\~A}}{1}%
+            {É}{{\'E}}{1}%
+            {È}{{\`E}}{1}%
+            {Ê}{{\^E}}{1}%
+            {Í}{{\'I}}{1}%
+            {Ó}{{\'O}}{1}%
+            {Ô}{{\^O}}{1}%
+            {Ò}{{\`O}}{1}%
+            {Õ}{{\~O}}{1}%
+            {Ú}{{\'U}}{1}%
+            {Ç}{{\c C}}{1}%
+            {0}{{\FormatDigit{0}}}{1}%
+            {1}{{\FormatDigit{1}}}{1}%
+            {2}{{\FormatDigit{2}}}{1}%
+            {3}{{\FormatDigit{3}}}{1}%
+            {4}{{\FormatDigit{4}}}{1}%
+            {5}{{\FormatDigit{5}}}{1}%
+            {6}{{\FormatDigit{6}}}{1}%
+            {7}{{\FormatDigit{7}}}{1}%
+            {8}{{\FormatDigit{8}}}{1}%
+            {9}{{\FormatDigit{9}}}{1}%
+            {.0}{{\FormatDigit{.0}}}{2}% 
+            {.1}{{\FormatDigit{.1}}}{2}% 
+            {.2}{{\FormatDigit{.2}}}{2}%
+            {.3}{{\FormatDigit{.3}}}{2}%
+            {.4}{{\FormatDigit{.4}}}{2}%
+            {.5}{{\FormatDigit{.5}}}{2}%
+            {.6}{{\FormatDigit{.6}}}{2}%
+            {.7}{{\FormatDigit{.7}}}{2}%
+            {.8}{{\FormatDigit{.8}}}{2}%
+            {.9}{{\FormatDigit{.9}}}{2}%
+            %{,}{{\FormatDigit{,}}}{1}% Eliminar o comentário se quiser "," colorido
+            {\ }{{ }}{1}%
+            ,%
+}
+
+\lstset{%
+  basicstyle=\footnotesize,       
+  breakatwhitespace=false,         
+  breaklines=true,                 
+  captionpos=b,                   
+  commentstyle=\color{gray},    
+  deletekeywords={...},           
+  escapeinside={\%*}{*)},          
+  extendedchars=true,              
+  keepspaces=true,                 
+  keywordstyle=[1]\color{structure},
+  keywordstyle=[2]\color{variables},
+  keywordstyle=[3]\color{functions},
+  keywordstyle=[4]\bfseries\color{functions},
+  language=c++,                
+  morekeywords={*,...},     
+  numbers=left,                    
+  numbersep=5pt,                   
+  numberstyle=\tiny\color{mygray}, 
+  rulecolor=\color{black},         
+  rulesepcolor=\color{myblue},
+  showspaces=false,                
+  showstringspaces=false,          
+  showtabs=false,                
+  stringstyle=\color{rgb: red,0.33;green,0.45;blue,0.87},    
+  tabsize=2,                       
+  title=\lstname,
+  emphstyle=\color{variables},
+  frame = single,
+  framexleftmargin = 15pt,
+  rulecolor = \color{arduino},
+}
+
+\lstdefinestyle{Arduino}{%
+    style=FormattedNumber,
+    keywords={setup, loop, if, else, for, switch, while, do, break, continue, return, goto},
+    morekeywords=[2]{HIGH, LOW, INPUT, OUTPUT, INPUT_PULLUP, LED_BUILTIN, true, false, int, float, void, boolean, char, word, long, short, double, string, array},
+    morekeywords=[3]{const, pinMode, digitalWrite, digitalRead, analogReference, analogRead, analogWrite, analogReadResolution, analogWriteResolution, tone, noTone, shiftOut, shiftIn, pulseIn, millis, micros, delay, delayMicroseconds, min, max, abs, constrain, map, pow, sqrt, sin, cos, tan, isAlphaNumeric, inAlpha, isAscii, isWhitespace, isControl, isDigit, isGraph, isLowerCase, isPintable, isPunct, isSpace, isUpperCase, isHexadecimalDigit, randomSeed, random, lowByte, highByte, bitRead, bitWrite, bitSet, bitClear, bit, attachInterrupt, detachInterrupt, interrupts, noInterrupts, Stream, Keyboard, Mouse, begin, println, print},
+    morekeywords=[4]{Serial},
+    morecomment=[l]{//},
+    morecomment=[s]{/*}{*/},
+    emph={const},
+}
+
+% Comando para incluir um sketch de Arduino, o primeiro parâmetro é o nome do arquivo que contem o script (sin .ino), o segundo é a legenda do contador Listing
+\newcommand{\ArduinoSketch}[2]{
+\begin{itemize}
+\item[]\lstinputlisting[caption=#2,label=#1,style=Arduino]{#1.ino}
+\end{itemize}
+}
+
+% Ambiente para incluir um sketch de Arduino escrevendo o código diretamente no documento LaTeX, tem um parâmetro de entrada que corresponde ao título do sketch
+\newtcblisting{ArduinoSketchBox}[2][colframe = arduino, enhanced, drop shadow, hbox]{
+	arc = 3pt, outer arc = 3pt,
+	listing only,
+	listing options = {
+		frame =,
+		style = Arduino,
+	},
+	title = #2,
+	#1
+}
+%-----------------------------------------------------------------------------

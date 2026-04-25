@@ -8,36 +8,8 @@ Este capítulo aprofunda a análise dos quatro controladores não-lineares imple
 \label{sec:ctrl_framework}
 % ==============================================================================
 
-A arquitetura de controle do \textit{Hephaestus} segue o paradigma de \textit{controle baseado em modelo} (\textit{model-based control}), no qual o conhecimento das equações de movimento do robô é explorado explicitamente na lei de controle para cancelar ou compensar a não-linearidade intrínseca da dinâmica \cite{craig1989introduction, spong2020robot, siciliano2009robotics}. O fluxo de sinais é organizado em três camadas sobrepostas, conforme ilustrado na Figura~\ref{fig:ctrl_framework}:
+A arquitetura de controle do \textit{Hephaestus} segue o paradigma de \textit{controle baseado em modelo} (\textit{model-based control}), no qual o conhecimento das equações de movimento do robô é explorado explicitamente na lei de controle para cancelar ou compensar a não-linearidade intrínseca da dinâmica \cite{craig1989introduction, spong2020robot, siciliano2009robotics}. O fluxo de sinais é organizado em três camadas sobrepostas.
 
-\begin{enumerate}
-    \item \textbf{Camada de Planejamento} (trajetória cartesiana $\to$ CLIK $\to$ referências de junta): gera as triplas $\{q_d(t), \dot{q}_d(t), \ddot{q}_d(t)\}$ a cada passo de integração, conforme descrito nas Seções~\ref{sec:traj_planning} e \ref{sec:clik} do Capítulo~\ref{cap:simulacao}.
-    \item \textbf{Camada de Controle} (referências de junta + estado medido $\to$ torque de controle $\tau_{\text{ctrl}}$): implementa uma das quatro estratégias descritas neste capítulo, consumindo as matrizes dinâmicas $M$, $C$, $G$ avaliadas numericamente.
-    \item \textbf{Camada de Integração} (torque total $\to$ integrador simplético $\to$ próximo estado): resolve a dinâmica direta $\ddot{q} = M^{-1}(\tau_{\text{ctrl}} + \tau_{\text{dist}} - C - G - \tau_{\text{pass}})$ e atualiza o estado $(q, \dot{q})$.
-\end{enumerate}
-
-\begin{figure}[h!]
-\centering
-\begin{tikzpicture}[
-    block/.style={rectangle, draw, minimum width=2.6cm, minimum height=0.8cm, align=center, font=\small},
-    sum/.style={circle, draw, minimum size=0.5cm},
-    arr/.style={->, >=stealth, thick}
-]
-    \node[block] (traj) {Planejamento\\de Trajetória};
-    \node[block, right=1.0cm of traj] (clik) {CLIK};
-    \node[block, right=1.0cm of clik] (ctrl) {Controlador\\($\tau_{\text{ctrl}}$)};
-    \node[block, right=1.0cm of ctrl] (plant) {Planta\\$M\ddot{q}+C\dot{q}+G=\tau$};
-    \node[block, below=0.7cm of ctrl] (model) {Modelo\\$M,C,G$};
-    \draw[arr] (traj) -- node[above]{\small$P_{\text{ref}},\dot{P}_{\text{ref}},\ddot{P}_{\text{ref}}$} (clik);
-    \draw[arr] (clik) -- node[above]{\small$q_d,\dot{q}_d,\ddot{q}_d$} (ctrl);
-    \draw[arr] (ctrl) -- node[above]{\small$\tau$} (plant);
-    \draw[arr] (model) -- (ctrl);
-    \draw[arr] (plant.east) -- ++(0.5,0) |- node[right, pos=0.25]{\small$q,\dot{q}$} (clik.south |- plant.east -| clik.east) -- (clik.east);
-    \draw[arr] (plant.south) |- (model.east);
-\end{tikzpicture}
-\caption{Estrutura de controle em malha fechada do \textit{Hephaestus}. O modelo dinâmico simbólico-numérico alimenta diretamente a camada de controle e é avaliado no estado corrente $(q^n, \dot{q}^n)$ a cada passo físico.}
-\label{fig:ctrl_framework}
-\end{figure}
 
 A interface de seleção de controlador é estabelecida pelo parâmetro \texttt{ctrl\_params} do método \texttt{run()}, cujo campo \texttt{"type"} determina qual classe de controlador é instanciada. Essa interface unificada permite a comparação direta das quatro estratégias sob condições rigorosamente idênticas de trajetória, modelo, perturbações e passo de integração — requisito metodológico fundamental para estudos comparativos em robótica de controle \cite{corke2021toolbox, astrom1995theory}.
 
@@ -88,7 +60,14 @@ A fragilidade fundamental do CTC é sua dependência do modelo exato. Em presen�
 \end{equation}
 onde a perturbação residual $d(t)$ é proporcional aos erros paramétricos e às acelerações/velocidades do sistema. Para erros paramétricos típicos de calibração de robôs industriais ($\leq 10\%$ de incerteza em massa e inércia) e trajetórias lentas a moderadas, $\|d\|$ é pequeno e o desempenho de rastreamento é mantido \cite{spong2020robot}. Entretanto, em cenários de perturbações externas abruptas (impactos, cargas não modeladas) ou erros paramétricos grandes (e.g., elos subaquáticos com massa adicionada mal estimada), o CTC-PID pode apresentar degradação significativa, motivando as estratégias robustas descritas nas seções seguintes \cite{slotine1991applied, edwards1998sliding}.
 
-O uso da integral $K_I\int e\,d\tau$ melhora a rejeição de perturbações constantes e elimina erros de regime permanente devidos a erros de modelagem estáticos (e.g., $\Delta G$ constante), ao custo de reduzida margem de fase e necessidade de anti-windup \cite{astrom1995theory}. O anti-windup por \textit{clamping} implementado no \textit{Hephaestus} (Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao}) previne a acumulação do integrador em saturação mas não altera a análise de estabilidade em regime linear.
+O uso da integral $K_I\int e\,d\tau$ melhora a rejeição de perturbações constantes e elimina erros de regime permanente devidos a erros de modelagem estáticos (e.g., $\Delta G$ constante), ao custo de reduzida margem de fase e necessidade de anti-windup \cite{astrom1995theory}. O anti-windup por \textit{clamping} implementado no \textit{Hephaestus} (Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao}) previne a acumulação do integrador em saturação mas não altera a análise de estabilidade em regime linear. A Figura~\ref{fig:ctc_pid} resume o fluxo do sinal de controle do CTC-PID, evidenciando o cancelamento da não-linearidade e o laço integral com anti-windup.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figuras/Diagramas/Diagrama 8 — Controlador CTC-PID.png}
+    \caption{Estrutura do controlador Torque Computado com PID (CTC-PID): o sinal auxiliar $v$ (Equação~\eqref{eq:v_pid}) é pré-multiplicado por $M(q)$ e somado aos termos de cancelamento $C(q,\dot{q})$ e $G(q)$, resultando em uma dinâmica de erro linear de segunda/terceira ordem (Equação~\eqref{eq:error_dyn_pid}). O integrador é sujeito a \textit{anti-windup} por \textit{clamping} \cite{astrom1995theory}.}
+    \label{fig:ctc_pid}
+\end{figure}
 
 % ==============================================================================
 \section{Controle por Modo Deslizante com Torque Computado (CT-SMC)}
@@ -97,7 +76,7 @@ O uso da integral $K_I\int e\,d\tau$ melhora a rejeição de perturbações cons
 
 \subsection{Superfície Deslizante e Interpretação Geométrica}
 
-O Controle por Modo Deslizante (\textit{Sliding Mode Control}, SMC), introduzido por Utkin (1977) \cite{utkin1977variable} e estendido para manipuladores robóticos por Slotine e Li (1987) \cite{slotine1987adaptive} e Slotine (1984) \cite{slotine1984sliding}, fundamenta-se em guiar o estado do sistema para uma superfície hiperbólica $\mathcal{S}$ no espaço de estados e mantê-lo sobre ela. Para o sistema de erro $e = q - q_d$, a superfície deslizante é:
+O Controle por Modo Deslizante (\textit{Sliding Mode Control}, SMC), introduzido por Utkin \cite{utkin1977variable} e estendido para manipuladores robóticos por Slotine e Li \cite{slotine1987adaptive} e Slotine \cite{slotine1984sliding}, fundamenta-se em guiar o estado do sistema para uma superfície hiperbólica $\mathcal{S}$ no espaço de estados e mantê-lo sobre ela. Para o sistema de erro $e = q - q_d$, a superfície deslizante é:
 \begin{equation}
     S = \dot{e} + \Lambda e \in \mathbb{R}^N, \qquad \Lambda = \text{diag}(\lambda_1, \ldots, \lambda_N),
     \label{eq:S_def}
@@ -133,7 +112,14 @@ A dependência de $\tau_{\text{SMC}}$ em relação ao modelo simbólico-numéric
 
 Esse comportamento contrasta com o CTC-PID, no qual perturbações de mesma magnitude entram diretamente na dinâmica de erro linear e podem causar erros de regime permanente proporcional. O CT-SMC oferece, portanto, robustez intrínseca a perturbações limitadas ao custo de possível \textit{chattering} — mitigado pela camada limite $\phi$ — e de uma resposta mais agressiva nos instantes iniciais, quando $|S|$ é grande e o termo $K\tanh(S/\phi)$ satura \cite{edwards1998sliding, slotine1991applied}.
 
-O parâmetro $\lambda$ desempenha papel duplo: define a inclinação da superfície deslizante (quanto maior $\lambda$, mais rápida a convergência sobre $\mathcal{S}$) e amplifica $\dot{e}$ na lei de controle (o que pode amplificar ruído de velocidade ou picos de aceleração de referência provenientes do CLIK). O filtro de aceleração $\ddot{q}_{d,f} = \alpha \ddot{q}_d + (1-\alpha)\ddot{q}_{d,f}^{\text{prev}}$ é essencial neste contexto, conforme discutido por Siciliano e Villani (1999) \cite{siciliano1999robot} e Slotine e Li (1991) \cite{slotine1991applied}.
+O parâmetro $\lambda$ desempenha papel duplo: define a inclinação da superfície deslizante (quanto maior $\lambda$, mais rápida a convergência sobre $\mathcal{S}$) e amplifica $\dot{e}$ na lei de controle (o que pode amplificar ruído de velocidade ou picos de aceleração de referência provenientes do CLIK). O filtro de aceleração $\ddot{q}_{d,f} = \alpha \ddot{q}_d + (1-\alpha)\ddot{q}_{d,f}^{\text{prev}}$ é essencial neste contexto, conforme discutido por Siciliano e Villani \cite{siciliano1999robot} e Slotine e Li \cite{slotine1991applied}. A Figura~\ref{fig:ct_smc} sintetiza a estrutura do CT-SMC, destacando a superfície deslizante $S = \dot{e} + \Lambda e$, a camada limite $\tanh(S/\phi)$ e a condição de alcance via função de Lyapunov.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.6\textwidth]{figuras/Diagramas/Diagrama 9 — Controlador CT-SMC.png}
+    \caption{Estrutura do Controle por Modo Deslizante com Torque Computado (CT-SMC): o sinal de chaveamento $-K\tanh(S/\phi)$ garante a condição de alcance $\dot{V}_i < 0$ para perturbações $\|d_i\| \leq K_i$ (Equação~\eqref{eq:lyap_smc}). O filtro passa-baixas de $\ddot{q}_{d,f}$ previne amplificação de picos de aceleração do CLIK \cite{slotine1991applied, burton1986continuous}.}
+    \label{fig:ct_smc}
+\end{figure}
 
 % ==============================================================================
 \section{Algoritmo Super-Twisting (STA)}
@@ -144,9 +130,9 @@ O parâmetro $\lambda$ desempenha papel duplo: define a inclinação da superfí
 
 O principal obstáculo prático ao SMC convencional é o \textit{chattering}: a oscilação de alta frequência do sinal de controle causada pelo chaveamento de sinal de $S$ nos limitadores de atuador reais \cite{utkin2017sliding}. Embora a camada limite $\tanh(S/\phi)$ reduza significativamente o \textit{chattering}, ela não o elimina completamente e introduz erro de regime permanente proporcional a $\phi$ \cite{burton1986continuous}.
 
-A teoria dos Modos Deslizantes de Ordem Superior (HOSM), desenvolvida por Levant (1993, 2003) \cite{levant1993sliding, levant2003higher}, resolve ambos os problemas simultaneamente: ao projetar leis de controle que impõem $S = \dot{S} = 0$ (em vez de apenas $S = 0$), os HOSMs produzem sinal de controle contínuo e convergência em tempo finito, sem o compromisso \textit{chattering}-precisão do SMC de primeira ordem \cite{levant2003higher, moreno2012strict}.
+A teoria dos Modos Deslizantes de Ordem Superior (HOSM), desenvolvida por Levant \cite{levant1993sliding, levant2003higher}, resolve ambos os problemas simultaneamente: ao projetar leis de controle que impõem $S = \dot{S} = 0$ (em vez de apenas $S = 0$), os HOSMs produzem sinal de controle contínuo e convergência em tempo finito, sem o compromisso \textit{chattering}-precisão do SMC de primeira ordem \cite{levant2003higher, moreno2012strict}.
 
-O algoritmo Super-Twisting (STA), proposto originalmente por Levant (1993) \cite{levant1993sliding} para o caso escalar, é o mais simples e amplamente utilizado dos HOSMs para sistemas de grau relativo um \cite{moreno2012strict, edwards1998sliding}. Sua extensão ao problema de controle de manipuladores com $N$ graus de liberdade foi estudada por Bartolini et al. (2003) \cite{bartolini2002multi} e consolidada por Shtessel et al. (2014) \cite{shtessel2014sliding}.
+O algoritmo Super-Twisting (STA), proposto originalmente por Levant \cite{levant1993sliding} para o caso escalar, é o mais simples e amplamente utilizado dos HOSMs para sistemas de grau relativo um \cite{moreno2012strict, edwards1998sliding}. Sua extensão ao problema de controle de manipuladores com $N$ graus de liberdade foi estudada por Bartolini et al. \cite{bartolini2002multi} e consolidada por Shtessel et al. \cite{shtessel2014sliding}.
 
 \subsection{Análise de Estabilidade via Função de Lyapunov Estrita}
 
@@ -161,7 +147,7 @@ com a lei de controle completa:
     \label{eq:sta_tau_cap5}
 \end{equation}
 
-Moreno e Osorio (2012) \cite{moreno2012strict} provaram que, para perturbações $d_i$ com $|\dot{d}_i| \leq \delta_i$ (derivada limitada), o STA converge em tempo finito a $S_i = \dot{S}_i = 0$ se e somente se:
+Moreno e Osorio \cite{moreno2012strict} provaram que, para perturbações $d_i$ com $|\dot{d}_i| \leq \delta_i$ (derivada limitada), o STA converge em tempo finito a $S_i = \dot{S}_i = 0$ se e somente se:
 \begin{equation}
     k_{2,i} > \delta_i, \qquad k_{1,i} > 2\sqrt{k_{2,i}\,\delta_i}.
     \label{eq:sta_conditions}
@@ -181,12 +167,19 @@ A propriedade central que distingue o STA do CT-SMC convencional é a continuida
     z_i^{n+1} = z_i^n - k_{2,i}\,\text{sign}(S_i^n)\,\Delta t_{\text{phys}},
     \label{eq:sta_z_discrete}
 \end{equation}
-o que introduz uma suavização discreta adicional pela integração numérica. Desde que $\Delta t_{\text{phys}}$ seja suficientemente pequeno (condição discutida na Seção~\ref{sec:sta_discreto}), essa implementação preserva as propriedades de convergência em tempo finito \cite{levant2010chattering}.
+o que introduz uma suavização discreta adicional pela integração numérica. Desde que $\Delta t_{\text{phys}}$ seja suficientemente pequeno (condição discutida na Seção~\ref{sec:sta_discreto}), essa implementação preserva as propriedades de convergência em tempo finito \cite{levant2010chattering}. A Figura~\ref{fig:sta_ctrl} ilustra a estrutura do algoritmo Super-Twisting, com a variável interna $z_i$ que integra o sinal descontínuo $-k_{2,i}\,\text{sign}(S_i)$ para produzir o sinal de controle contínuo $v_{\text{sw},i}$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.4\textwidth]{figuras/Diagramas/Diagrama 10 — Controlador STA (Super-Twisting).png}
+    \caption{Estrutura do algoritmo Super-Twisting (STA): a variável interna $z_i$ (Equação~\eqref{eq:sta_z}) integra o sinal descontínuo $-k_{2,i}\,\text{sign}(S_i)$, tornando $v_{\text{sw},i}$ contínuo e eliminando o \textit{chattering}. As condições de ganho $k_{2,i} > \delta_i$ e $k_{1,i} > 2\sqrt{k_{2,i}\delta_i}$ garantem convergência em tempo finito \cite{levant1993sliding, moreno2012strict}.}
+    \label{fig:sta_ctrl}
+\end{figure}
 
 \subsection{Implementação Discreta e Estabilidade Numérica}
 \label{sec:sta_discreto}
 
-A discretização do STA introduz erros que podem comprometer a convergência em tempo finito para passos de integração grandes. Levant (2010) \cite{levant2010chattering} estabeleceu que, para o STA discreto com passo $h = \Delta t_{\text{phys}}$ e ganhos $(k_1, k_2)$, a propriedade de \textit{real sliding} garante que os estados satisfazem $|S| = O(h)$ em regime — uma precisão de primeira ordem no passo de integração. No \textit{Hephaestus}, com $\Delta t_{\text{phys}} = 10^{-3}$ s e ganhos típicos $k_1 = 5$, $k_2 = 10$, o erro de regime em modo deslizante é da ordem de $k_1 h^{1/2} \approx 0.16$ rad — negligenciável para as trajetórias de teste e coberto pela convergência do CLIK \cite{levant2010chattering, shtessel2014sliding}.
+A discretização do STA introduz erros que podem comprometer a convergência em tempo finito para passos de integração grandes. Levant \cite{levant2010chattering} estabeleceu que, para o STA discreto com passo $h = \Delta t_{\text{phys}}$ e ganhos $(k_1, k_2)$, a propriedade de \textit{real sliding} garante que os estados satisfazem $|S| = O(h)$ em regime — uma precisão de primeira ordem no passo de integração. No \textit{Hephaestus}, com $\Delta t_{\text{phys}} = 10^{-3}$ s e ganhos típicos $k_1 = 5$, $k_2 = 10$, o erro de regime em modo deslizante é da ordem de $k_1 h^{1/2} \approx 0.16$ rad — negligenciável para as trajetórias de teste e coberto pela convergência do CLIK \cite{levant2010chattering, shtessel2014sliding}.
 
 % ==============================================================================
 \section{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}
@@ -195,7 +188,7 @@ A discretização do STA introduz erros que podem comprometer a convergência em
 
 \subsection{Paradigma de Rejeição Ativa e Motivação}
 
-O LADRC (\textit{Linear Active Disturbance Rejection Control}), originalmente proposto por Han (1995) \cite{han1995class} como \textit{Active Disturbance Rejection Control} (ADRC) não-linear e reformulado na versão linear por Gao (2003) \cite{gao2003scaling}, representa um paradigma fundamentalmente distinto das três estratégias anteriores: em vez de cancelar a não-linearidade por inversão do modelo ou de projetar superfícies robustas, o ADRC \textit{estima e rejeita} em tempo real a totalidade dos efeitos não modelados e perturbações externas por meio de um Observador de Estado Estendido (ESO) \cite{han2009pid, huang2014active, gao2003scaling}.
+O LADRC (\textit{Linear Active Disturbance Rejection Control}), originalmente proposto por Han \cite{han1995class} como \textit{Active Disturbance Rejection Control} (ADRC) não-linear e reformulado na versão linear por Gao \cite{gao2003scaling}, representa um paradigma fundamentalmente distinto das três estratégias anteriores: em vez de cancelar a não-linearidade por inversão do modelo ou de projetar superfícies robustas, o ADRC \textit{estima e rejeita} em tempo real a totalidade dos efeitos não modelados e perturbações externas por meio de um Observador de Estado Estendido (ESO) \cite{han2009pid, huang2014active, gao2003scaling}.
 
 A motivação central é a seguinte: em sistemas reais, o modelo dinâmico disponível é sempre aproximado — seja por incerteza paramétrica, simplificações geométricas, dinâmica de elos flexíveis não modelada, ou acoplamentos ignorados. Ao tratar a totalidade dessas discrepâncias como um ``distúrbio total'' $f_i$ estimável em tempo real, o LADRC pode oferecer desempenho equivalente ao CTC com modelo exato mesmo quando o modelo utilizado é apenas uma aproximação grosseira da dinâmica real \cite{han2009pid, gao2003scaling, zheng2010practical}.
 
@@ -234,7 +227,7 @@ com o ESO implementado como um observador de Luenberger para o par $(A_e, C_e = 
     L_e = [\beta_1, \beta_2, \beta_3]^\top,
     \label{eq:eso_observer}
 \end{equation}
-onde $L_e$ é o vetor de ganhos escolhido para que o polinômio característico do observador seja $(\lambda + \omega_o)^3$ — parametrização de banda por frequência (\textit{bandwidth parameterization}) proposta por Gao (2003) \cite{gao2003scaling}:
+onde $L_e$ é o vetor de ganhos escolhido para que o polinômio característico do observador seja $(\lambda + \omega_o)^3$ — parametrização de banda por frequência (\textit{bandwidth parameterization}) proposta por Gao \cite{gao2003scaling}:
 \begin{equation}
     \beta_1 = 3\omega_o, \qquad \beta_2 = 3\omega_o^2, \qquad \beta_3 = \omega_o^3.
     \label{eq:eso_gains}
@@ -242,12 +235,19 @@ onde $L_e$ é o vetor de ganhos escolhido para que o polinômio característico 
 
 Essa parametrização unifica o ajuste do ESO em um único parâmetro $\omega_o$ (frequência de banda do observador), simplificando o projeto: um $\omega_o$ maior implica observador mais rápido e melhor rejeição de distúrbios variáveis no tempo, ao custo de maior amplificação de ruído de medição e potencial instabilidade numérica para $\omega_o \Delta t_{\text{phys}} > 0.1$ \cite{gao2003scaling, zheng2010practical}.
 
-A análise de convergência do ESO, desenvolvida por Zheng e Gao (2010) \cite{zheng2010practical}, estabelece que, para distúrbios $f_i$ com $|\dot{f}_i| \leq \delta_i$ e modelo aproximado com erro $|\Delta b_{0,i}| < b_{0,i}$, o erro de estimação satisfaz:
+A análise de convergência do ESO, desenvolvida por Zheng e Gao \cite{zheng2010practical}, estabelece que, para distúrbios $f_i$ com $|\dot{f}_i| \leq \delta_i$ e modelo aproximado com erro $|\Delta b_{0,i}| < b_{0,i}$, o erro de estimação satisfaz:
 \begin{equation}
     \lim_{t\to\infty} \|z_3(t) - f_i(t)\| \leq \frac{\delta_i}{\omega_o},
     \label{eq:eso_convergence}
 \end{equation}
-ou seja, a qualidade da estimação do distúrbio é inversamente proporcional à frequência de banda do observador \cite{zheng2010practical}.
+ou seja, a qualidade da estimação do distúrbio é inversamente proporcional à frequência de banda do observador \cite{zheng2010practical}. A Figura~\ref{fig:ladrc_eso} esquematiza a estrutura do ESO de terceira ordem, com a parametrização por largura de banda $\omega_o$ e a estimação do estado estendido $z_3 \approx f_i$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.65\textwidth]{figuras/Diagramas/Diagrama 11a — LADRC Observador de Estado Estendido.png}
+    \caption{Observador de Estado Estendido (ESO) de terceira ordem do LADRC: estima o estado $(z_1 \approx q_i,\; z_2 \approx \dot{q}_i,\; z_3 \approx f_i)$ a partir da medição de posição $q_i$ e da entrada de controle anterior. Os ganhos $\beta_k = \binom{3}{k}\omega_o^k$ alocam todos os polos do observador em $-\omega_o$ \cite{gao2003scaling, zheng2010practical}.}
+    \label{fig:ladrc_eso}
+\end{figure}
 
 \subsection{Lei de Controle e Feedforward Explícito}
 
@@ -258,13 +258,20 @@ A lei de controle do LADRC cancela o distúrbio estimado $z_{3,i}^{\text{filt}}$
     \label{eq:ladrc_ctrl_cap5}
 \end{align}
 
-O \textit{feedforward} explícito de $G_i$ e $C_i$ na Equação~\eqref{eq:ladrc_ctrl_cap5} reduz o distúrbio residual que o ESO precisa estimar. Sem esse \textit{feedforward}, o distúrbio total $f_i$ inclui $-G_i/M_{ii}$ (que pode ser da ordem de dezenas de rad/s$^2$ para elos pesados em posição não-horizontal) e $-[C\dot{q}]_i/M_{ii}$ (crescente com $\dot{q}^2$ ao longo da trajetória), impondo ao ESO uma tarefa de estimação com dinâmica crescente que introduz transientes oscilatórios \cite{han2009pid}. Com o \textit{feedforward}, $f_i$ é reduzido a erros de modelo e perturbações externas — sinais menores e mais lentos que o ESO estima com maior precisão \cite{huang2014active}.
+O \textit{feedforward} explícito de $G_i$ e $C_i$ na Equação~\eqref{eq:ladrc_ctrl_cap5} reduz o distúrbio residual que o ESO precisa estimar. Sem esse \textit{feedforward}, o distúrbio total $f_i$ inclui $-G_i/M_{ii}$ (que pode ser da ordem de dezenas de rad/s$^2$ para elos pesados em posição não-horizontal) e $-[C\dot{q}]_i/M_{ii}$ (crescente com $\dot{q}^2$ ao longo da trajetória), impondo ao ESO uma tarefa de estimação com dinâmica crescente que introduz transientes oscilatórios \cite{han2009pid}. Com o \textit{feedforward}, $f_i$ é reduzido a erros de modelo e perturbações externas — sinais menores e mais lentos que o ESO estima com maior precisão \cite{huang2014active}. A Figura~\ref{fig:ladrc_ctrl} apresenta a lei de controle completa do LADRC, evidenciando o cancelamento do distúrbio estimado $z_{3,i}^{\text{filt}}$ e o \textit{feedforward} explícito de $G$ e $C$.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.65\textwidth]{figuras/Diagramas/Diagrama 11b — LADRC Lei de Controle.png}
+    \caption{Lei de controle do LADRC (Equações~\eqref{eq:adrc_u0_cap5}--\eqref{eq:ladrc_ctrl_cap5}): o distúrbio estimado $z_{3,i}^{\text{filt}}$ é subtraído da ação de controle PD $u_{0,i}$ e o resultado é dividido por $b_{0,i}$; o \textit{feedforward} explícito de $G_i$ e $C_i$ reduz o distúrbio residual que o ESO precisa rastrear \cite{han2009pid, huang2014active, gao2003scaling}.}
+    \label{fig:ladrc_ctrl}
+\end{figure}
 
 \subsection{Descentralização e Acoplamento Dinâmico Residual}
 
 A implementação descentralizada do LADRC — um par (ESO, lei de controle) por junta — ignora os acoplamentos dinâmicos entre juntas presentes na matriz de inércia não-diagonal e na matriz de Coriolis. No entanto, esses acoplamentos são exatamente os termos que compõem o distúrbio total $f_i$: eles são estimados pelo ESO e cancelados implicitamente, sem necessidade de inversão explícita do modelo acoplado \cite{huang2014active, gao2003scaling}.
 
-Esta propriedade é particularmente relevante para robôs com elos pesados (onde $M_{ij}$, $i \neq j$, é significativo) e trajetórias rápidas (onde os termos de Coriolis $C_{ij}\dot{q}_j$ são grandes): o LADRC pode oferecer desempenho comparável ao CTC acoplado mesmo quando o modelo de junta utilizado é apenas o integrador duplo com $b_0 = 1/M_{ii}$. Evidências experimentais desta propriedade foram reportadas por Huang e Xue (2014) \cite{huang2014active} e confirmadas para manipuladores seriais por Madonski et al. (2019) \cite{madonski2019general}.
+Esta propriedade é particularmente relevante para robôs com elos pesados (onde $M_{ij}$, $i \neq j$, é significativo) e trajetórias rápidas (onde os termos de Coriolis $C_{ij}\dot{q}_j$ são grandes): o LADRC pode oferecer desempenho comparável ao CTC acoplado mesmo quando o modelo de junta utilizado é apenas o integrador duplo com $b_0 = 1/M_{ii}$. Evidências experimentais desta propriedade foram reportadas por Huang e Xue \cite{huang2014active} e confirmadas para manipuladores seriais por Madonski et al. \cite{madonski2019general}.
 
 % ==============================================================================
 \section{Integração dos Controladores com o Modelo Simbólico}
@@ -478,7 +485,7 @@ Este capítulo apresentou a análise aprofundada dos quatro controladores implem
 
     \item O \textbf{CT-SMC} com camada limite, detalhando a condição de alcance via função de Lyapunov, o compromisso \textit{chattering}-precisão controlado por $\phi$, e a análise de robustez a perturbações limitadas \cite{slotine1991applied, burton1986continuous, edwards1998sliding, utkin2017sliding}.
 
-    \item O \textbf{STA} como HOSM de segunda ordem com sinal de controle contínuo, convergência em tempo finito provada pela função de Lyapunov estrita de Moreno e Osorio (2012) \cite{moreno2012strict}, e considerações sobre a discretização numérica segundo Levant (2010) \cite{levant2010chattering}.
+    \item O \textbf{STA} como HOSM de segunda ordem com sinal de controle contínuo, convergência em tempo finito provada pela função de Lyapunov estrita de Moreno e Osorio \cite{moreno2012strict}, e considerações sobre a discretização numérica segundo Levant \cite{levant2010chattering}.
 
     \item O \textbf{LADRC} descentralizado com ESO de terceira ordem, parametrização por largura de banda \cite{gao2003scaling}, análise de convergência do observador \cite{zheng2010practical} e o papel do \textit{feedforward} de $G$ e $C$ na redução do distúrbio residual estimado \cite{han2009pid, huang2014active}.
 

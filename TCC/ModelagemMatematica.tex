@@ -7,7 +7,7 @@ Este capítulo apresenta, em detalhe, a arquitetura de modelagem matemática imp
 \section{Visão Geral da Arquitetura}
 % ==============================================================================
 
-A \textit{engine} matemática do \textit{Hephaestus} é organizada em uma hierarquia de classes: \texttt{RobotMathEngine} — responsável pela modelagem em ambiente seco (ar) — e \texttt{RobotMathHydro} — subclasse que estende o modelo para ambiente subaquático, incorporando os efeitos de massa adicionada e empuxo. A filosofia de projeto segue o princípio de separação entre a camada simbólica (geração das equações exatas) e a camada numérica (avaliação eficiente em tempo de simulação), conforme proposto por Meurer et al.~(2017) \cite{meurer2017sympy}.
+A \textit{engine} matemática do \textit{Hephaestus} é organizada em uma hierarquia de classes: \texttt{RobotMathEngine} — responsável pela modelagem em ambiente seco (ar) — e \texttt{RobotMathHydro} — subclasse que estende o modelo para ambiente subaquático, incorporando os efeitos de massa adicionada e empuxo. A filosofia de projeto segue o princípio de separação entre a camada simbólica (geração das equações exatas) e a camada numérica (avaliação eficiente em tempo de simulação), conforme proposto por Meurer et al. \cite{meurer2017sympy}.
 
 O fluxo completo de processamento é organizado em quatro etapas sequenciais, refletidas nos métodos públicos da classe:
 
@@ -93,7 +93,14 @@ A velocidade angular global do elo $i$ é acumulada recursivamente:
     \label{eq:omega_rec}
 \end{equation}
 
-Essa recorrência segue a formulação vetorial da velocidade angular para cadeias seriais \cite{craig1989introduction, luh1980online}. O resultado é uma expressão simbólica linear em $\{\dot{q}_1, \ldots, \dot{q}_N\}$, cuja derivada em relação a $\dot{q}_j$ fornece diretamente a $j$-ésima coluna do Jacobiano angular $J_{\omega,i}$ \cite{siciliano2009robotics}.
+Essa recorrência segue a formulação vetorial da velocidade angular para cadeias seriais \cite{craig1989introduction, luh1980online}. O resultado é uma expressão simbólica linear em $\{\dot{q}_1, \ldots, \dot{q}_N\}$, cuja derivada em relação a $\dot{q}_j$ fornece diretamente a $j$-ésima coluna do Jacobiano angular $J_{\omega,i}$ \cite{siciliano2009robotics}. O fluxo completo da etapa de cinemática simbólica — da especificação de juntas ao Jacobiano geométrico — é sintetizado na Figura~\ref{fig:cinem_simbolica}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.70\textwidth]{figuras/Diagramas/Diagrama 2a — Cinemática Simbólica.png}
+    \caption{Fluxo de cinemática simbólica implementado em \texttt{step\_1\_kinematics}: da especificação de \texttt{joint\_config} e \texttt{link\_vectors\_mask} à construção das transformações homogêneas acumuladas $T_i$, das posições dos centros de massa $\vec{p}_{\text{cm},i}$, das velocidades angulares $\vec{\omega}_i$ e do Jacobiano geométrico completo $J(q) \in \mathbb{R}^{6 \times N}$.}
+    \label{fig:cinem_simbolica}
+\end{figure}
 
 % ==============================================================================
 \section{Derivação Simbólica da Matriz de Inércia e do Vetor de Gravidade}
@@ -151,7 +158,14 @@ O Jacobiano geométrico do efetuador $J(q) \in \mathbb{R}^{6 \times N}$ é monta
     \label{eq:jacobian_full}
 \end{equation}
 
-A disponibilidade do Jacobiano $6 \times N$ completo viabiliza o controle no espaço de tarefa 6D (posição + orientação), tratado em detalhe no Capítulo~\ref{cap:simulacao}. Esta é uma extensão crítica em relação a abordagens que consideram apenas o Jacobiano posicional $3 \times N$, que são insuficientes para controle de orientação em tarefas de manipulação subaquática ou em superfícies inclinadas \cite{chiaverini1997singularity, siciliano2009robotics}.
+A disponibilidade do Jacobiano $6 \times N$ completo viabiliza o controle no espaço de tarefa 6D (posição + orientação), tratado em detalhe no Capítulo~\ref{cap:simulacao}. Esta é uma extensão crítica em relação a abordagens que consideram apenas o Jacobiano posicional $3 \times N$, que são insuficientes para controle de orientação em tarefas de manipulação subaquática ou em superfícies inclinadas \cite{chiaverini1997singularity, siciliano2009robotics}. A Figura~\ref{fig:dinam_simbolica} sintetiza o fluxo das Seções~\ref{sec:M_G} e~\ref{sec:cinematica_simbolica}, mostrando como $M(q)$, $G(q)$ e $J(q)$ são derivados a partir das posições e Jacobianos de cada elo.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figuras/Diagramas/Diagrama 2b — Dinâmica Simbólica M G e Coriolis.png}
+    \caption{Fluxo de derivação simbólica da matriz de inércia $M(q)$, do vetor de gradiente de potencial $G(q)$ e dos coeficientes de Coriolis pelo método dos símbolos de Christoffel, implementado em \texttt{step\_2\_jacobian\_M\_G} e \texttt{step\_3\_coriolis\_combined}.}
+    \label{fig:dinam_simbolica}
+\end{figure}
 
 % ==============================================================================
 \section{Cálculo Simbólico do Vetor de Coriolis}
@@ -206,7 +220,7 @@ Quando o \textit{Hephaestus} é distribuído como executável via PyInstaller (a
 \label{sec:hydro_engine}
 % ==============================================================================
 
-A classe \texttt{RobotMathHydro} herda integralmente de \texttt{RobotMathEngine} e sobrescreve os métodos \texttt{step\_1\_kinematics\_hydro} e \texttt{step\_2\_jacobian\_M\_G} para incorporar os efeitos físicos do ambiente aquático, conforme a formulação de Fossen (2011) \cite{fossen2011handbook} e Antonelli (2014) \cite{antonelli2014modelling}.
+A classe \texttt{RobotMathHydro} herda integralmente de \texttt{RobotMathEngine} e sobrescreve os métodos \texttt{step\_1\_kinematics\_hydro} e \texttt{step\_2\_jacobian\_M\_G} para incorporar os efeitos físicos do ambiente aquático, conforme a formulação de Fossen \cite{fossen2011handbook} e Antonelli \cite{antonelli2014modelling}.
 
 \subsection{Parâmetros Adicionais: Volumes e Massa Adicionada}
 
@@ -266,7 +280,14 @@ A estrutura formal das equações de movimento hidrodinâmicas é idêntica à t
     M_{\text{Hydro}}(q)\ddot{q} + C_{\text{Hydro}}(q,\dot{q})\dot{q} + G_{\text{Hydro}}(q) = \tau,
     \label{eq:EOM_hydro}
 \end{equation}
-onde $C_{\text{Hydro}}$ é calculado pelos mesmos símbolos de Christoffel sobre $M_{\text{Hydro}}$ (Equação~\eqref{eq:christoffel_impl}), sem nenhuma modificação algorítmica. Os termos de arrasto hidrodinâmico $\tau_{\text{drag}} = D_{\text{lin}}\dot{q} + D_{\text{quad}}|\dot{q}|\dot{q}$ (Equação~\eqref{eq:drag} do Capítulo~\ref{cap:revisao}) são aplicados separadamente no integrador numérico como forças passivas, não na geração simbólica do modelo, pela razão de que sua forma $|\dot{q}_i|\dot{q}_i$ não é simbólica no sentido lagrangiano clássico \cite{fossen2011handbook}.
+onde $C_{\text{Hydro}}$ é calculado pelos mesmos símbolos de Christoffel sobre $M_{\text{Hydro}}$ (Equação~\eqref{eq:christoffel_impl}), sem nenhuma modificação algorítmica. Os termos de arrasto hidrodinâmico $\tau_{\text{drag}} = D_{\text{lin}}\dot{q} + D_{\text{quad}}|\dot{q}|\dot{q}$ (Equação~\eqref{eq:drag} do Capítulo~\ref{cap:revisao}) são aplicados separadamente no integrador numérico como forças passivas, não na geração simbólica do modelo, pela razão de que sua forma $|\dot{q}_i|\dot{q}_i$ não é simbólica no sentido lagrangiano clássico \cite{fossen2011handbook}. A Figura~\ref{fig:hydro_extensao} ilustra como \texttt{RobotMathHydro} estende \texttt{RobotMathEngine} por herança, sobrescrevendo os métodos de dinâmica para incorporar massa adicionada e potencial aparente Peso--Empuxo.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=1\textwidth]{figuras/Diagramas/Diagrama 3 — Extensão Hidrodinâmica.png}
+    \caption{Extensão hidrodinâmica implementada em \texttt{RobotMathHydro}: herança de \texttt{RobotMathEngine} com sobrescrita dos métodos de cinemática e dinâmica para incorporar o tensor de massa adicionada $M_A^{(g)}$ (Equação~\eqref{eq:M_hydro_impl}) e o potencial aparente Peso--Empuxo (Equação~\eqref{eq:V_aparente}) segundo a formulação de Fossen~\cite{fossen2011handbook}.}
+    \label{fig:hydro_extensao}
+\end{figure}
 
 % ==============================================================================
 \section{Preparação e Exportação do Modelo Simbólico}
@@ -343,7 +364,14 @@ No construtor \texttt{RobotSimulator.\_\_init\_\_}, cada grandeza dinâmica é c
     \item \texttt{funcs\_fk\_all\_links}: lista de $N$ funções $f_{\text{FK},i}: \mathbb{R}^{2N+P} \to \mathbb{R}^{3}$, avaliando a posição 3D do extremo do elo $i$ — utilizadas para a visualização gráfica animada do manipulador.
 \end{itemize}
 
-onde $P = |\texttt{params\_list}|$ é o número total de parâmetros físicos. A compilação separada por grandeza — em vez de uma única função monolítica — permite o despacho paralelo de $M$, $C$ e $G$ durante a simulação: cada uma das funções pode ser submetida simultaneamente a um \textit{worker} distinto do executor paralelo, triplicando a taxa de avaliação dinâmica em máquinas com pelo menos três núcleos \cite{leu1986automated}.
+onde $P = |\texttt{params\_list}|$ é o número total de parâmetros físicos. A compilação separada por grandeza — em vez de uma única função monolítica — permite o despacho paralelo de $M$, $C$ e $G$ durante a simulação: cada uma das funções pode ser submetida simultaneamente a um \textit{worker} distinto do executor paralelo, triplicando a taxa de avaliação dinâmica em máquinas com pelo menos três núcleos \cite{leu1986automated}. A Figura~\ref{fig:compilacao_simbolica} sintetiza o fluxo completo de compilação simbólico-numérica, desde as expressões SymPy geradas nas etapas anteriores até as funções NumPy prontas para avaliação a cada passo de integração.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.92\textwidth]{figuras/Diagramas/Diagrama 4 — Compilação Simbólico-Numérica.png}
+    \caption{Fluxo de compilação simbólico-numérica via \texttt{sp.lambdify()} com CSE ativo: as expressões SymPy de $M$, $C$, $G$ e $J$ passam pela Eliminação de Subexpressões Comuns antes de gerar código Python/NumPy compilado, reduzindo em 60--90\% o número de operações primitivas e viabilizando a avaliação em tempo de simulação \cite{meurer2017sympy, alfred2007compilers}.}
+    \label{fig:compilacao_simbolica}
+\end{figure}
 
 % ==============================================================================
 \section{Paralelismo em Dois Níveis e Executor Persistente}
@@ -369,7 +397,14 @@ Durante a fase de \emph{simulação}, as funções \texttt{func\_M}, \texttt{fun
 
 A abordagem de executor persistente com compilação nos \textit{workers} (em vez de serialização das funções compiladas, que o \texttt{pickle} não suporta) elimina o custo de respawn e reduz o \textit{overhead} de IPC (\textit{Inter-Process Communication}) a apenas a serialização dos argumentos numéricos (vetores de ponto flutuante), que é negligenciável \cite{beazley2010understanding}.
 
-Quando o paralelismo não está ativo (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal, sem instanciar o executor — comportamento padrão seguro para qualquer ambiente de execução, incluindo executáveis PyInstaller.
+Quando o paralelismo não está ativo (\texttt{use\_parallel=False}), as três funções são avaliadas sequencialmente na thread principal, sem instanciar o executor — comportamento padrão seguro para qualquer ambiente de execução, incluindo executáveis PyInstaller. A Figura~\ref{fig:paralelismo_2niveis} ilustra os dois níveis de paralelismo, suas fronteiras temporais distintas e os papéis do \texttt{ProcessPoolExecutor} em cada fase do ciclo de vida do \textit{Hephaestus}.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=0.5\textwidth]{figuras/Diagramas/Diagrama 12 — Paralelismo em Dois Níveis.png}
+    \caption{Paralelismo em dois níveis no \textit{Hephaestus}: (Nível~1) derivação paralela de $\partial M/\partial q_k$ e das linhas de $C$ por \texttt{ProcessPoolExecutor} durante a geração \textit{offline} do modelo; (Nível~2) avaliação paralela e persistente de \texttt{func\_M}, \texttt{func\_C} e \texttt{func\_G} a cada passo de integração física durante a simulação \textit{online}.}
+    \label{fig:paralelismo_2niveis}
+\end{figure}
 
 % ==============================================================================
 \section{Considerações sobre a Complexidade Computacional}
