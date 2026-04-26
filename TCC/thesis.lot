@@ -3,23 +3,23 @@
 \babel@toc {brazil}{}\relax 
 \addvspace {10\p@ }
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {2.1}{\ignorespaces Mapeamento entre fundamentos teóricos e componentes do \textit {Hephaestus}.}}{20}{table.caption.9}%
+\contentsline {table}{\numberline {2.1}{\ignorespaces Mapeamento entre fundamentos teóricos e componentes do \textit {Hephaestus}.}}{27}{table.caption.10}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {3.1}{\ignorespaces Complexidade computacional das etapas de modelagem e simulação.}}{39}{table.caption.15}%
-\addvspace {10\p@ }
-\addvspace {10\p@ }
-\contentsline {table}{\numberline {5.1}{\ignorespaces Papel das matrizes dinâmicas em cada estratégia de controle.}}{77}{table.caption.26}%
-\contentsline {table}{\numberline {5.2}{\ignorespaces Custo computacional adicional por passo de integração $\Delta t_{\text {phys}}$.}}{77}{table.caption.27}%
-\contentsline {table}{\numberline {5.3}{\ignorespaces Parâmetros de configuração dos controladores na interface \texttt {ctrl\_params}.}}{78}{table.caption.28}%
-\contentsline {table}{\numberline {5.4}{\ignorespaces Comparação teórica das estratégias de controle implementadas.}}{79}{table.caption.29}%
-\addvspace {10\p@ }
-\contentsline {table}{\numberline {6.1}{\ignorespaces Parâmetros mecânicos do braço antropomórfico do UVMS (elos 7--12).}}{86}{table.caption.34}%
-\contentsline {table}{\numberline {6.2}{\ignorespaces Parâmetros dos controladores para o UVMS 12-GDL subaquático.}}{88}{table.caption.36}%
-\contentsline {table}{\numberline {6.3}{\ignorespaces Desempenho dos controladores no UVMS 12-GDL , modelo nominal. Médias sobre as 12 juntas.}}{88}{table.caption.37}%
-\addvspace {10\p@ }
-\contentsline {table}{\numberline {7.1}{\ignorespaces Roadmap de epics propostos para a plataforma \textit {Hephaestus}.}}{102}{table.caption.43}%
+\contentsline {table}{\numberline {3.1}{\ignorespaces Complexidade computacional das etapas de modelagem e simulação.}}{51}{table.caption.16}%
 \addvspace {10\p@ }
 \addvspace {10\p@ }
+\contentsline {table}{\numberline {5.1}{\ignorespaces Papel das matrizes dinâmicas em cada estratégia de controle.}}{103}{table.caption.27}%
+\contentsline {table}{\numberline {5.2}{\ignorespaces Custo computacional adicional por passo de integração $\Delta t_{\text {phys}}$.}}{104}{table.caption.28}%
+\contentsline {table}{\numberline {5.3}{\ignorespaces Parâmetros de configuração dos controladores na interface \texttt {ctrl\_params}.}}{104}{table.caption.29}%
+\contentsline {table}{\numberline {5.4}{\ignorespaces Comparação teórica das estratégias de controle implementadas.}}{105}{table.caption.30}%
 \addvspace {10\p@ }
-\contentsline {table}{\numberline {C.1}{\ignorespaces Dependências Python do \textit {Hephaestus}.}}{134}{table.caption.69}%
-\contentsline {table}{\numberline {C.2}{\ignorespaces Estrutura principal de arquivos do repositório \textit {Hephaestus}.}}{136}{table.caption.74}%
+\contentsline {table}{\numberline {6.1}{\ignorespaces Parâmetros mecânicos do braço antropomórfico do UVMS (elos 7--12).}}{115}{table.caption.35}%
+\contentsline {table}{\numberline {6.2}{\ignorespaces Parâmetros dos controladores para o UVMS 12-GDL subaquático.}}{117}{table.caption.37}%
+\contentsline {table}{\numberline {6.3}{\ignorespaces Desempenho dos controladores no UVMS 12-GDL , modelo nominal. Médias sobre as 12 juntas.}}{118}{table.caption.38}%
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {7.1}{\ignorespaces \textit {Roadmap} de \textit {epics} propostos para a plataforma \textit {Hephaestus}.}}{132}{table.caption.44}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {table}{\numberline {C.1}{\ignorespaces Dependências Python do \textit {Hephaestus}.}}{163}{table.caption.70}%
+\contentsline {table}{\numberline {C.2}{\ignorespaces Estrutura principal de arquivos do repositório \textit {Hephaestus}.}}{165}{table.caption.75}%

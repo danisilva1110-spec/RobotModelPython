@@ -5,87 +5,91 @@
 \citation{corke2021toolbox,astrom1995theory}
 \citation{leu1986automated}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {chapter}{\numberline {5}Controladores Implementados e Integração com o Modelo}{62}{chapter.5}\protected@file@percent }
+\@writefile{toc}{\contentsline {chapter}{\numberline {5}Controladores Implementados e Integração com o Modelo}{83}{chapter.5}\protected@file@percent }
 \@writefile{lof}{\addvspace {10\p@ }}
 \@writefile{lot}{\addvspace {10\p@ }}
-\newlabel{cap:controladores}{{5}{62}{Controladores Implementados e Integração com o Modelo}{chapter.5}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.1}Estrutura Unificada de Controle em Malha Fechada}{62}{section.5.1}\protected@file@percent }
-\newlabel{sec:ctrl_framework}{{5.1}{62}{Estrutura Unificada de Controle em Malha Fechada}{section.5.1}{}}
+\newlabel{cap:controladores}{{5}{83}{Controladores Implementados e Integração com o Modelo}{chapter.5}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.1}Estrutura Unificada de Controle em Malha Fechada}{83}{section.5.1}\protected@file@percent }
+\newlabel{sec:ctrl_framework}{{5.1}{83}{Estrutura Unificada de Controle em Malha Fechada}{section.5.1}{}}
 \citation{isidori1985nonlinear,khalil2002nonlinear}
-\citation{spong2020robot}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {5.2}Controle por Torque Computado com PID}{84}{section.5.2}\protected@file@percent }
+\newlabel{sec:ctc_pid_cap5}{{5.2}{84}{Controle por Torque Computado com PID}{section.5.2}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.1}Fundamentação Teórica e Cancelamento de Não-Linearidade}{84}{subsection.5.2.1}\protected@file@percent }
+\newlabel{eq:ctc_geral}{{5.1}{84}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.1}{}}
+\newlabel{eq:ctc_linear}{{5.2}{84}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.2}{}}
 \citation{spong2020robot,isidori1985nonlinear}
 \citation{astrom1995theory,ogata2010modern}
 \citation{astrom1995theory}
-\def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.2}Controle por Torque Computado com PID}{63}{section.5.2}\protected@file@percent }
-\newlabel{sec:ctc_pid_cap5}{{5.2}{63}{Controle por Torque Computado com PID}{section.5.2}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.1}Fundamentação Teórica e Cancelamento de Não-Linearidade}{63}{subsection.5.2.1}\protected@file@percent }
-\newlabel{eq:ctc_geral}{{5.1}{63}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.1}{}}
-\newlabel{eq:ctc_linear}{{5.2}{63}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.2}{}}
-\newlabel{eq:v_pid}{{5.3}{63}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.3}{}}
-\newlabel{eq:error_dyn_pid}{{5.4}{63}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.4}{}}
 \citation{golub2013matrix}
+\def\@LN@column{1}
+\newlabel{eq:v_pid}{{5.3}{85}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.3}{}}
+\newlabel{eq:error_dyn_pid}{{5.4}{85}{Fundamentação Teórica e Cancelamento de Não-Linearidade}{equation.5.4}{}}
 \citation{spong2020robot}
 \citation{slotine1991applied,edwards1998sliding}
 \citation{astrom1995theory}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.2}Integração com o Modelo Simbólico-Numérico}{86}{subsection.5.2.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.3}Análise de Robustez a Incertezas Paramétricas}{86}{subsection.5.2.3}\protected@file@percent }
+\newlabel{eq:ctc_robustness}{{5.5}{86}{Análise de Robustez a Incertezas Paramétricas}{equation.5.5}{}}
 \citation{astrom1995theory}
 \citation{astrom1995theory}
 \citation{utkin1977variable}
 \citation{slotine1987adaptive}
 \citation{slotine1984sliding}
-\def\@LN@column{1}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.2}Integração com o Modelo Simbólico-Numérico}{64}{subsection.5.2.2}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.2.3}Análise de Robustez a Incertezas Paramétricas}{64}{subsection.5.2.3}\protected@file@percent }
-\newlabel{eq:ctc_robustness}{{5.5}{64}{Análise de Robustez a Incertezas Paramétricas}{equation.5.5}{}}
 \citation{slotine1991applied}
+\def\@LN@column{1}
+\@writefile{lof}{\contentsline {figure}{\numberline {5.1}{\ignorespaces Estrutura do controlador Torque Computado com PID (CTC-PID): o sinal auxiliar $v$ (Equação~\eqref  {eq:v_pid}) é pré-multiplicado por $M(q)$ e somado aos termos de cancelamento $C(q,\dot  {q})$ e $G(q)$, resultando em uma dinâmica de erro linear de segunda/terceira ordem (Equação~\eqref  {eq:error_dyn_pid}). O integrador é sujeito a \textit  {anti-windup} por \textit  {clamping} \cite  {astrom1995theory}.}}{87}{figure.caption.22}\protected@file@percent }
+\newlabel{fig:ctc_pid}{{5.1}{87}{Estrutura do controlador Torque Computado com PID (CTC-PID): o sinal auxiliar $v$ (Equação~\eqref {eq:v_pid}) é pré-multiplicado por $M(q)$ e somado aos termos de cancelamento $C(q,\dot {q})$ e $G(q)$, resultando em uma dinâmica de erro linear de segunda/terceira ordem (Equação~\eqref {eq:error_dyn_pid}). O integrador é sujeito a \textit {anti-windup} por \textit {clamping} \cite {astrom1995theory}}{figure.caption.22}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.3}Controle por Modo Deslizante com Torque Computado (CT-SMC)}{87}{section.5.3}\protected@file@percent }
+\newlabel{sec:ct_smc_cap5}{{5.3}{87}{Controle por Modo Deslizante com Torque Computado (CT-SMC)}{section.5.3}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.1}Superfície Deslizante e Interpretação Geométrica}{87}{subsection.5.3.1}\protected@file@percent }
+\newlabel{eq:S_def}{{5.6}{87}{Superfície Deslizante e Interpretação Geométrica}{equation.5.6}{}}
 \citation{edwards1998sliding,utkin2017sliding}
 \citation{slotine1991applied}
 \def\@LN@column{1}
-\@writefile{lof}{\contentsline {figure}{\numberline {5.1}{\ignorespaces Estrutura do controlador Torque Computado com PID (CTC-PID): o sinal auxiliar $v$ (Equação~\eqref  {eq:v_pid}) é pré-multiplicado por $M(q)$ e somado aos termos de cancelamento $C(q,\dot  {q})$ e $G(q)$, resultando em uma dinâmica de erro linear de segunda/terceira ordem (Equação~\eqref  {eq:error_dyn_pid}). O integrador é sujeito a \textit  {anti-windup} por \textit  {clamping} \cite  {astrom1995theory}.}}{65}{figure.caption.21}\protected@file@percent }
-\newlabel{fig:ctc_pid}{{5.1}{65}{Estrutura do controlador Torque Computado com PID (CTC-PID): o sinal auxiliar $v$ (Equação~\eqref {eq:v_pid}) é pré-multiplicado por $M(q)$ e somado aos termos de cancelamento $C(q,\dot {q})$ e $G(q)$, resultando em uma dinâmica de erro linear de segunda/terceira ordem (Equação~\eqref {eq:error_dyn_pid}). O integrador é sujeito a \textit {anti-windup} por \textit {clamping} \cite {astrom1995theory}}{figure.caption.21}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.3}Controle por Modo Deslizante com Torque Computado (CT-SMC)}{65}{section.5.3}\protected@file@percent }
-\newlabel{sec:ct_smc_cap5}{{5.3}{65}{Controle por Modo Deslizante com Torque Computado (CT-SMC)}{section.5.3}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.1}Superfície Deslizante e Interpretação Geométrica}{65}{subsection.5.3.1}\protected@file@percent }
-\newlabel{eq:S_def}{{5.6}{65}{Superfície Deslizante e Interpretação Geométrica}{equation.5.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.2}Lei de Controle CT-SMC e Condição de Alcance}{65}{subsection.5.3.2}\protected@file@percent }
-\newlabel{eq:smc_cap5}{{5.7}{65}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.2}Lei de Controle CT-SMC e Condição de Alcance}{88}{subsection.5.3.2}\protected@file@percent }
+\newlabel{eq:smc_cap5}{{5.7}{88}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.7}{}}
+\newlabel{eq:S_dot}{{5.8}{88}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.8}{}}
 \citation{slotine1991applied,edwards1998sliding}
 \citation{burton1986continuous}
 \citation{slotine1991applied,utkin2017sliding}
 \citation{edwards1998sliding,slotine1991applied}
+\def\@LN@column{1}
+\newlabel{eq:lyap_smc}{{5.9}{89}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.9}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.3}Integração com o Modelo e Sensibilidade Paramétrica}{89}{subsection.5.3.3}\protected@file@percent }
 \citation{siciliano1999robot}
 \citation{slotine1991applied}
-\def\@LN@column{1}
-\newlabel{eq:S_dot}{{5.8}{66}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.8}{}}
-\newlabel{eq:lyap_smc}{{5.9}{66}{Lei de Controle CT-SMC e Condição de Alcance}{equation.5.9}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.3.3}Integração com o Modelo e Sensibilidade Paramétrica}{66}{subsection.5.3.3}\protected@file@percent }
 \citation{slotine1991applied,burton1986continuous}
 \citation{slotine1991applied,burton1986continuous}
 \citation{utkin2017sliding}
 \citation{burton1986continuous}
-\def\@LN@column{1}
-\@writefile{lof}{\contentsline {figure}{\numberline {5.2}{\ignorespaces Estrutura do Controle por Modo Deslizante com Torque Computado (CT-SMC): o sinal de chaveamento $-K\tanh (S/\phi )$ garante a condição de alcance $\dot  {V}_i < 0$ para perturbações $\|d_i\| \leq K_i$ (Equação~\eqref  {eq:lyap_smc}). O filtro passa-baixas de $\ddot  {q}_{d,f}$ previne amplificação de picos de aceleração do CLIK \cite  {slotine1991applied, burton1986continuous}.}}{67}{figure.caption.22}\protected@file@percent }
-\newlabel{fig:ct_smc}{{5.2}{67}{Estrutura do Controle por Modo Deslizante com Torque Computado (CT-SMC): o sinal de chaveamento $-K\tanh (S/\phi )$ garante a condição de alcance $\dot {V}_i < 0$ para perturbações $\|d_i\| \leq K_i$ (Equação~\eqref {eq:lyap_smc}). O filtro passa-baixas de $\ddot {q}_{d,f}$ previne amplificação de picos de aceleração do CLIK \cite {slotine1991applied, burton1986continuous}}{figure.caption.22}{}}
 \citation{levant1993sliding,levant2003higher}
 \citation{levant2003higher,moreno2012strict}
 \citation{levant1993sliding}
 \citation{moreno2012strict,edwards1998sliding}
 \citation{bartolini2002multi}
 \citation{shtessel2014sliding}
-\citation{moreno2012strict}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {5.4}Algoritmo Super-Twisting (STA)}{90}{section.5.4}\protected@file@percent }
+\newlabel{sec:sta_cap5}{{5.4}{90}{Algoritmo Super-Twisting (STA)}{section.5.4}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.1}Motivação: Chattering e Modos Deslizantes de Ordem Superior}{90}{subsection.5.4.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5.2}{\ignorespaces Estrutura do Controle por Modo Deslizante com Torque Computado (CT-SMC): o sinal de chaveamento $-K\tanh (S/\phi )$ garante a condição de alcance $\dot  {V}_i < 0$ para perturbações $\|d_i\| \leq K_i$ (Equação~\eqref  {eq:lyap_smc}). O filtro passa-baixas de $\ddot  {q}_{d,f}$ previne amplificação de picos de aceleração do CLIK \cite  {slotine1991applied, burton1986continuous}.}}{91}{figure.caption.23}\protected@file@percent }
+\newlabel{fig:ct_smc}{{5.2}{91}{Estrutura do Controle por Modo Deslizante com Torque Computado (CT-SMC): o sinal de chaveamento $-K\tanh (S/\phi )$ garante a condição de alcance $\dot {V}_i < 0$ para perturbações $\|d_i\| \leq K_i$ (Equação~\eqref {eq:lyap_smc}). O filtro passa-baixas de $\ddot {q}_{d,f}$ previne amplificação de picos de aceleração do CLIK \cite {slotine1991applied, burton1986continuous}}{figure.caption.23}{}}
 \citation{moreno2012strict}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.4}Algoritmo Super-Twisting (STA)}{68}{section.5.4}\protected@file@percent }
-\newlabel{sec:sta_cap5}{{5.4}{68}{Algoritmo Super-Twisting (STA)}{section.5.4}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.1}Motivação: Chattering e Modos Deslizantes de Ordem Superior}{68}{subsection.5.4.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.2}Análise de Estabilidade via Função de Lyapunov Estrita}{68}{subsection.5.4.2}\protected@file@percent }
-\newlabel{eq:sta_vsw}{{5.10}{68}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.10}{}}
-\newlabel{eq:sta_z}{{5.11}{68}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.11}{}}
-\newlabel{eq:sta_tau_cap5}{{5.12}{68}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.12}{}}
-\newlabel{eq:sta_conditions}{{5.13}{68}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.13}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.2}Análise de Estabilidade via Função de Lyapunov Estrita}{92}{subsection.5.4.2}\protected@file@percent }
+\newlabel{eq:sta_vsw}{{5.10}{92}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.10}{}}
+\newlabel{eq:sta_z}{{5.11}{92}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.11}{}}
+\newlabel{eq:sta_tau_cap5}{{5.12}{92}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.12}{}}
+\citation{moreno2012strict}
 \citation{bhat2000finite,moreno2012strict}
 \citation{slotine1991applied,shtessel2014sliding}
 \citation{levant1993sliding}
+\def\@LN@column{1}
+\newlabel{eq:sta_conditions}{{5.13}{93}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.13}{}}
+\newlabel{eq:lyap_sta}{{5.14}{93}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.14}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.3}Continuidade do Sinal de Controle e Eliminação do Chattering}{93}{subsection.5.4.3}\protected@file@percent }
 \citation{levant2010chattering}
 \citation{levant1993sliding,moreno2012strict}
 \citation{levant1993sliding,moreno2012strict}
@@ -95,113 +99,120 @@
 \citation{gao2003scaling}
 \citation{han2009pid,huang2014active,gao2003scaling}
 \def\@LN@column{1}
-\newlabel{eq:lyap_sta}{{5.14}{69}{Análise de Estabilidade via Função de Lyapunov Estrita}{equation.5.14}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.3}Continuidade do Sinal de Controle e Eliminação do Chattering}{69}{subsection.5.4.3}\protected@file@percent }
-\newlabel{eq:sta_z_discrete}{{5.15}{69}{Continuidade do Sinal de Controle e Eliminação do Chattering}{equation.5.15}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.4}Implementação Discreta e Estabilidade Numérica}{69}{subsection.5.4.4}\protected@file@percent }
-\newlabel{sec:sta_discreto}{{5.4.4}{69}{Implementação Discreta e Estabilidade Numérica}{subsection.5.4.4}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5.3}{\ignorespaces Estrutura do algoritmo Super-Twisting (STA): a variável interna $z_i$ (Equação~\eqref  {eq:sta_z}) integra o sinal descontínuo $-k_{2,i}\,\text  {sign}(S_i)$, tornando $v_{\text  {sw},i}$ contínuo e eliminando o \textit  {chattering}. As condições de ganho $k_{2,i} > \delta _i$ e $k_{1,i} > 2\sqrt  {k_{2,i}\delta _i}$ garantem convergência em tempo finito \cite  {levant1993sliding, moreno2012strict}.}}{70}{figure.caption.23}\protected@file@percent }
-\newlabel{fig:sta_ctrl}{{5.3}{70}{Estrutura do algoritmo Super-Twisting (STA): a variável interna $z_i$ (Equação~\eqref {eq:sta_z}) integra o sinal descontínuo $-k_{2,i}\,\text {sign}(S_i)$, tornando $v_{\text {sw},i}$ contínuo e eliminando o \textit {chattering}. As condições de ganho $k_{2,i} > \delta _i$ e $k_{1,i} > 2\sqrt {k_{2,i}\delta _i}$ garantem convergência em tempo finito \cite {levant1993sliding, moreno2012strict}}{figure.caption.23}{}}
+\newlabel{eq:sta_z_discrete}{{5.15}{94}{Continuidade do Sinal de Controle e Eliminação do Chattering}{equation.5.15}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.4.4}Implementação Discreta e Estabilidade Numérica}{94}{subsection.5.4.4}\protected@file@percent }
+\newlabel{sec:sta_discreto}{{5.4.4}{94}{Implementação Discreta e Estabilidade Numérica}{subsection.5.4.4}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.5}Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}{94}{section.5.5}\protected@file@percent }
+\newlabel{sec:ladrc_cap5}{{5.5}{94}{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}{section.5.5}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.1}Paradigma de Rejeição Ativa e Motivação}{94}{subsection.5.5.1}\protected@file@percent }
+\@writefile{lof}{\contentsline {figure}{\numberline {5.3}{\ignorespaces Estrutura do algoritmo Super-Twisting (STA): a variável interna $z_i$ (Equação~\eqref  {eq:sta_z}) integra o sinal descontínuo $-k_{2,i}\,\text  {sign}(S_i)$, tornando $v_{\text  {sw},i}$ contínuo e eliminando o \textit  {chattering}. As condições de ganho $k_{2,i} > \delta _i$ e $k_{1,i} > 2\sqrt  {k_{2,i}\delta _i}$ garantem convergência em tempo finito \cite  {levant1993sliding, moreno2012strict}.}}{95}{figure.caption.24}\protected@file@percent }
+\newlabel{fig:sta_ctrl}{{5.3}{95}{Estrutura do algoritmo Super-Twisting (STA): a variável interna $z_i$ (Equação~\eqref {eq:sta_z}) integra o sinal descontínuo $-k_{2,i}\,\text {sign}(S_i)$, tornando $v_{\text {sw},i}$ contínuo e eliminando o \textit {chattering}. As condições de ganho $k_{2,i} > \delta _i$ e $k_{1,i} > 2\sqrt {k_{2,i}\delta _i}$ garantem convergência em tempo finito \cite {levant1993sliding, moreno2012strict}}{figure.caption.24}{}}
 \citation{han2009pid,gao2003scaling,zheng2010practical}
 \citation{gao2003scaling,huang2014active}
 \citation{gao2003scaling}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.5}Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}{71}{section.5.5}\protected@file@percent }
-\newlabel{sec:ladrc_cap5}{{5.5}{71}{Controle por Rejeição Ativa de Distúrbios Linear (LADRC)}{section.5.5}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.1}Paradigma de Rejeição Ativa e Motivação}{71}{subsection.5.5.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.2}Formulação do Modelo de Planta de Canal Integrador}{71}{subsection.5.5.2}\protected@file@percent }
-\newlabel{eq:adrc_plant_cap5}{{5.16}{71}{Formulação do Modelo de Planta de Canal Integrador}{equation.5.16}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.2}Formulação do Modelo de Planta de Canal Integrador}{96}{subsection.5.5.2}\protected@file@percent }
+\newlabel{eq:adrc_plant_cap5}{{5.16}{96}{Formulação do Modelo de Planta de Canal Integrador}{equation.5.16}{}}
+\def\@LN@column{1}
+\newlabel{eq:b0_auto}{{5.17}{97}{Formulação do Modelo de Planta de Canal Integrador}{equation.5.17}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.3}Observador de Estado Estendido (ESO) Linear}{97}{subsection.5.5.3}\protected@file@percent }
+\newlabel{eq:eso_cont}{{5.18}{97}{Observador de Estado Estendido (ESO) Linear}{equation.5.18}{}}
+\newlabel{eq:eso_observer}{{5.19}{97}{Observador de Estado Estendido (ESO) Linear}{equation.5.19}{}}
 \citation{gao2003scaling}
 \citation{gao2003scaling,zheng2010practical}
 \citation{zheng2010practical}
-\citation{zheng2010practical}
 \def\@LN@column{1}
-\newlabel{eq:b0_auto}{{5.17}{72}{Formulação do Modelo de Planta de Canal Integrador}{equation.5.17}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.3}Observador de Estado Estendido (ESO) Linear}{72}{subsection.5.5.3}\protected@file@percent }
-\newlabel{eq:eso_cont}{{5.18}{72}{Observador de Estado Estendido (ESO) Linear}{equation.5.18}{}}
-\newlabel{eq:eso_observer}{{5.19}{72}{Observador de Estado Estendido (ESO) Linear}{equation.5.19}{}}
-\newlabel{eq:eso_gains}{{5.20}{72}{Observador de Estado Estendido (ESO) Linear}{equation.5.20}{}}
-\newlabel{eq:eso_convergence}{{5.21}{72}{Observador de Estado Estendido (ESO) Linear}{equation.5.21}{}}
+\newlabel{eq:eso_gains}{{5.20}{98}{Observador de Estado Estendido (ESO) Linear}{equation.5.20}{}}
+\newlabel{eq:eso_convergence}{{5.21}{98}{Observador de Estado Estendido (ESO) Linear}{equation.5.21}{}}
+\citation{zheng2010practical}
 \citation{gao2003scaling,zheng2010practical}
 \citation{gao2003scaling,zheng2010practical}
 \citation{han2009pid}
 \citation{huang2014active}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.4}Lei de Controle e Feedforward Explícito}{99}{subsection.5.5.4}\protected@file@percent }
+\newlabel{eq:adrc_u0_cap5}{{5.22}{99}{Lei de Controle e Feedforward Explícito}{equation.5.22}{}}
+\newlabel{eq:ladrc_ctrl_cap5}{{5.23}{99}{Lei de Controle e Feedforward Explícito}{equation.5.23}{}}
+\@writefile{lof}{\contentsline {figure}{\numberline {5.4}{\ignorespaces Observador de Estado Estendido (ESO) de terceira ordem do LADRC: estima o estado $(z_1 \approx q_i,\tmspace  +\thickmuskip {.2777em} z_2 \approx \dot  {q}_i,\tmspace  +\thickmuskip {.2777em} z_3 \approx f_i)$ a partir da medição de posição $q_i$ e da entrada de controle anterior. Os ganhos $\beta _k = \binom  {3}{k}\omega _o^k$ alocam todos os polos do observador em $-\omega _o$ \cite  {gao2003scaling, zheng2010practical}.}}{100}{figure.caption.25}\protected@file@percent }
+\newlabel{fig:ladrc_eso}{{5.4}{100}{Observador de Estado Estendido (ESO) de terceira ordem do LADRC: estima o estado $(z_1 \approx q_i,\; z_2 \approx \dot {q}_i,\; z_3 \approx f_i)$ a partir da medição de posição $q_i$ e da entrada de controle anterior. Os ganhos $\beta _k = \binom {3}{k}\omega _o^k$ alocam todos os polos do observador em $-\omega _o$ \cite {gao2003scaling, zheng2010practical}}{figure.caption.25}{}}
 \citation{han2009pid,huang2014active,gao2003scaling}
 \citation{han2009pid,huang2014active,gao2003scaling}
 \citation{huang2014active,gao2003scaling}
+\def\@LN@column{1}
+\@writefile{lof}{\contentsline {figure}{\numberline {5.5}{\ignorespaces Lei de controle do LADRC (Equações~\eqref  {eq:adrc_u0_cap5}--\eqref  {eq:ladrc_ctrl_cap5}): o distúrbio estimado $z_{3,i}^{\text  {filt}}$ é subtraído da ação de controle PD $u_{0,i}$ e o resultado é dividido por $b_{0,i}$; o \textit  {feedforward} explícito de $G_i$ e $C_i$ reduz o distúrbio residual que o ESO precisa rastrear \cite  {han2009pid, huang2014active, gao2003scaling}.}}{101}{figure.caption.26}\protected@file@percent }
+\newlabel{fig:ladrc_ctrl}{{5.5}{101}{Lei de controle do LADRC (Equações~\eqref {eq:adrc_u0_cap5}--\eqref {eq:ladrc_ctrl_cap5}): o distúrbio estimado $z_{3,i}^{\text {filt}}$ é subtraído da ação de controle PD $u_{0,i}$ e o resultado é dividido por $b_{0,i}$; o \textit {feedforward} explícito de $G_i$ e $C_i$ reduz o distúrbio residual que o ESO precisa rastrear \cite {han2009pid, huang2014active, gao2003scaling}}{figure.caption.26}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.5}Descentralização e Acoplamento Dinâmico Residual}{101}{subsection.5.5.5}\protected@file@percent }
 \citation{huang2014active}
 \citation{madonski2019general}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.4}Lei de Controle e Feedforward Explícito}{73}{subsection.5.5.4}\protected@file@percent }
-\newlabel{eq:adrc_u0_cap5}{{5.22}{73}{Lei de Controle e Feedforward Explícito}{equation.5.22}{}}
-\newlabel{eq:ladrc_ctrl_cap5}{{5.23}{73}{Lei de Controle e Feedforward Explícito}{equation.5.23}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.5.5}Descentralização e Acoplamento Dinâmico Residual}{73}{subsection.5.5.5}\protected@file@percent }
-\@writefile{lof}{\contentsline {figure}{\numberline {5.4}{\ignorespaces Observador de Estado Estendido (ESO) de terceira ordem do LADRC: estima o estado $(z_1 \approx q_i,\tmspace  +\thickmuskip {.2777em} z_2 \approx \dot  {q}_i,\tmspace  +\thickmuskip {.2777em} z_3 \approx f_i)$ a partir da medição de posição $q_i$ e da entrada de controle anterior. Os ganhos $\beta _k = \binom  {3}{k}\omega _o^k$ alocam todos os polos do observador em $-\omega _o$ \cite  {gao2003scaling, zheng2010practical}.}}{74}{figure.caption.24}\protected@file@percent }
-\newlabel{fig:ladrc_eso}{{5.4}{74}{Observador de Estado Estendido (ESO) de terceira ordem do LADRC: estima o estado $(z_1 \approx q_i,\; z_2 \approx \dot {q}_i,\; z_3 \approx f_i)$ a partir da medição de posição $q_i$ e da entrada de controle anterior. Os ganhos $\beta _k = \binom {3}{k}\omega _o^k$ alocam todos os polos do observador em $-\omega _o$ \cite {gao2003scaling, zheng2010practical}}{figure.caption.24}{}}
-\@writefile{lof}{\contentsline {figure}{\numberline {5.5}{\ignorespaces Lei de controle do LADRC (Equações~\eqref  {eq:adrc_u0_cap5}--\eqref  {eq:ladrc_ctrl_cap5}): o distúrbio estimado $z_{3,i}^{\text  {filt}}$ é subtraído da ação de controle PD $u_{0,i}$ e o resultado é dividido por $b_{0,i}$; o \textit  {feedforward} explícito de $G_i$ e $C_i$ reduz o distúrbio residual que o ESO precisa rastrear \cite  {han2009pid, huang2014active, gao2003scaling}.}}{75}{figure.caption.25}\protected@file@percent }
-\newlabel{fig:ladrc_ctrl}{{5.5}{75}{Lei de controle do LADRC (Equações~\eqref {eq:adrc_u0_cap5}--\eqref {eq:ladrc_ctrl_cap5}): o distúrbio estimado $z_{3,i}^{\text {filt}}$ é subtraído da ação de controle PD $u_{0,i}$ e o resultado é dividido por $b_{0,i}$; o \textit {feedforward} explícito de $G_i$ e $C_i$ reduz o distúrbio residual que o ESO precisa rastrear \cite {han2009pid, huang2014active, gao2003scaling}}{figure.caption.25}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.6}Integração dos Controladores com o Modelo Simbólico}{102}{section.5.6}\protected@file@percent }
+\newlabel{sec:integracao_ctrl_modelo}{{5.6}{102}{Integração dos Controladores com o Modelo Simbólico}{section.5.6}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.1}Cadeia de Dependências: do Simbólico ao Numérico}{102}{subsection.5.6.1}\protected@file@percent }
 \citation{spong2020robot}
 \citation{gao2003scaling,madonski2019general}
-\def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.6}Integração dos Controladores com o Modelo Simbólico}{76}{section.5.6}\protected@file@percent }
-\newlabel{sec:integracao_ctrl_modelo}{{5.6}{76}{Integração dos Controladores com o Modelo Simbólico}{section.5.6}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.1}Cadeia de Dependências: do Simbólico ao Numérico}{76}{subsection.5.6.1}\protected@file@percent }
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.2}Uso Diferenciado do Modelo por Cada Estratégia}{76}{subsection.5.6.2}\protected@file@percent }
 \citation{leu1986automated}
 \citation{gamma1994design}
 \def\@LN@column{1}
-\@writefile{lot}{\contentsline {table}{\numberline {5.1}{\ignorespaces Papel das matrizes dinâmicas em cada estratégia de controle.}}{77}{table.caption.26}\protected@file@percent }
-\newlabel{tab:ctrl_model_usage}{{5.1}{77}{Papel das matrizes dinâmicas em cada estratégia de controle}{table.caption.26}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.3}Avaliação Numérica e Custo Computacional por Controlador}{77}{subsection.5.6.3}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {5.2}{\ignorespaces Custo computacional adicional por passo de integração $\Delta t_{\text  {phys}}$.}}{77}{table.caption.27}\protected@file@percent }
-\newlabel{tab:ctrl_compute}{{5.2}{77}{Custo computacional adicional por passo de integração $\Delta t_{\text {phys}}$}{table.caption.27}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.2}Uso Diferenciado do Modelo por Cada Estratégia}{103}{subsection.5.6.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5.1}{\ignorespaces Papel das matrizes dinâmicas em cada estratégia de controle.}}{103}{table.caption.27}\protected@file@percent }
+\newlabel{tab:ctrl_model_usage}{{5.1}{103}{Papel das matrizes dinâmicas em cada estratégia de controle}{table.caption.27}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.6.3}Avaliação Numérica e Custo Computacional por Controlador}{103}{subsection.5.6.3}\protected@file@percent }
 \citation{astrom1995theory,han2009pid}
-\citation{spong2020robot,corke2017robotics}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.7}Interface Gráfica e Configuração dos Controladores}{78}{section.5.7}\protected@file@percent }
-\newlabel{sec:gui_ctrl}{{5.7}{78}{Interface Gráfica e Configuração dos Controladores}{section.5.7}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.7.1}Arquitetura de Configuração via \texttt  {ctrl\_params}}{78}{subsection.5.7.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {5.3}{\ignorespaces Parâmetros de configuração dos controladores na interface \texttt  {ctrl\_params}.}}{78}{table.caption.28}\protected@file@percent }
-\newlabel{tab:ctrl_params}{{5.3}{78}{Parâmetros de configuração dos controladores na interface \texttt {ctrl\_params}}{table.caption.28}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.7.2}Ferramentas de Ajuste e Análise Comparativa}{78}{subsection.5.7.2}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5.2}{\ignorespaces Custo computacional adicional por passo de integração $\Delta t_{\text  {phys}}$.}}{104}{table.caption.28}\protected@file@percent }
+\newlabel{tab:ctrl_compute}{{5.2}{104}{Custo computacional adicional por passo de integração $\Delta t_{\text {phys}}$}{table.caption.28}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.7}Interface Gráfica e Configuração dos Controladores}{104}{section.5.7}\protected@file@percent }
+\newlabel{sec:gui_ctrl}{{5.7}{104}{Interface Gráfica e Configuração dos Controladores}{section.5.7}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.7.1}Arquitetura de Configuração via \texttt  {ctrl\_params}}{104}{subsection.5.7.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5.3}{\ignorespaces Parâmetros de configuração dos controladores na interface \texttt  {ctrl\_params}.}}{104}{table.caption.29}\protected@file@percent }
+\newlabel{tab:ctrl_params}{{5.3}{104}{Parâmetros de configuração dos controladores na interface \texttt {ctrl\_params}}{table.caption.29}{}}
+\citation{spong2020robot,corke2017robotics}
 \citation{craig1989introduction,spong2020robot}
 \citation{slotine1991applied,edwards1998sliding}
 \citation{levant1993sliding,moreno2012strict}
 \citation{gao2003scaling,huang2014active}
 \citation{astrom1995theory,slotine1991applied,gao2003scaling,han2009pid}
 \def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.8}Análise Comparativa das Estratégias de Controle}{79}{section.5.8}\protected@file@percent }
-\newlabel{sec:comp_ctrl}{{5.8}{79}{Análise Comparativa das Estratégias de Controle}{section.5.8}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.1}Propriedades Teóricas Comparadas}{79}{subsection.5.8.1}\protected@file@percent }
-\@writefile{lot}{\contentsline {table}{\numberline {5.4}{\ignorespaces Comparação teórica das estratégias de controle implementadas.}}{79}{table.caption.29}\protected@file@percent }
-\newlabel{tab:ctrl_comparison}{{5.4}{79}{Comparação teórica das estratégias de controle implementadas}{table.caption.29}{}}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.2}Orientações para Seleção e Ajuste de Ganhos}{79}{subsection.5.8.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.7.2}Ferramentas de Ajuste e Análise Comparativa}{105}{subsection.5.7.2}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.8}Análise Comparativa das Estratégias de Controle}{105}{section.5.8}\protected@file@percent }
+\newlabel{sec:comp_ctrl}{{5.8}{105}{Análise Comparativa das Estratégias de Controle}{section.5.8}{}}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.1}Propriedades Teóricas Comparadas}{105}{subsection.5.8.1}\protected@file@percent }
+\@writefile{lot}{\contentsline {table}{\numberline {5.4}{\ignorespaces Comparação teórica das estratégias de controle implementadas.}}{105}{table.caption.30}\protected@file@percent }
+\newlabel{tab:ctrl_comparison}{{5.4}{105}{Comparação teórica das estratégias de controle implementadas}{table.caption.30}{}}
+\citation{slotine1991applied}
 \citation{burton1986continuous}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.2}Orientações para Seleção e Ajuste de Ganhos}{106}{subsection.5.8.2}\protected@file@percent }
+\newlabel{eq:ctc_kp_stability}{{5.24}{106}{CTC-PID}{equation.5.24}{}}
+\newlabel{eq:smc_K_condition}{{5.25}{106}{CT-SMC}{equation.5.25}{}}
 \citation{moreno2012strict}
+\citation{zheng2010practical}
 \citation{han2009pid}
 \def\@LN@column{1}
+\newlabel{eq:sta_ratio}{{5.26}{107}{STA}{equation.5.26}{}}
+\newlabel{eq:ladrc_wo_stability}{{5.27}{107}{LADRC}{equation.5.27}{}}
 \citation{craig1989introduction,spong2020robot}
 \citation{levant1993sliding,shtessel2014sliding}
 \citation{gao2003scaling,huang2014active,madonski2019general}
 \citation{fossen2011handbook,antonelli2014modelling}
 \citation{slotine1991applied}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.3}Aplicabilidade por Cenário}{108}{subsection.5.8.3}\protected@file@percent }
+\@writefile{toc}{\contentsline {section}{\numberline {5.9}Forças Dissipativas como Perturbações Estruturadas}{108}{section.5.9}\protected@file@percent }
+\newlabel{sec:dissipative_cap5}{{5.9}{108}{Forças Dissipativas como Perturbações Estruturadas}{section.5.9}{}}
 \citation{moreno2012strict}
 \citation{han2009pid,huang2014active}
-\def\@LN@column{1}
-\@writefile{toc}{\contentsline {subsection}{\numberline {5.8.3}Aplicabilidade por Cenário}{81}{subsection.5.8.3}\protected@file@percent }
-\@writefile{toc}{\contentsline {section}{\numberline {5.9}Forças Dissipativas como Perturbações Estruturadas}{81}{section.5.9}\protected@file@percent }
-\newlabel{sec:dissipative_cap5}{{5.9}{81}{Forças Dissipativas como Perturbações Estruturadas}{section.5.9}{}}
 \citation{fossen2011handbook}
 \citation{zheng2010practical}
+\def\@LN@column{1}
+\newlabel{eq:K_friction}{{5.28}{109}{Forças Dissipativas como Perturbações Estruturadas}{equation.5.28}{}}
+\@writefile{toc}{\contentsline {section}{\numberline {5.10}Validação da Integração por Análise de Conservação de Energia}{109}{section.5.10}\protected@file@percent }
+\newlabel{sec:validacao_energia}{{5.10}{109}{Validação da Integração por Análise de Conservação de Energia}{section.5.10}{}}
+\newlabel{eq:lyap_pd_energy}{{5.29}{109}{Validação da Integração por Análise de Conservação de Energia}{equation.5.29}{}}
 \citation{khalil2002nonlinear}
 \citation{corke2021toolbox}
 \citation{spong2020robot,siciliano2009robotics}
 \citation{slotine1987adaptive,tomei2002simple}
-\def\@LN@column{1}
-\@writefile{toc}{\contentsline {section}{\numberline {5.10}Validação da Integração por Análise de Conservação de Energia}{82}{section.5.10}\protected@file@percent }
-\newlabel{sec:validacao_energia}{{5.10}{82}{Validação da Integração por Análise de Conservação de Energia}{section.5.10}{}}
-\newlabel{eq:lyap_pd_energy}{{5.24}{82}{Validação da Integração por Análise de Conservação de Energia}{equation.5.24}{}}
-\@writefile{toc}{\contentsline {section}{\numberline {5.11}Síntese do Capítulo}{82}{section.5.11}\protected@file@percent }
 \citation{siciliano2009robotics,craig1989introduction}
 \citation{spong2020robot,isidori1985nonlinear,astrom1995theory}
 \citation{slotine1991applied,burton1986continuous,edwards1998sliding,utkin2017sliding}
@@ -210,11 +221,13 @@
 \citation{gao2003scaling}
 \citation{zheng2010practical}
 \citation{han2009pid,huang2014active}
+\def\@LN@column{1}
+\@writefile{toc}{\contentsline {section}{\numberline {5.11}Síntese do Capítulo}{110}{section.5.11}\protected@file@percent }
 \citation{astrom1995theory,slotine1991applied,gao2003scaling,moreno2012strict}
 \def\@LN@column{1}
 \@setckpt{Controladores}{
-\setcounter{page}{84}
-\setcounter{equation}{24}
+\setcounter{page}{112}
+\setcounter{equation}{29}
 \setcounter{enumi}{5}
 \setcounter{enumii}{0}
 \setcounter{enumiii}{0}
@@ -234,10 +247,6 @@
 \setcounter{lastpagecount}{0}
 \setcounter{keywords}{3}
 \setcounter{parentequation}{0}
-\setcounter{section@level}{1}
-\setcounter{Item}{32}
-\setcounter{Hfootnote}{0}
-\setcounter{bookmark@seq@number}{139}
 \setcounter{caption@flags}{2}
 \setcounter{continuedfloat}{0}
 \setcounter{float@type}{32}
@@ -248,11 +257,15 @@
 \setcounter{LT@tables}{0}
 \setcounter{LT@chunks}{0}
 \setcounter{linenumber}{1}
-\setcounter{LN@truepage}{102}
+\setcounter{LN@truepage}{128}
 \setcounter{AM@survey}{0}
 \setcounter{lstnumber}{1}
 \setcounter{svg@param@lastpage}{0}
 \setcounter{svg@param@currpage}{-1}
+\setcounter{section@level}{1}
+\setcounter{Item}{32}
+\setcounter{Hfootnote}{0}
+\setcounter{bookmark@seq@number}{139}
 \setcounter{tcbbreakpart}{0}
 \setcounter{tcblayer}{0}
 \setcounter{tcolorbox@number}{0}

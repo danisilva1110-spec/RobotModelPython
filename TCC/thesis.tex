@@ -1,6 +1,5 @@
 \documentclass[bch,numbers]{cefet}
 \usepackage{amsmath,amssymb}
-\usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage[T1]{fontenc}
 \usepackage{lmodern}
@@ -18,8 +17,10 @@
 \usepackage{lineno}
 \usepackage{etoolbox}
 \usepackage{pdfpages} % para anexar documentos inteiros tipo pdf
+\usepackage{pdflscape} % para páginas em paisagem (landscape) com rotação automática no PDF
 \usepackage{listings}
 \usepackage{svg} % para incluir arquivos SVG; compilar com: pdflatex --shell-escape
+\usepackage{hyperref}
 
 \input{arduino_code.tex}
 \input{latex_code.tex}

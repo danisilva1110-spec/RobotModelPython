@@ -29,9 +29,6 @@ Reallocating 'name_of_file' (item size: 1) to 12 items.
 Reallocating 'name_of_file' (item size: 1) to 14 items.
 A level-1 auxiliary file: Apendices.aux
 Database file #1: referencias.bib
-Warning--I didn't find a database entry for "lewis2003robot"
-Warning--I didn't find a database entry for "bessa2005controle"
-Warning--I didn't find a database entry for "nakamura1990advanced"
 `address' is a missing field, not a string, for entry alfred2007compilers
 while executing---line 1298 of file coppe-unsrt.bst
 Warning--can't use both volume and number fields in slotine1991applied
@@ -61,7 +58,7 @@ while executing---line 1298 of file coppe-unsrt.bst
 while executing---line 1298 of file coppe-unsrt.bst
 You've used 64 entries,
             2630 wiz_defined-function locations,
-            935 strings with 14321 characters,
+            932 strings with 14270 characters,
 and the built_in function-call counts, 25764 in all, are:
 = -- 2168
 > -- 899

@@ -27,23 +27,54 @@ O Controle por Torque Computado (CTC), também denominado \textit{computed torqu
     \tau_{\text{CTC}} = M(q)\,v + C(q,\dot{q}) + G(q),
     \label{eq:ctc_geral}
 \end{equation}
-onde $v \in \mathbb{R}^N$ é um sinal de controle auxiliar linear \cite{spong2020robot}. Substituindo a Equação~\eqref{eq:ctc_geral} na equação de movimento $M\ddot{q} + C\dot{q} + G = \tau$ e assumindo modelo exato, obtém-se a dinâmica de malha fechada linearizada:
+onde:
+\begin{itemize}
+    \item $\tau_{\text{CTC}} \in \mathbb{R}^N$ é o vetor de torques de controle aplicado às juntas;
+    \item $M(q) \in \mathbb{R}^{N \times N}$ é a matriz de inércia generalizada;
+    \item $C(q,\dot{q})\,\dot{q} \in \mathbb{R}^N$ é o vetor de Coriolis e centrífugas;
+    \item $G(q) \in \mathbb{R}^N$ é o vetor de gravidade;
+    \item $v \in \mathbb{R}^N$ é o sinal de controle auxiliar linear (a ser projetado, e.g. lei PID);
+    \item $q, \dot{q} \in \mathbb{R}^N$ são as posições e velocidades de junta correntes.
+\end{itemize}
+
+Substituindo a Equação~\eqref{eq:ctc_geral} na equação de movimento $M\ddot{q} + C\dot{q} + G = \tau$ e assumindo modelo exato, obtém-se a dinâmica de malha fechada linearizada:
 \begin{equation}
     \ddot{q} = v,
     \label{eq:ctc_linear}
 \end{equation}
-que é um sistema de integradores duplos desacoplados e independentes da configuração $q$. A não-linearidade e o acoplamento entre juntas são completamente eliminados por \textit{feedback linearization} exata, desde que $M(q)$, $C(q,\dot{q})$ e $G(q)$ sejam conhecidos exatamente \cite{spong2020robot, isidori1985nonlinear}.
+onde:
+\begin{itemize}
+    \item $\ddot{q} \in \mathbb{R}^N$ é a aceleração resultante das juntas;
+    \item $v \in \mathbb{R}^N$ é o sinal auxiliar linear injetado na lei de controle (Equação~\eqref{eq:ctc_geral}).
+\end{itemize}
+Esta relação revela que o sistema em malha fechada é um conjunto de integradores duplos desacoplados e independentes da configuração $q$. A não-linearidade e o acoplamento entre juntas são completamente eliminados por \textit{feedback linearization} exata, desde que $M(q)$, $C(q,\dot{q})$ e $G(q)$ sejam conhecidos exatamente \cite{spong2020robot, isidori1985nonlinear}.
 
 Com a escolha do sinal auxiliar PID:
 \begin{equation}
     v = \ddot{q}_d + K_D\dot{e} + K_P e + K_I \int_0^t e\,d\tau,
     \label{eq:v_pid}
 \end{equation}
-onde $e = q_d - q$ é o erro de junta, a dinâmica de erro satisfaz:
+onde:
+\begin{itemize}
+    \item $v \in \mathbb{R}^N$ é o sinal auxiliar PID;
+    \item $\ddot{q}_d \in \mathbb{R}^N$ é a aceleração de junta de referência (\textit{feedforward});
+    \item $e = q_d - q \in \mathbb{R}^N$ é o erro de posição de junta;
+    \item $\dot{e} = \dot{q}_d - \dot{q}$ é o erro de velocidade;
+    \item $\int_0^t e\,d\tau \in \mathbb{R}^N$ é o erro integral acumulado;
+    \item $K_P, K_D, K_I \in \mathbb{R}^{N \times N}$ são as matrizes de ganhos proporcional, derivativo e integral, respectivamente.
+\end{itemize}
+
+A dinâmica de erro satisfaz:
 \begin{equation}
     \ddot{e} + K_D\dot{e} + K_P e + K_I \int_0^t e\,d\tau = 0.
     \label{eq:error_dyn_pid}
 \end{equation}
+onde:
+\begin{itemize}
+    \item $\ddot{e}, \dot{e}, e \in \mathbb{R}^N$ são, respectivamente, o erro de aceleração, velocidade e posição de junta;
+    \item $K_P, K_D, K_I$ são as matrizes de ganhos definidas anteriormente;
+    \item esta equação descreve um sistema linear desacoplado de terceira ordem cuja estabilidade é determinada pelos autovalores das matrizes $K_P, K_D, K_I$.
+\end{itemize}
 
 Esta é a equação de um sistema linear de terceira ordem com coeficientes matriciais diagonais constantes. Sua estabilidade é garantida pelas condições de Routh-Hurwitz sobre os ganhos $\{K_P, K_D, K_I\}$ \cite{astrom1995theory, ogata2010modern}: para $K_I = 0$ (modo PD), a condição é simplesmente $K_P > 0$ e $K_D > 0$. A escolha $K_D = 2\zeta\sqrt{K_P}$ com $\zeta = 1$ impõe amortecimento crítico ao sistema de segunda ordem resultante, minimizando o \textit{overshoot} enquanto maximiza a velocidade de convergência para $K_I = 0$ \cite{astrom1995theory}.
 
@@ -58,9 +89,17 @@ A fragilidade fundamental do CTC é sua dependência do modelo exato. Em presen�
     \ddot{e} + K_D\dot{e} + K_P e = \underbrace{M^{-1}(q)\left[\Delta M(q)\ddot{q} + \Delta C\dot{q} + \Delta G\right]}_{\text{perturbação residual } d(t)},
     \label{eq:ctc_robustness}
 \end{equation}
-onde a perturbação residual $d(t)$ é proporcional aos erros paramétricos e às acelerações/velocidades do sistema. Para erros paramétricos típicos de calibração de robôs industriais ($\leq 10\%$ de incerteza em massa e inércia) e trajetórias lentas a moderadas, $\|d\|$ é pequeno e o desempenho de rastreamento é mantido \cite{spong2020robot}. Entretanto, em cenários de perturbações externas abruptas (impactos, cargas não modeladas) ou erros paramétricos grandes (e.g., elos subaquáticos com massa adicionada mal estimada), o CTC-PID pode apresentar degradação significativa, motivando as estratégias robustas descritas nas seções seguintes \cite{slotine1991applied, edwards1998sliding}.
+onde:
+\begin{itemize}
+    \item $\ddot{e}, \dot{e}, e \in \mathbb{R}^N$ são o erro de aceleração, velocidade e posição de junta;
+    \item $K_P, K_D \in \mathbb{R}^{N \times N}$ são os ganhos proporcional e derivativo do PID;
+    \item $\Delta M(q), \Delta C(q,\dot{q}), \Delta G(q)$ representam, respectivamente, os erros de modelagem das matrizes de inércia, Coriolis e gravidade;
+    \item $\ddot{q}, \dot{q} \in \mathbb{R}^N$ são a aceleração e a velocidade reais das juntas;
+    \item $M^{-1}(q)$ é a inversa da matriz de inércia nominal;
+    \item $d(t) \in \mathbb{R}^N$ é a perturbação residual resultante, proporcional aos erros paramétricos e ao estado dinâmico do robô.
+\end{itemize} Para erros paramétricos típicos de calibração de robôs industriais ($\leq 10\%$ de incerteza em massa e inércia) e trajetórias lentas a moderadas, $\|d\|$ é pequeno e o desempenho de rastreamento é mantido \cite{spong2020robot}. Entretanto, em cenários de perturbações externas abruptas (impactos, cargas não modeladas) ou erros paramétricos grandes (e.g., elos subaquáticos com massa adicionada mal estimada), o CTC-PID pode apresentar degradação significativa, motivando as estratégias robustas descritas nas seções seguintes \cite{slotine1991applied, edwards1998sliding}.
 
-O uso da integral $K_I\int e\,d\tau$ melhora a rejeição de perturbações constantes e elimina erros de regime permanente devidos a erros de modelagem estáticos (e.g., $\Delta G$ constante), ao custo de reduzida margem de fase e necessidade de anti-windup \cite{astrom1995theory}. O anti-windup por \textit{clamping} implementado no \textit{Hephaestus} (Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao}) previne a acumulação do integrador em saturação mas não altera a análise de estabilidade em regime linear. A Figura~\ref{fig:ctc_pid} resume o fluxo do sinal de controle do CTC-PID, evidenciando o cancelamento da não-linearidade e o laço integral com anti-windup.
+O uso da integral $K_I\int e\,d\tau$ melhora a rejeição de perturbações constantes e elimina erros de regime permanente devidos a erros de modelagem estáticos (e.g., $\Delta G$ constante), ao custo de reduzida margem de fase e necessidade de \textit{anti-windup} \cite{astrom1995theory}. O \textit{anti-windup} por \textit{clamping} implementado no \textit{Hephaestus} (Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao}) previne a acumulação do integrador em saturação mas não altera a análise de estabilidade em regime linear. Resume-se, na Figura~\ref{fig:ctc_pid}, o fluxo do sinal de controle do CTC-PID, com destaque para o cancelamento da não-linearidade e para o laço integral com \textit{anti-windup}.
 
 \begin{figure}[htbp]
     \centering
@@ -81,7 +120,14 @@ O Controle por Modo Deslizante (\textit{Sliding Mode Control}, SMC), introduzido
     S = \dot{e} + \Lambda e \in \mathbb{R}^N, \qquad \Lambda = \text{diag}(\lambda_1, \ldots, \lambda_N),
     \label{eq:S_def}
 \end{equation}
-onde $\lambda_i > 0$ é o parâmetro de pendente da superfície para a junta $i$. A superfície $\mathcal{S} = \{(e, \dot{e}) : S = 0\}$ é uma variedade de dimensão $N$ no espaço de estados $2N$-dimensional, dentro da qual a dinâmica de erro satisfaz $\dot{e} + \Lambda e = 0$, um sistema linear estável de primeira ordem que converge exponencialmente com constante de tempo $1/\lambda_i$ \cite{slotine1991applied}.
+onde:
+\begin{itemize}
+    \item $S \in \mathbb{R}^N$ é o vetor de superfície deslizante (uma componente por junta);
+    \item $e = q - q_d \in \mathbb{R}^N$ é o erro de posição de junta (note a convenção $q - q_d$ usada no SMC);
+    \item $\dot{e} \in \mathbb{R}^N$ é o erro de velocidade;
+    \item $\Lambda \in \mathbb{R}^{N \times N}$ é uma matriz diagonal de pendentes da superfície deslizante;
+    \item $\lambda_i > 0$ é o parâmetro de pendente da superfície da junta $i$, que define a constante de tempo $1/\lambda_i$ da convergência do erro durante o modo deslizante.
+\end{itemize} A superfície $\mathcal{S} = \{(e, \dot{e}) : S = 0\}$ é uma variedade de dimensão $N$ no espaço de estados $2N$-dimensional, dentro da qual a dinâmica de erro satisfaz $\dot{e} + \Lambda e = 0$, um sistema linear estável de primeira ordem que converge exponencialmente com constante de tempo $1/\lambda_i$ \cite{slotine1991applied}.
 
 A interpretação geométrica é a seguinte: se o controlador for capaz de forçar $S \to 0$ em tempo finito, então o estado do sistema fica ``preso'' sobre $\mathcal{S}$ e converge ao ponto de equilíbrio $e = 0$, $\dot{e} = 0$ seguindo a dinâmica unidimensional $\dot{e} + \Lambda e = 0$. O projeto do controlador resume-se então a garantir $S \to 0$, separando o problema em duas fases: a fase de alcance (\textit{reaching phase}) e a fase de deslizamento (\textit{sliding phase}) \cite{edwards1998sliding, utkin2017sliding}.
 
@@ -92,19 +138,47 @@ A lei de controle CT-SMC implementada no \textit{Hephaestus} é:
     \tau_{\text{SMC}} = M(q)\left[\ddot{q}_{d,f} - \Lambda\dot{e} - K\tanh(S/\phi)\right] + C(q,\dot{q}) + G(q),
     \label{eq:smc_cap5}
 \end{equation}
-onde $\ddot{q}_{d,f}$ é a aceleração de referência filtrada (Seção~\ref{sec:controle_impl}), $K = \text{diag}(K_1, \ldots, K_N)$ são os ganhos de robustez e $\phi$ é a espessura da camada limite. A Equação~\eqref{eq:smc_cap5} pode ser reescrita como $\tau = \tau_{\text{CTC}} + \tau_{\text{sw}}$, onde $\tau_{\text{CTC}} = M\ddot{q}_{d,f} + C + G$ é o termo de torque computado e $\tau_{\text{sw}} = -M(\Lambda\dot{e} + K\tanh(S/\phi))$ é o termo de chaveamento \cite{slotine1991applied}.
+onde:
+\begin{itemize}
+    \item $\tau_{\text{SMC}} \in \mathbb{R}^N$ é o torque de controle SMC;
+    \item $M(q), C(q,\dot{q})\,\dot{q}, G(q)$ são as matrizes/vetores dinâmicos definidos anteriormente;
+    \item $\ddot{q}_{d,f} \in \mathbb{R}^N$ é a aceleração de referência filtrada (Seção~\ref{sec:controle_impl} do Capítulo~\ref{cap:simulacao});
+    \item $\Lambda \in \mathbb{R}^{N \times N}$ é a matriz diagonal de pendentes da superfície deslizante (Equação~\eqref{eq:S_def});
+    \item $\dot{e} \in \mathbb{R}^N$ é o erro de velocidade de junta;
+    \item $K = \text{diag}(K_1, \ldots, K_N) \in \mathbb{R}^{N \times N}$ é a matriz diagonal de ganhos de robustez (\textit{switching gains});
+    \item $\phi > 0$ é a espessura da camada limite (\textit{boundary layer}) que regulariza $\text{sign}(S)$;
+    \item $\tanh(S/\phi)$ é aplicado componente a componente.
+\end{itemize} A Equação~\eqref{eq:smc_cap5} pode ser reescrita como $\tau = \tau_{\text{CTC}} + \tau_{\text{sw}}$, onde $\tau_{\text{CTC}} = M\ddot{q}_{d,f} + C + G$ é o termo de torque computado e $\tau_{\text{sw}} = -M(\Lambda\dot{e} + K\tanh(S/\phi))$ é o termo de chaveamento \cite{slotine1991applied}.
 
 Considerando o modelo exato ($M$, $C$, $G$ perfeitos) e substituindo a Equação~\eqref{eq:smc_cap5} na equação de movimento, obtém-se a dinâmica de $S$:
 \begin{equation}
     \dot{S} = \ddot{e} + \Lambda\dot{e} = -K\tanh(S/\phi) + d,
     \label{eq:S_dot}
 \end{equation}
-onde $d \in \mathbb{R}^N$ representa perturbações e erros de modelo. Para $\|d_i\| \leq D_i$ e $K_i > D_i$, a função de Lyapunov $V_i = S_i^2/2$ satisfaz \cite{slotine1991applied, edwards1998sliding}:
+onde:
+\begin{itemize}
+    \item $\dot{S} \in \mathbb{R}^N$ é a derivada temporal da superfície deslizante;
+    \item $\ddot{e}, \dot{e}$ são o erro de aceleração e velocidade;
+    \item $\Lambda$ é a matriz diagonal de pendentes (Equação~\eqref{eq:S_def});
+    \item $K\tanh(S/\phi)$ é o termo de chaveamento contínuo (idêntico à Equação~\eqref{eq:smc_cap5});
+    \item $d \in \mathbb{R}^N$ representa as perturbações e erros de modelo agrupados, com componente $d_i$ para a junta $i$ limitada por $|d_i| \leq D_i$.
+\end{itemize}
+
+Para $\|d_i\| \leq D_i$ e $K_i > D_i$, a função de Lyapunov $V_i = S_i^2/2$ satisfaz \cite{slotine1991applied, edwards1998sliding}:
 \begin{equation}
     \dot{V}_i = S_i\dot{S}_i = -K_i S_i \tanh(S_i/\phi_i) + S_i d_i \leq -\left(K_i - D_i\right)|S_i| + K_i \phi_i,
     \label{eq:lyap_smc}
 \end{equation}
-o que garante $\dot{V}_i < 0$ para $|S_i| > K_i\phi_i / (K_i - D_i)$. Portanto, $|S_i|$ é uniformemente limitado superiormente por $\|S_i\|_\infty \leq K_i\phi_i/(K_i - D_i)$ em regime estacionário, e a \textit{camada limite} controla o compromisso entre \textit{chattering} e precisão de rastreamento \cite{burton1986continuous}.
+onde:
+\begin{itemize}
+    \item $V_i = S_i^2/2$ é a função de Lyapunov candidata escalar para a junta $i$;
+    \item $\dot{V}_i$ é sua derivada ao longo das trajetórias do sistema;
+    \item $S_i$ é a $i$-ésima componente da superfície deslizante e $\dot{S}_i$ sua derivada temporal;
+    \item $K_i > 0$ é o ganho de robustez e $\phi_i > 0$ a espessura da camada limite, ambos da junta $i$;
+    \item $D_i$ é a cota superior da magnitude do distúrbio na junta $i$ (i.e., $|d_i| \leq D_i$);
+    \item a desigualdade utiliza a propriedade $|\tanh(x)| \geq |x|/(1+|x|)$ e o limite uniforme $K_i\phi_i$.
+\end{itemize}
+Esta condição garante $\dot{V}_i < 0$ para $|S_i| > K_i\phi_i / (K_i - D_i)$. Portanto, $|S_i|$ é uniformemente limitado superiormente por $\|S_i\|_\infty \leq K_i\phi_i/(K_i - D_i)$ em regime estacionário, e a \textit{camada limite} controla o compromisso entre \textit{chattering} e precisão de rastreamento \cite{burton1986continuous}.
 
 \subsection{Integração com o Modelo e Sensibilidade Paramétrica}
 
@@ -112,7 +186,7 @@ A dependência de $\tau_{\text{SMC}}$ em relação ao modelo simbólico-numéric
 
 Esse comportamento contrasta com o CTC-PID, no qual perturbações de mesma magnitude entram diretamente na dinâmica de erro linear e podem causar erros de regime permanente proporcional. O CT-SMC oferece, portanto, robustez intrínseca a perturbações limitadas ao custo de possível \textit{chattering}, mitigado pela camada limite $\phi$, e de uma resposta mais agressiva nos instantes iniciais, quando $|S|$ é grande e o termo $K\tanh(S/\phi)$ satura \cite{edwards1998sliding, slotine1991applied}.
 
-O parâmetro $\lambda$ desempenha papel duplo: define a inclinação da superfície deslizante (quanto maior $\lambda$, mais rápida a convergência sobre $\mathcal{S}$) e amplifica $\dot{e}$ na lei de controle (o que pode amplificar ruído de velocidade ou picos de aceleração de referência provenientes do CLIK). O filtro de aceleração $\ddot{q}_{d,f} = \alpha \ddot{q}_d + (1-\alpha)\ddot{q}_{d,f}^{\text{prev}}$ é essencial neste contexto, conforme discutido por Siciliano e Villani \cite{siciliano1999robot} e Slotine e Li \cite{slotine1991applied}. A Figura~\ref{fig:ct_smc} sintetiza a estrutura do CT-SMC, destacando a superfície deslizante $S = \dot{e} + \Lambda e$, a camada limite $\tanh(S/\phi)$ e a condição de alcance via função de Lyapunov.
+O parâmetro $\lambda$ desempenha papel duplo: define a inclinação da superfície deslizante (quanto maior $\lambda$, mais rápida a convergência sobre $\mathcal{S}$) e amplifica $\dot{e}$ na lei de controle (o que pode amplificar ruído de velocidade ou picos de aceleração de referência provenientes do CLIK). O filtro de aceleração $\ddot{q}_{d,f} = \alpha \ddot{q}_d + (1-\alpha)\ddot{q}_{d,f}^{\text{prev}}$ é essencial neste contexto, conforme discutido por Siciliano e Villani \cite{siciliano1999robot} e Slotine e Li \cite{slotine1991applied}. Sintetiza-se, na Figura~\ref{fig:ct_smc}, a estrutura do CT-SMC, com destaque para a superfície deslizante $S = \dot{e} + \Lambda e$, para a camada limite $\tanh(S/\phi)$ e para a condição de alcance via função de Lyapunov.
 
 \begin{figure}[htbp]
     \centering
@@ -141,24 +215,57 @@ O STA para a junta $i$ define a variável interna $z_i$ e a parcela de chaveamen
     v_{\text{sw},i} &= -k_{1,i}|S_i|^{1/2}\,\text{sign}(S_i) + z_i, \label{eq:sta_vsw}\\
     \dot{z}_i &= -k_{2,i}\,\text{sign}(S_i), \label{eq:sta_z}
 \end{align}
-com a lei de controle completa:
+onde:
+\begin{itemize}
+    \item $v_{\text{sw},i}$ é a parcela contínua de chaveamento da junta $i$;
+    \item $S_i$ é a $i$-ésima componente da superfície deslizante (Equação~\eqref{eq:S_def});
+    \item $|S_i|^{1/2}$ é a raiz quadrada do módulo de $S_i$ e $\text{sign}(S_i)$ é a função sinal;
+    \item $z_i$ é a variável interna do STA que integra o sinal descontínuo, tornando $v_{\text{sw},i}$ contínuo;
+    \item $\dot{z}_i$ é a derivada temporal de $z_i$;
+    \item $k_{1,i}, k_{2,i} > 0$ são os ganhos do STA da junta $i$, ajustados de acordo com a magnitude esperada do distúrbio.
+\end{itemize}
+
+A lei de controle completa é:
 \begin{equation}
     \tau_{\text{STA},i} = M(q)_i\left[\ddot{q}_{d,f,i} - \lambda_i\dot{e}_i + v_{\text{sw},i}\right] + C_i + G_i.
     \label{eq:sta_tau_cap5}
 \end{equation}
+onde:
+\begin{itemize}
+    \item $\tau_{\text{STA},i}$ é o torque STA da junta $i$;
+    \item $M(q)_i$ é a $i$-ésima linha da matriz de inércia $M(q)$;
+    \item $\ddot{q}_{d,f,i}$ é a aceleração de referência filtrada da junta $i$;
+    \item $\lambda_i > 0$ é a pendente da superfície deslizante da junta $i$ (Equação~\eqref{eq:S_def});
+    \item $\dot{e}_i$ é o erro de velocidade da junta $i$;
+    \item $v_{\text{sw},i}$ é o sinal contínuo gerado pelas Equações~\eqref{eq:sta_vsw}--\eqref{eq:sta_z};
+    \item $C_i, G_i$ são, respectivamente, as $i$-ésimas componentes dos vetores de Coriolis e gravidade.
+\end{itemize}
 
 Moreno e Osorio \cite{moreno2012strict} provaram que, para perturbações $d_i$ com $|\dot{d}_i| \leq \delta_i$ (derivada limitada), o STA converge em tempo finito a $S_i = \dot{S}_i = 0$ se e somente se:
 \begin{equation}
     k_{2,i} > \delta_i, \qquad k_{1,i} > 2\sqrt{k_{2,i}\,\delta_i}.
     \label{eq:sta_conditions}
 \end{equation}
+onde:
+\begin{itemize}
+    \item $k_{1,i}, k_{2,i} > 0$ são os ganhos do STA da junta $i$ definidos nas Equações~\eqref{eq:sta_vsw}--\eqref{eq:sta_z};
+    \item $\delta_i > 0$ é a cota superior da derivada temporal do distúrbio da junta $i$, ou seja, $|\dot{d}_i(t)| \leq \delta_i$ para todo $t$.
+\end{itemize}
 
 A prova utiliza a função de Lyapunov estrita quadrática-de-Lyapunov (QLF) para o vetor de estados $\xi_i = [|S_i|^{1/2}\,\text{sign}(S_i),\; z_i]^\top$ \cite{moreno2012strict}:
 \begin{equation}
     V_i(\xi_i) = \xi_i^\top P_i \xi_i, \qquad P_i = \begin{bmatrix} k_{2,i} + k_{1,i}^2/2 & -k_{1,i}/2 \\ -k_{1,i}/2 & 1/2 \end{bmatrix},
     \label{eq:lyap_sta}
 \end{equation}
-com $\dot{V}_i \leq -\beta_i V_i^{1/2}$ para algum $\beta_i > 0$ dependendo dos ganhos, uma condição que implica convergência em tempo finito \cite{bhat2000finite, moreno2012strict}. A análise estende-se ao caso multi-junta pelo princípio da estabilidade independente para sistemas decentralizados sob a hipótese de que os acoplamentos dinâmicos residuais (incluídos em $d_i$) satisfazem as condições de limitação de derivada \cite{slotine1991applied, shtessel2014sliding}.
+onde:
+\begin{itemize}
+    \item $V_i(\xi_i)$ é a função de Lyapunov estrita quadrática (QLF) para a junta $i$;
+    \item $\xi_i = [|S_i|^{1/2}\,\text{sign}(S_i),\; z_i]^\top \in \mathbb{R}^2$ é o vetor de estados aumentados do STA;
+    \item $P_i \in \mathbb{R}^{2 \times 2}$ é uma matriz simétrica positiva definida que depende dos ganhos $k_{1,i}, k_{2,i}$;
+    \item os elementos de $P_i$ são $k_{2,i} + k_{1,i}^2/2$, $-k_{1,i}/2$ e $1/2$, escolhidos para que $V_i$ satisfaça uma desigualdade diferencial finita no tempo;
+    \item $\xi_i^\top$ é o vetor transposto de $\xi_i$.
+\end{itemize}
+Tem-se $\dot{V}_i \leq -\beta_i V_i^{1/2}$ para algum $\beta_i > 0$ dependendo dos ganhos, condição que implica convergência em tempo finito \cite{bhat2000finite, moreno2012strict}. A análise estende-se ao caso multi-junta pelo princípio da estabilidade independente para sistemas decentralizados sob a hipótese de que os acoplamentos dinâmicos residuais (incluídos em $d_i$) satisfazem as condições de limitação de derivada \cite{slotine1991applied, shtessel2014sliding}.
 
 \subsection{Continuidade do Sinal de Controle e Eliminação do Chattering}
 
@@ -167,7 +274,14 @@ A propriedade central que distingue o STA do CT-SMC convencional é a continuida
     z_i^{n+1} = z_i^n - k_{2,i}\,\text{sign}(S_i^n)\,\Delta t_{\text{phys}},
     \label{eq:sta_z_discrete}
 \end{equation}
-o que introduz uma suavização discreta adicional pela integração numérica. Desde que $\Delta t_{\text{phys}}$ seja suficientemente pequeno (condição discutida na Seção~\ref{sec:sta_discreto}), essa implementação preserva as propriedades de convergência em tempo finito \cite{levant2010chattering}. A Figura~\ref{fig:sta_ctrl} ilustra a estrutura do algoritmo Super-Twisting, com a variável interna $z_i$ que integra o sinal descontínuo $-k_{2,i}\,\text{sign}(S_i)$ para produzir o sinal de controle contínuo $v_{\text{sw},i}$.
+onde:
+\begin{itemize}
+    \item $z_i^n, z_i^{n+1}$ são, respectivamente, os valores da variável interna $z_i$ nos instantes $t_n$ e $t_{n+1}$;
+    \item $S_i^n$ é o valor da superfície deslizante da junta $i$ no instante $t_n$;
+    \item $k_{2,i} > 0$ é o ganho do STA;
+    \item $\Delta t_{\text{phys}}$ é o passo da integração física;
+    \item esta é a discretização de Euler explícito da Equação~\eqref{eq:sta_z}.
+\end{itemize} Desde que $\Delta t_{\text{phys}}$ seja suficientemente pequeno (condição discutida na Seção~\ref{sec:sta_discreto}), essa implementação preserva as propriedades de convergência em tempo finito \cite{levant2010chattering}. Ilustra-se, na Figura~\ref{fig:sta_ctrl}, a estrutura do algoritmo Super-Twisting, com a variável interna $z_i$ que integra o sinal descontínuo $-k_{2,i}\,\text{sign}(S_i)$ para produzir o sinal de controle contínuo $v_{\text{sw},i}$.
 
 \begin{figure}[htbp]
     \centering
@@ -199,7 +313,15 @@ Para a junta $i$, a dinâmica de malha fechada é reescrita no formato de \texti
     \ddot{q}_i = b_{0,i}\,\tau_i + f_i,
     \label{eq:adrc_plant_cap5}
 \end{equation}
-onde $b_{0,i}$ é um ganho nominal (a ser escolhido), e $f_i$ é o distúrbio total que engloba \cite{gao2003scaling, huang2014active}:
+onde:
+\begin{itemize}
+    \item $\ddot{q}_i$ é a aceleração da junta $i$;
+    \item $\tau_i$ é o torque aplicado à junta $i$;
+    \item $b_{0,i}$ é o ganho nominal de canal (a ser escolhido pelo projetista, tipicamente $b_{0,i} \approx 1/M_{ii}$);
+    \item $f_i$ é o distúrbio total da junta $i$, que agrupa todos os efeitos não capturados pelo modelo nominal de canal integrador.
+\end{itemize}
+
+O distúrbio total $f_i$ engloba \cite{gao2003scaling, huang2014active}:
 \begin{itemize}
     \item os termos de Coriolis residuais não compensados pelo \textit{feedforward}: $-[C\dot{q}]_i / M_{ii}$;
     \item os acoplamentos dinâmicos entre juntas: $-\sum_{j \neq i} M_{ij}\ddot{q}_j / M_{ii}$;
@@ -212,7 +334,12 @@ A escolha $b_{0,i} \approx 1/M_{ii}(q_0)$ como estimativa do ganho de canal inte
     b_{0,i} = \frac{1}{\max(M_{ii}(q_0),\, 10^{-4})},
     \label{eq:b0_auto}
 \end{equation}
-com a saturação $10^{-4}$ prevenindo divisão por zero em configurações degeneradas.
+onde:
+\begin{itemize}
+    \item $b_{0,i}$ é o ganho nominal de canal estimado automaticamente para a junta $i$;
+    \item $M_{ii}(q_0)$ é o $i$-ésimo elemento diagonal da matriz de inércia avaliada na postura inicial $q_0$;
+    \item $\max(\cdot, 10^{-4})$ é uma saturação inferior que impede divisão por zero em configurações degeneradas (em que $M_{ii}(q_0) \to 0$).
+\end{itemize}
 
 \subsection{Observador de Estado Estendido (ESO) Linear}
 
@@ -221,26 +348,60 @@ O ESO de terceira ordem estima o estado $(q_i, \dot{q}_i)$ e o distúrbio total 
     \frac{d}{dt}\begin{bmatrix}z_1\\z_2\\z_3\end{bmatrix} = \underbrace{\begin{bmatrix}0&1&0\\0&0&1\\0&0&0\end{bmatrix}}_{A_e}\begin{bmatrix}z_1\\z_2\\z_3\end{bmatrix} + \underbrace{\begin{bmatrix}0\\b_0\\0\end{bmatrix}}_{B_e}\tau_i + \underbrace{\begin{bmatrix}0\\0\\1\end{bmatrix}}_{E}\dot{f}_i,
     \label{eq:eso_cont}
 \end{equation}
-com o ESO implementado como um observador de Luenberger para o par $(A_e, C_e = [1,0,0])$:
+onde:
+\begin{itemize}
+    \item $z_1, z_2, z_3$ são, respectivamente, os estados estimados $z_1 \approx q_i$, $z_2 \approx \dot{q}_i$ e $z_3 \approx f_i$;
+    \item $A_e \in \mathbb{R}^{3 \times 3}$ é a matriz de estado aumentada (cadeia de integradores);
+    \item $B_e \in \mathbb{R}^{3 \times 1}$ é o vetor de entrada com ganho nominal $b_0 = b_{0,i}$;
+    \item $E \in \mathbb{R}^{3 \times 1}$ é o vetor que injeta a derivada do distúrbio $\dot{f}_i$ no estado estendido;
+    \item $\tau_i$ é o torque aplicado à junta $i$.
+\end{itemize}
+
+O ESO é implementado como um observador de Luenberger para o par $(A_e, C_e = [1,0,0])$:
 \begin{equation}
     \dot{\hat{x}} = A_e\hat{x} + B_e\tau_i + L_e(q_i - \hat{z}_1), \qquad
     L_e = [\beta_1, \beta_2, \beta_3]^\top,
     \label{eq:eso_observer}
 \end{equation}
-onde $L_e$ é o vetor de ganhos escolhido para que o polinômio característico do observador seja $(\lambda + \omega_o)^3$, parametrização de banda por frequência (\textit{bandwidth parameterization}) proposta por Gao \cite{gao2003scaling}:
+onde:
+\begin{itemize}
+    \item $\hat{x} = [\hat{z}_1, \hat{z}_2, \hat{z}_3]^\top \in \mathbb{R}^3$ é o vetor de estados estimados;
+    \item $\dot{\hat{x}}$ é sua derivada temporal;
+    \item $A_e, B_e$ são as matrizes definidas na Equação~\eqref{eq:eso_cont};
+    \item $\tau_i$ é o torque aplicado;
+    \item $q_i$ é a posição medida da junta $i$;
+    \item $(q_i - \hat{z}_1)$ é o erro de inovação, multiplicado pelo ganho do observador;
+    \item $L_e = [\beta_1, \beta_2, \beta_3]^\top \in \mathbb{R}^3$ é o vetor de ganhos do observador, escolhido para alocar todos os autovalores do erro em $-\omega_o$.
+\end{itemize}
+
+A parametrização de banda por frequência (\textit{bandwidth parameterization}) proposta por Gao \cite{gao2003scaling} é:
 \begin{equation}
     \beta_1 = 3\omega_o, \qquad \beta_2 = 3\omega_o^2, \qquad \beta_3 = \omega_o^3.
     \label{eq:eso_gains}
 \end{equation}
+onde:
+\begin{itemize}
+    \item $\beta_1, \beta_2, \beta_3$ são os ganhos do observador correspondentes aos três estados aumentados;
+    \item $\omega_o > 0$ é a frequência de banda (\textit{bandwidth}) do ESO, único parâmetro de ajuste do observador;
+    \item os coeficientes $3, 3, 1$ correspondem aos coeficientes binomiais $\binom{3}{k}$ que asseguram polinômio característico $(\lambda + \omega_o)^3$.
+\end{itemize}
 
-Essa parametrização unifica o ajuste do ESO em um único parâmetro $\omega_o$ (frequência de banda do observador), simplificando o projeto: um $\omega_o$ maior implica observador mais rápido e melhor rejeição de distúrbios variáveis no tempo, ao custo de maior amplificação de ruído de medição e potencial instabilidade numérica para $\omega_o \Delta t_{\text{phys}} > 0.1$ \cite{gao2003scaling, zheng2010practical}.
+Essa parametrização unifica o ajuste do ESO em um único parâmetro $\omega_o$ (frequência de banda do observador), simplificando o projeto: um $\omega_o$ maior implica observador mais rápido e melhor rejeição de distúrbios variáveis no tempo, ao custo de maior amplificação de ruído de medição e potencial instabilidade numérica caso o produto $\omega_o\,\Delta t_{\text{phys}}$ ultrapasse o limite heurístico discutido na Equação~\eqref{eq:ladrc_wo_stability} \cite{gao2003scaling, zheng2010practical}.
 
 A análise de convergência do ESO, desenvolvida por Zheng e Gao \cite{zheng2010practical}, estabelece que, para distúrbios $f_i$ com $|\dot{f}_i| \leq \delta_i$ e modelo aproximado com erro $|\Delta b_{0,i}| < b_{0,i}$, o erro de estimação satisfaz:
 \begin{equation}
     \lim_{t\to\infty} \|z_3(t) - f_i(t)\| \leq \frac{\delta_i}{\omega_o},
     \label{eq:eso_convergence}
 \end{equation}
-ou seja, a qualidade da estimação do distúrbio é inversamente proporcional à frequência de banda do observador \cite{zheng2010practical}. A Figura~\ref{fig:ladrc_eso} esquematiza a estrutura do ESO de terceira ordem, com a parametrização por largura de banda $\omega_o$ e a estimação do estado estendido $z_3 \approx f_i$.
+onde:
+\begin{itemize}
+    \item $z_3(t)$ é a estimativa de distúrbio produzida pelo ESO;
+    \item $f_i(t)$ é o distúrbio total real da junta $i$;
+    \item $\|z_3(t) - f_i(t)\|$ é o erro absoluto de estimação;
+    \item $\delta_i$ é a cota superior da derivada temporal do distúrbio, $|\dot{f}_i| \leq \delta_i$;
+    \item $\omega_o$ é a frequência de banda do ESO (Equação~\eqref{eq:eso_gains}).
+\end{itemize}
+Esta relação mostra que a qualidade da estimação do distúrbio é inversamente proporcional à frequência de banda do observador \cite{zheng2010practical}. Esquematiza-se, na Figura~\ref{fig:ladrc_eso}, a estrutura do ESO de terceira ordem, com a parametrização por largura de banda $\omega_o$ e a estimação do estado estendido $z_3 \approx f_i$.
 
 \begin{figure}[htbp]
     \centering
@@ -257,8 +418,19 @@ A lei de controle do LADRC cancela o distúrbio estimado $z_{3,i}^{\text{filt}}$
     \tau_i^{\text{LADRC}} &= \frac{u_{0,i} - z_{3,i}^{\text{filt}}}{b_{0,i}} + G_i + C_i.
     \label{eq:ladrc_ctrl_cap5}
 \end{align}
+onde:
+\begin{itemize}
+    \item $u_{0,i}$ é o sinal de controle nominal da junta $i$ (lei PD com \textit{feedforward} de aceleração);
+    \item $\tau_i^{\text{LADRC}}$ é o torque de controle LADRC aplicado à junta $i$;
+    \item $\ddot{q}_{d,i}, \dot{q}_{d,i}, q_{d,i}$ são as referências de aceleração, velocidade e posição da junta $i$ geradas pelo CLIK;
+    \item $q_i, \dot{q}_i$ são a posição e a velocidade medidas da junta;
+    \item $k_{p,i}, k_{d,i} > 0$ são os ganhos proporcional e derivativo da junta $i$;
+    \item $z_{3,i}^{\text{filt}}$ é a estimativa do distúrbio total $f_i$ produzida pelo ESO e suavizada pelo filtro IIR;
+    \item $b_{0,i}$ é o ganho nominal de canal (Equação~\eqref{eq:b0_auto});
+    \item $G_i, C_i$ são, respectivamente, as $i$-ésimas componentes dos vetores de gravidade e Coriolis aplicadas como \textit{feedforward} explícito.
+\end{itemize}
 
-O \textit{feedforward} explícito de $G_i$ e $C_i$ na Equação~\eqref{eq:ladrc_ctrl_cap5} reduz o distúrbio residual que o ESO precisa estimar. Sem esse \textit{feedforward}, o distúrbio total $f_i$ inclui $-G_i/M_{ii}$ (que pode ser da ordem de dezenas de rad/s$^2$ para elos pesados em posição não-horizontal) e $-[C\dot{q}]_i/M_{ii}$ (crescente com $\dot{q}^2$ ao longo da trajetória), impondo ao ESO uma tarefa de estimação com dinâmica crescente que introduz transientes oscilatórios \cite{han2009pid}. Com o \textit{feedforward}, $f_i$ é reduzido a erros de modelo e perturbações externas, sinais menores e mais lentos que o ESO estima com maior precisão \cite{huang2014active}. A Figura~\ref{fig:ladrc_ctrl} apresenta a lei de controle completa do LADRC, evidenciando o cancelamento do distúrbio estimado $z_{3,i}^{\text{filt}}$ e o \textit{feedforward} explícito de $G$ e $C$.
+O \textit{feedforward} explícito de $G_i$ e $C_i$ na Equação~\eqref{eq:ladrc_ctrl_cap5} reduz o distúrbio residual que o ESO precisa estimar. Sem esse \textit{feedforward}, o distúrbio total $f_i$ inclui $-G_i/M_{ii}$ (que pode ser da ordem de dezenas de rad/s$^2$ para elos pesados em posição não-horizontal) e $-[C\dot{q}]_i/M_{ii}$ (crescente com $\dot{q}^2$ ao longo da trajetória), impondo ao ESO uma tarefa de estimação com dinâmica crescente que introduz transientes oscilatórios \cite{han2009pid}. Com o \textit{feedforward}, $f_i$ é reduzido a erros de modelo e perturbações externas, sinais menores e mais lentos que o ESO estima com maior precisão \cite{huang2014active}. Apresenta-se, na Figura~\ref{fig:ladrc_ctrl}, a lei de controle completa do LADRC, com destaque para o cancelamento do distúrbio estimado $z_{3,i}^{\text{filt}}$ e para o \textit{feedforward} explícito de $G$ e $C$.
 
 \begin{figure}[htbp]
     \centering
@@ -300,7 +472,9 @@ Embora todos os controladores consumam as mesmas funções compiladas, o papel d
 \centering
 \caption{Papel das matrizes dinâmicas em cada estratégia de controle.}
 \label{tab:ctrl_model_usage}
-\begin{tabular}{p{2.8cm} p{2.5cm} p{2.5cm} p{2.5cm} p{3.2cm}}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{2.4cm} p{2.4cm} p{2.4cm} p{2.4cm} p{3.2cm}}
 \hline
 \textbf{Controlador} & \textbf{Uso de $M$} & \textbf{Uso de $C$} & \textbf{Uso de $G$} & \textbf{Sensibilidade a Erros de Modelo} \\
 \hline
@@ -328,7 +502,7 @@ A Tabela~\ref{tab:ctrl_compute} quantifica o custo computacional adicional por p
 \hline
 \textbf{Controlador} & \textbf{Operações principais} & \textbf{Custo dominante} \\
 \hline
-CTC-PID & $M\cdot v$, anti-windup & produto matriz-vetor $O(N^2)$ \\
+CTC-PID & $M\cdot v$, \textit{anti-windup} & produto matriz-vetor $O(N^2)$ \\
 CT-SMC & filtro $\ddot{q}_{d,f}$, $S$, $\tanh(S/\phi)$, $M\cdot v$ & idem + $N$ avaliações de $\tanh$ \\
 STA & filtro $\ddot{q}_{d,f}$, $S$, $|S|^{1/2}$, $\text{sign}(S)$, integração de $z$, $M\cdot v$ & idem + $N$ raízes quadradas \\
 LADRC & $N$ ESOs (3 estados cada), filtro IIR em $z_3$, lei PD, divisão por $b_0$ & $3N$ operações Euler + $N$ divisões \\
@@ -336,7 +510,7 @@ LADRC & $N$ ESOs (3 estados cada), filtro IIR em $z_3$, lei PD, divisão por $b_
 \end{tabular}
 \end{table}
 
-Para $N \leq 8$ GDL e $\Delta t_{\text{phys}} = 10^{-3}$ s, todos os controladores adicionam overhead desprezível em comparação com a avaliação de $M$, $C$, $G$ (dominante). O custo computacional dos controladores torna-se relevante apenas para $N \geq 15$ ou em implementações \textit{hard real-time} com restrições de ciclo na ordem de microssegundos \cite{leu1986automated}.
+Para $N \leq 8$ GDL e $\Delta t_{\text{phys}} = 10^{-3}$ s, todos os controladores adicionam \textit{overhead} desprezível em comparação com a avaliação de $M$, $C$, $G$ (dominante). O custo computacional dos controladores torna-se relevante apenas para $N \geq 15$ ou em implementações \textit{hard real-time} com restrições de ciclo na ordem de microssegundos \cite{leu1986automated}.
 
 % ==============================================================================
 \section{Interface Gráfica e Configuração dos Controladores}
@@ -347,7 +521,7 @@ Para $N \leq 8$ GDL e $\Delta t_{\text{phys}} = 10^{-3}$ s, todos os controlador
 
 A interface gráfica do \textit{Hephaestus}, implementada em \texttt{main.py} com a biblioteca CustomTkinter, expõe os parâmetros de cada controlador por meio de campos de entrada dinâmicos na aba de Simulação. A parametrização é empacotada no dicionário \texttt{ctrl\_params} que é passado ao método \texttt{RobotSimulator.run()}, sem que a interface gráfica precise conhecer a implementação interna dos controladores, em uma separação de responsabilidades que segue o padrão MVC (\textit{Model-View-Controller}) \cite{gamma1994design}.
 
-A Tabela~\ref{tab:ctrl_params} lista os parâmetros configuráveis por estratégia:
+Listam-se, na Tabela~\ref{tab:ctrl_params}, os parâmetros configuráveis por estratégia:
 
 \begin{table}[h!]
 \centering
@@ -357,10 +531,10 @@ A Tabela~\ref{tab:ctrl_params} lista os parâmetros configuráveis por estratég
 \hline
 \textbf{Controlador} & \textbf{Parâmetros principais} & \textbf{Descrição} \\
 \hline
-CTC-PID & \texttt{Kp}, \texttt{zeta}, \texttt{ki}, \texttt{windup\_limit} & Ganhos proporcional, amortecimento, integral e limite anti-windup \\
+CTC-PID & \texttt{Kp}, \texttt{zeta}, \texttt{ki}, \texttt{windup\_limit} & Ganhos proporcional, amortecimento, integral e limite \textit{anti-windup} \\
 CT-SMC & \texttt{lambda}, \texttt{K}, \texttt{phi}, \texttt{ddq\_filter\_alpha} & Pendente da superfície, ganho de robustez, espessura da camada limite, coef. filtro \\
 STA & \texttt{lambda}, \texttt{k1}, \texttt{k2}, \texttt{ddq\_filter\_alpha} & Pendente da superfície, ganhos STA, coef. filtro \\
-LADRC & \texttt{wo}, \texttt{b0} (ou \texttt{auto\_b0}), \texttt{kp}, \texttt{kd}, \texttt{z3\_filter\_alpha}, \texttt{gravity\_ff}, \texttt{coriolis\_ff} & Banda do observador, ganho de canal, ganhos PD, filtro de distúrbio, flags de feedforward \\
+LADRC & \texttt{wo}, \texttt{b0} (ou \texttt{auto\_b0}), \texttt{kp}, \texttt{kd}, \texttt{z3\_filter\_alpha}, \texttt{gravity\_ff}, \texttt{coriolis\_ff} & Banda do observador, ganho de canal, ganhos PD, filtro de distúrbio, \textit{flags} de \textit{feedforward} \\
 \hline
 \end{tabular}
 \end{table}
@@ -369,7 +543,7 @@ LADRC & \texttt{wo}, \texttt{b0} (ou \texttt{auto\_b0}), \texttt{kp}, \texttt{kd
 
 A aba de Análise da interface gráfica permite a sobreposição de resultados de múltiplas sessões de simulação (\texttt{comparison\_sessions}), cada uma armazenando os arrays de erro e torque, os parâmetros do controlador e as condições da trajetória. Essa funcionalidade é fundamental para a metodologia de ajuste iterativo de ganhos: o usuário pode comparar visualmente a resposta ao degrau de erro de junta para diferentes valores de $\lambda$ (SMC/STA) ou $\omega_o$ (LADRC), identificando o compromisso \textit{velocidade de convergência × chattering × consumo de torque} \cite{astrom1995theory, han2009pid}.
 
-A serialização das sessões em formato \texttt{pickle} permite a exportação dos arrays de resultado para análise posterior em ferramentas externas (MATLAB, scipy, etc.), enquanto a funcionalidade de exportação para código Octave das equações simbólicas (via \texttt{octave\_code} do SymPy) permite verificação cruzada das matrizes dinâmicas com \textit{toolboxes} de robótica estabelecidas \cite{spong2020robot, corke2017robotics}.
+A serialização das sessões em formato \texttt{pickle} permite a exportação dos arrays de resultado para análise posterior em ferramentas externas (MATLAB, SciPy, etc.), enquanto a funcionalidade de exportação para código Octave das equações simbólicas (via \texttt{octave\_code} do SymPy) permite verificação cruzada das matrizes dinâmicas com \textit{toolboxes} de robótica estabelecidas \cite{spong2020robot, corke2017robotics}.
 
 % ==============================================================================
 \section{Análise Comparativa das Estratégias de Controle}
@@ -378,13 +552,14 @@ A serialização das sessões em formato \texttt{pickle} permite a exportação 
 
 \subsection{Propriedades Teóricas Comparadas}
 
-A Tabela~\ref{tab:ctrl_comparison} sintetiza as propriedades teóricas fundamentais das quatro estratégias de controle implementadas, segundo a literatura de referência:
+Sintetizam-se, na Tabela~\ref{tab:ctrl_comparison}, as propriedades teóricas fundamentais das quatro estratégias de controle implementadas, segundo a literatura de referência:
 
 \begin{table}[h!]
 \centering
 \caption{Comparação teórica das estratégias de controle implementadas.}
 \label{tab:ctrl_comparison}
-\begin{tabular}{p{2.5cm} p{2.0cm} p{2.0cm} p{2.2cm} p{3.5cm}}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{2.6cm} p{2.0cm} p{2.0cm} p{2.2cm} p{3.5cm}}
 \hline
 \textbf{Propriedade} & \textbf{CTC-PID} & \textbf{CT-SMC} & \textbf{STA} & \textbf{LADRC} \\
 \hline
@@ -404,35 +579,63 @@ Ref. principais & \cite{craig1989introduction,spong2020robot} & \cite{slotine199
 Com base na análise teórica e nas propriedades implementadas, as seguintes diretrizes de seleção e ajuste de ganhos são propostas para o ambiente \textit{Hephaestus} \cite{astrom1995theory, slotine1991applied, gao2003scaling, han2009pid}:
 
 \subsubsection*{CTC-PID}
+A condição de estabilidade que limita o ganho proporcional $k_p$ do CTC-PID em função do passo de integração simplético é dada pela Equação~\eqref{eq:ctc_kp_stability}:
+\begin{equation}
+    \Delta t_{\text{phys}} < \frac{2}{\sqrt{k_p}},
+    \label{eq:ctc_kp_stability}
+\end{equation}
+onde $\Delta t_{\text{phys}}$ é o passo de integração física e $k_p$ é o ganho proporcional do CTC-PID; valores maiores de $k_p$ exigem passos de integração proporcionalmente menores (Seção~\ref{sec:estabilidade_num} do Capítulo~\ref{cap:simulacao}).
+
 \begin{itemize}
-    \item Ponto de partida: $k_p = 100$ rad$^2$/s$^2$, $\zeta = 1$ (amortecimento crítico), $k_i = 0$.
-    \item Aumentar $k_p$ para reduzir erros de rastreamento em trajetórias rápidas. Verificar a condição de estabilidade do integrador simplético: $\Delta t_{\text{phys}} < 2/\sqrt{k_p}$ (Seção~\ref{sec:estabilidade_num}).
+    \item Ponto de partida: $k_p = 100$ rad$^2$/s$^2$, $\zeta = 1$ (amortecimento crítico) e $k_i = 0$.
+    \item Aumentar $k_p$ para reduzir erros de rastreamento em trajetórias rápidas, sempre verificando a condição da Equação~\eqref{eq:ctc_kp_stability}.
     \item Ativar $k_i$ apenas em presença de perturbações constantes ou erros estáticos de modelo. Iniciar com $k_i = k_p / 100$ e aumentar até eliminar o erro de regime.
 \end{itemize}
 
 \subsubsection*{CT-SMC}
+A condição que dimensiona o ganho de robustez $K$ do CT-SMC para garantir a invariância da superfície deslizante face a perturbações limitadas \cite{slotine1991applied} é apresentada na Equação~\eqref{eq:smc_K_condition}:
+\begin{equation}
+    K > \|d\|_\infty,
+    \label{eq:smc_K_condition}
+\end{equation}
+onde $K$ é o ganho diagonal de robustez e $\|d\|_\infty$ é a cota superior da magnitude do distúrbio agregado (erros de modelo + perturbações externas), tipicamente estimada pela amplitude do erro de rastreamento observado no CTC-PID com o mesmo modelo.
+
 \begin{itemize}
-    \item Ponto de partida: $\lambda = 5$ rad/s, $K = 5$ N·m, $\phi = 0.1$ rad/s.
-    \item $\lambda$ determina a dinâmica sobre $\mathcal{S}$: valores maiores aceleram a convergência mas amplificam ruído de velocidade.
-    \item $K$ deve satisfazer $K > \|d\|_\infty$; estimar $\|d\|$ pela amplitude do erro de rastreamento do CTC-PID com o mesmo modelo.
+    \item Ponto de partida: $\lambda = 5$ rad/s, $K = 5$ N$\cdot$m e $\phi = 0,1$ rad/s.
+    \item $\lambda$ determina a dinâmica sobre $\mathcal{S}$: valores maiores aceleram a convergência, mas amplificam ruído de velocidade.
+    \item $K$ deve satisfazer a Equação~\eqref{eq:smc_K_condition}.
     \item Ajustar $\phi$ para o maior valor que ainda garanta precisão de rastreamento aceitável, minimizando o \textit{chattering} residual \cite{burton1986continuous}.
-    \item Reduzir \texttt{ddq\_filter\_alpha} (ex. 0.5) se picos de aceleração do CLIK causarem torques impulsivos.
+    \item Reduzir \texttt{ddq\_filter\_alpha} (ex.\ 0,5) se picos de aceleração do CLIK causarem torques impulsivos.
 \end{itemize}
 
 \subsubsection*{STA}
+A condição necessária e suficiente para a convergência em tempo finito do STA, em sua forma compacta de razão entre os ganhos \cite{moreno2012strict}, é apresentada na Equação~\eqref{eq:sta_ratio}:
+\begin{equation}
+    \frac{k_2}{k_1^2} > \frac{\delta_i}{4 k_{2,i}},
+    \label{eq:sta_ratio}
+\end{equation}
+onde $k_1$ e $k_2$ são os ganhos do STA da junta $i$ e $\delta_i$ é a cota superior da derivada temporal do distúrbio (Equação~\eqref{eq:sta_conditions}).
+
 \begin{itemize}
-    \item Ponto de partida: $\lambda = 5$ rad/s, $k_1 = 5$, $k_2 = 10$.
-    \item Verificar as condições da Equação~\eqref{eq:sta_conditions}: estimar $\delta_i$ como a máxima taxa de variação do distúrbio observada no CT-SMC.
-    \item Aumentar $k_2$ para melhorar rejeição de distúrbios variáveis; aumentar $k_1$ para acelerar o convergência.
-    \item Ratio $k_2 / k_1^2 > \delta_i / (4k_{2,i})$ é a condição necessária e suficiente \cite{moreno2012strict}.
+    \item Ponto de partida: $\lambda = 5$ rad/s, $k_1 = 5$ e $k_2 = 10$.
+    \item Verificar as condições da Equação~\eqref{eq:sta_conditions}, estimando $\delta_i$ como a máxima taxa de variação do distúrbio observada no CT-SMC.
+    \item Aumentar $k_2$ para melhorar a rejeição de distúrbios variáveis; aumentar $k_1$ para acelerar a convergência.
+    \item A condição da Equação~\eqref{eq:sta_ratio} é necessária e suficiente para a convergência em tempo finito.
 \end{itemize}
 
 \subsubsection*{LADRC}
+A condição de estabilidade numérica do ESO discreto que limita a frequência de banda $\omega_o$ do observador em função do passo de integração \cite{zheng2010practical} é dada pela Equação~\eqref{eq:ladrc_wo_stability}:
+\begin{equation}
+    \omega_o \leq \frac{0,1}{\Delta t_{\text{phys}}},
+    \label{eq:ladrc_wo_stability}
+\end{equation}
+onde $\omega_o$ é a frequência de banda do ESO (Equação~\eqref{eq:eso_gains}) e $\Delta t_{\text{phys}}$ é o passo de integração; para $\Delta t_{\text{phys}} = 10^{-3}$~s, o limite resultante é $\omega_o^{\max} = 100$~rad/s.
+
 \begin{itemize}
-    \item Ponto de partida: $\omega_o = 20\omega_{\text{cl}}$, onde $\omega_{\text{cl}} = \sqrt{k_p}$ é a frequência de malha fechada. Para $k_p = 100$, $\omega_o = 200$ rad/s.
-    \item Verificar a condição de estabilidade numérica: $\omega_o \leq 0.1/\Delta t_{\text{phys}} = 100$ rad/s para $\Delta t_{\text{phys}} = 10^{-3}$ s.
+    \item Ponto de partida: $\omega_o = 20\,\omega_{\text{cl}}$, onde $\omega_{\text{cl}} = \sqrt{k_p}$ é a frequência de malha fechada. Para $k_p = 100$, tem-se $\omega_o = 200$~rad/s, sujeita ao limite da Equação~\eqref{eq:ladrc_wo_stability}.
+    \item Verificar a Equação~\eqref{eq:ladrc_wo_stability} antes de aumentar $\omega_o$.
     \item Ativar \texttt{auto\_b0 = True} inicialmente; ajustar manualmente se a resposta apresentar oscilações crescentes (indicativas de $b_0$ muito alto) ou lentidão (indicativas de $b_0$ muito baixo).
-    \item O filtro \texttt{z3\_filter\_alpha} (padrão 0.2) é crítico nos primeiros instantes; valores muito altos ($> 0.5$) podem reamplificar o conteúdo de alta frequência do ESO \cite{han2009pid}.
+    \item O filtro \texttt{z3\_filter\_alpha} (padrão 0,2) é crítico nos primeiros instantes; valores muito altos ($> 0,5$) podem reamplificar o conteúdo de alta frequência do ESO \cite{han2009pid}.
     \item Sempre ativar \texttt{gravity\_ff = True} para robôs em ar; avaliar \texttt{coriolis\_ff = True} para trajetórias rápidas.
 \end{itemize}
 
@@ -454,9 +657,14 @@ A seleção da estratégia de controle mais adequada depende do cenário de apli
 
 Os modelos de atrito nas juntas e arrasto hidrodinâmico, descritos na Seção~\ref{sec:dissipative} do Capítulo~\ref{cap:simulacao}, não são incluídos nas leis de controle dos quatro estratégias, e são aplicados como torques passivos externos $\tau_{\text{pass}}$ na dinâmica direta. Do ponto de vista da análise de robustez, esse tratamento implica que as forças dissipativas funcionam como \textit{perturbações estruturadas} que os controladores robustos (CT-SMC, STA, LADRC) estimam e rejeitam, enquanto o CTC-PID as observa pelo sinal de erro residual.
 
-O atrito de Coulomb $F_{c,i}\tanh(\dot{q}_i/\varepsilon)$ satisfaz $|F_{c,i}\tanh(\dot{q}_i/\varepsilon)| \leq F_{c,i}$ (distúrbio limitado), sendo diretamente rejeitável pelo CT-SMC com $K_i > F_{c,i}/M_{ii}$ \cite{slotine1991applied}. Para o STA, a condição é $k_{2,i} > \dot{F}_{c,i}^{\max}/M_{ii}$; como $\tanh$ é diferenciável, essa derivada é limitada por $F_{c,i}/(\varepsilon M_{ii})$ em regime \cite{moreno2012strict}. Para o LADRC, o atrito entra em $f_i$ e é estimado pelo ESO com precisão limitada por $\omega_o$; para atrito Coulomb puro ($\dot{q} = 0 \to \dot{q} \neq 0$), a descontinuidade em $f_i$ requer $\omega_o$ suficientemente alto para rastrear a transição \cite{han2009pid, huang2014active}.
+O atrito de Coulomb regularizado $F_{c,i}\tanh(\dot{q}_i/\varepsilon)$ é uniformemente limitado por $F_{c,i}$ (distúrbio limitado), sendo diretamente rejeitável pelo CT-SMC desde que o ganho de robustez satisfaça a condição apresentada na Equação~\eqref{eq:K_friction} \cite{slotine1991applied}:
+\begin{equation}
+    K_i > \frac{F_{c,i}}{M_{ii}},
+    \label{eq:K_friction}
+\end{equation}
+onde $K_i$ é o ganho de robustez do CT-SMC da junta $i$, $F_{c,i}$ é a amplitude do atrito de Coulomb e $M_{ii}$ é o $i$-ésimo elemento diagonal da matriz de inércia. Para o STA, a condição análoga é $k_{2,i} > \dot{F}_{c,i}^{\max}/M_{ii}$; como $\tanh$ é diferenciável, essa derivada é limitada por $F_{c,i}/(\varepsilon M_{ii})$ em regime \cite{moreno2012strict}. Para o LADRC, o atrito entra em $f_i$ e é estimado pelo ESO com precisão limitada por $\omega_o$; para atrito Coulomb puro ($\dot{q} = 0 \to \dot{q} \neq 0$), a descontinuidade em $f_i$ requer $\omega_o$ suficientemente alto para rastrear a transição \cite{han2009pid, huang2014active}.
 
-O arrasto hidrodinâmico $D_{\text{quad},i}|\dot{q}_i|\dot{q}_i$ é uma perturbação dependente do estado e crescente com $\dot{q}_i^2$, o que pode violoar a hipótese de distúrbio limitado do CT-SMC para trajetórias muito rápidas \cite{fossen2011handbook}. Para o LADRC, o arrasto quadrático é uma função contínua de $\dot{q}$ e sua derivada $2D_{\text{quad},i}|\dot{q}_i|\ddot{q}_i$ é limitada quando as velocidades e acelerações são finitas, preservando a condição de convergência do ESO \cite{zheng2010practical}.
+O arrasto hidrodinâmico $D_{\text{quad},i}|\dot{q}_i|\dot{q}_i$ é uma perturbação dependente do estado e crescente com $\dot{q}_i^2$, o que pode violar a hipótese de distúrbio limitado do CT-SMC para trajetórias muito rápidas \cite{fossen2011handbook}. Para o LADRC, o arrasto quadrático é uma função contínua de $\dot{q}$ e sua derivada $2D_{\text{quad},i}|\dot{q}_i|\ddot{q}_i$ é limitada quando as velocidades e acelerações são finitas, preservando a condição de convergência do ESO \cite{zheng2010practical}.
 
 % ==============================================================================
 \section{Validação da Integração por Análise de Conservação de Energia}
@@ -468,7 +676,16 @@ Uma verificação interna da consistência da integração entre os controladore
     V_{\text{PD}}(e, \dot{e}) = \frac{1}{2}\dot{e}^\top M_{\text{nom}}\dot{e} + \frac{1}{2}e^\top K_P e,
     \label{eq:lyap_pd_energy}
 \end{equation}
-satisfaz $\dot{V}_{\text{PD}} = -\dot{e}^\top K_D \dot{e} \leq 0$ (dissipação de energia pelo amortecimento), garantindo convergência assintótica para o equilíbrio $e = \dot{e} = 0$ \cite{khalil2002nonlinear}. Esta análise pode ser verificada numericamente no \textit{Hephaestus} pelos arrays de resultado armazenados: $V_{\text{PD}}(t_k)$ deve ser monotonicamente decrescente para o CTC-PD com modelo exato, confirmando a consistência entre o modelo simbólico e a lei de controle implementada \cite{corke2021toolbox}.
+onde:
+\begin{itemize}
+    \item $V_{\text{PD}}(e, \dot{e})$ é a função de Lyapunov candidata (interpretável como ``energia mecânica'' do erro);
+    \item $e = q_d - q \in \mathbb{R}^N$ é o erro de posição de junta e $\dot{e}$ o erro de velocidade;
+    \item $M_{\text{nom}} \in \mathbb{R}^{N \times N}$ é a matriz de inércia nominal (constante ou avaliada na postura nominal), assumida simétrica e positiva definida;
+    \item $K_P \in \mathbb{R}^{N \times N}$ é a matriz de ganho proporcional (positiva definida);
+    \item o primeiro termo $\frac{1}{2}\dot{e}^\top M_{\text{nom}}\dot{e}$ representa a energia cinética associada ao erro de velocidade;
+    \item o segundo termo $\frac{1}{2}e^\top K_P e$ representa a energia potencial elástica associada ao erro de posição.
+\end{itemize}
+Esta função satisfaz $\dot{V}_{\text{PD}} = -\dot{e}^\top K_D \dot{e} \leq 0$ (dissipação de energia pelo amortecimento), garantindo convergência assintótica para o equilíbrio $e = \dot{e} = 0$ \cite{khalil2002nonlinear}. Esta análise pode ser verificada numericamente no \textit{Hephaestus} pelos arrays de resultado armazenados: $V_{\text{PD}}(t_k)$ deve ser monotonicamente decrescente para o CTC-PD com modelo exato, confirmando a consistência entre o modelo simbólico e a lei de controle implementada \cite{corke2021toolbox}.
 
 A propriedade de skew-simetria da matriz $\dot{M}(q) - 2C(q,\dot{q})$, característica das equações de Euler-Lagrange de manipuladores derivadas pelo formalismo de Christoffel \cite{spong2020robot, siciliano2009robotics}, garante que os controladores baseados em modelo do \textit{Hephaestus} sejam energeticamente consistentes: a lei de controle nunca injeta energia artificial no sistema pela dinâmica do modelo, apenas pelo sinal de controle $v$. Essa propriedade, que pode ser verificada algebricamente nas expressões simbólicas geradas por \texttt{RobotMathEngine}, é um indicador de correção da geração simbólica e é explorada nas provas de estabilidade global de controladores adaptativos para robótica \cite{slotine1987adaptive, tomei2002simple}.
 

@@ -138,6 +138,17 @@
 \newblock \enquote{Underwater Robotics}, \emph{Advanced Robotics}, v.~15, n.~5,
   \penalty0 pp.~609--639, 2001.
 
+\bibitem[\MakeUppercase{Ogata}(2010)Ogata]{ogata2010modern}
+\MakeUppercase{Ogata, K.}
+\newblock \emph{Modern Control Engineering}.
+\newblock 5th ed. Upper Saddle River, NJ, Prentice Hall, 2010.
+
+\bibitem[\MakeUppercase{Spong}\emph{ et~al.}(2020)Spong, Hutchinson, e
+  Vidyasagar]{spong2020robot}
+\MakeUppercase{Spong, M.~W., Hutchinson, S., Vidyasagar, M.}
+\newblock \emph{Robot Modeling and Control}.
+\newblock 2nd ed. Hoboken, NJ, Wiley, 2020.
+
 \bibitem[\MakeUppercase{Hollerbach}(1980)Hollerbach]{hollerbach1980recursive}
 \MakeUppercase{Hollerbach, J.~M.}
 \newblock \enquote{A Recursive Lagrangian Formulation of Manipulator Dynamics
@@ -151,12 +162,6 @@
 \newblock \enquote{A Kinematic Notation for Lower-Pair Mechanisms Based on
   Matrices}, \emph{Journal of Applied Mechanics}, v.~22, n.~2, \penalty0
   pp.~215--221, 1955.
-
-\bibitem[\MakeUppercase{Spong}\emph{ et~al.}(2020)Spong, Hutchinson, e
-  Vidyasagar]{spong2020robot}
-\MakeUppercase{Spong, M.~W., Hutchinson, S., Vidyasagar, M.}
-\newblock \emph{Robot Modeling and Control}.
-\newblock 2nd ed. Hoboken, NJ, Wiley, 2020.
 
 \bibitem[\MakeUppercase{Golub} e \MakeUppercase{Van~Loan}(2013)Golub e
   Van~Loan]{golub2013matrix}
@@ -331,11 +336,6 @@
 \MakeUppercase{Khalil, H.~K., Grizzle, J.~W.}
 \newblock \emph{Nonlinear systems}, v.~3.
 \newblock Prentice hall Upper Saddle River, NJ, 2002.
-
-\bibitem[\MakeUppercase{Ogata}(2010)Ogata]{ogata2010modern}
-\MakeUppercase{Ogata, K.}
-\newblock \emph{Modern Control Engineering}.
-\newblock 5th ed. Upper Saddle River, NJ, Prentice Hall, 2010.
 
 \bibitem[\MakeUppercase{Utkin}(1977)Utkin]{utkin1977variable}
 \MakeUppercase{Utkin, V.~I.}

@@ -10,24 +10,53 @@ Este capítulo apresenta os resultados das simulações numéricas realizadas co
 
 \subsection{Critérios de Avaliação de Desempenho}
 
-A comparação das quatro estratégias de controle baseia-se em métricas quantitativas calculadas sobre as séries temporais de erro de junta $e(t) = q_d(t) - q(t)$ e torque de controle $\tau(t)$ armazenadas pelo método \texttt{RobotSimulator.run()}, conforme descrito na Seção~\ref{sec:arq_simulador} do Capítulo~\ref{cap:simulacao}. As métricas utilizadas são:
+A comparação das quatro estratégias de controle baseia-se em métricas quantitativas calculadas sobre as séries temporais de erro de junta $e(t) = q_d(t) - q(t)$ e torque de controle $\tau(t)$ armazenadas pelo método \texttt{RobotSimulator.run()}, conforme descrito na Seção~\ref{sec:arq_simulador} do Capítulo~\ref{cap:simulacao}. Quatro métricas são utilizadas para a avaliação quantitativa: o Erro Quadrático Médio por junta (RMSE), o Erro de Pico, o Torque RMS e o Índice de \textit{Chattering}, definidas a seguir.
 
+O Erro Quadrático Médio por Junta (RMSE), apresentado na Equação~\eqref{eq:rmse}, pondera erros grandes mais pesadamente que erros pequenos, sendo sensível tanto à fase de transiente quanto ao regime permanente \cite{astrom1995theory}:
+\begin{equation}
+    \varepsilon_{\text{rms},i} = \sqrt{\frac{1}{T_f}\int_0^{T_f} e_i(t)^2\,dt},
+    \label{eq:rmse}
+\end{equation}
+onde:
 \begin{itemize}
-    \item \textbf{Erro Quadrático Médio por Junta} (RMSE): $\varepsilon_{\text{rms},i} = \sqrt{\frac{1}{T_f}\int_0^{T_f} e_i(t)^2\,dt}$, que pondera erros grandes mais pesadamente que erros pequenos, sendo sensível tanto à fase de transiente quanto ao regime permanente \cite{astrom1995theory}.
-
-    \item \textbf{Erro de Pico} ($\varepsilon_{\text{pk},i} = \max_t |e_i(t)|$): captura o pior desvio instantâneo ao longo da trajetória, relevante para restrições de segurança em espaços confinados \cite{siciliano2009robotics}.
-
-    \item \textbf{Torque RMS} ($\tau_{\text{rms},i} = \sqrt{\frac{1}{T_f}\int_0^{T_f} \tau_i(t)^2\,dt}$): métrica indireta do consumo energético da junta $i$ e indicador de esforço do atuador \cite{spong2020robot, craig1989introduction}.
-
-    \item \textbf{Índice de \textit{Chattering}} ($\chi_i = \frac{1}{T_f}\int_0^{T_f} |\dot{\tau}_i(t)|\,dt$): integral do valor absoluto da derivada do torque, que penaliza variações rápidas de torque características do \textit{chattering} de controle por modo deslizante \cite{edwards1998sliding, utkin2017sliding}.
+    \item $\varepsilon_{\text{rms},i}$ é o erro quadrático médio (RMSE) da junta $i$ ao longo da trajetória;
+    \item $e_i(t) = q_{d,i}(t) - q_i(t)$ é o erro de posição de junta no instante $t$;
+    \item $T_f$ é a duração total da trajetória.
 \end{itemize}
+
+O Erro de Pico, definido na Equação~\eqref{eq:peak_error}, captura o pior desvio instantâneo ao longo da trajetória, sendo relevante para restrições de segurança em espaços confinados \cite{siciliano2009robotics}:
+\begin{equation}
+    \varepsilon_{\text{pk},i} = \max_{t \in [0, T_f]} |e_i(t)|,
+    \label{eq:peak_error}
+\end{equation}
+onde $\varepsilon_{\text{pk},i}$ é o erro de pico (máximo absoluto) da junta $i$ e $e_i(t)$ é o erro instantâneo conforme definido em~\eqref{eq:rmse}.
+
+O Torque RMS, expresso pela Equação~\eqref{eq:torque_rms}, é uma métrica indireta do consumo energético da junta $i$ e indicador do esforço do atuador \cite{spong2020robot, craig1989introduction}:
+\begin{equation}
+    \tau_{\text{rms},i} = \sqrt{\frac{1}{T_f}\int_0^{T_f} \tau_i(t)^2\,dt},
+    \label{eq:torque_rms}
+\end{equation}
+onde $\tau_i(t)$ é o torque aplicado à junta $i$ no instante $t$ e $T_f$ é a duração total da trajetória.
+
+O Índice de \textit{Chattering}, dado pela Equação~\eqref{eq:chattering}, é a integral do valor absoluto da derivada do torque, penalizando variações rápidas características do \textit{chattering} de controle por modo deslizante \cite{edwards1998sliding, utkin2017sliding}:
+\begin{equation}
+    \chi_i = \frac{1}{T_f}\int_0^{T_f} |\dot{\tau}_i(t)|\,dt,
+    \label{eq:chattering}
+\end{equation}
+onde $\chi_i$ é o índice de \textit{chattering} da junta $i$ e $\dot{\tau}_i(t)$ é a derivada temporal do torque aplicado.
 
 Para a análise de robustez, a métrica de referência é a razão de degradação do RMSE em relação ao caso nominal:
 \begin{equation}
     \rho_i = \frac{\varepsilon_{\text{rms},i}^{(\text{pert})}}{\varepsilon_{\text{rms},i}^{(\text{nom})}},
     \label{eq:degradacao}
 \end{equation}
-onde valores de $\rho_i$ próximos de 1 indicam alta robustez e valores elevados ($\rho_i \gg 1$) indicam sensibilidade às incertezas introduzidas \cite{slotine1991applied, moreno2012strict}.
+onde:
+\begin{itemize}
+    \item $\rho_i$ é o fator adimensional de degradação do desempenho da junta $i$ (\textit{performance degradation ratio});
+    \item $\varepsilon_{\text{rms},i}^{(\text{pert})}$ é o RMSE de junta no cenário com perturbações ou incerteza paramétrica introduzidas;
+    \item $\varepsilon_{\text{rms},i}^{(\text{nom})}$ é o RMSE de junta no cenário nominal (sem perturbações);
+    \item valores de $\rho_i$ próximos de 1 indicam alta robustez (degradação desprezível) e valores elevados ($\rho_i \gg 1$) indicam sensibilidade às incertezas \cite{slotine1991applied, moreno2012strict}.
+\end{itemize}
 
 \subsection{Plataforma e Parâmetros de Integração}
 
@@ -35,7 +64,7 @@ Todos os experimentos foram executados na plataforma \textit{Hephaestus} com os 
 
 \begin{itemize}
     \item Passo de integração física: $\Delta t_{\text{phys}} = 10^{-3}$ s;
-    \item Passo de visualização: $\Delta t_{\text{vis}} = 5 \times 10^{-2}$ s (50 \textit{substeps} por frame);
+    \item Passo de visualização: $\Delta t_{\text{vis}} = 5 \times 10^{-2}$ s (50 \textit{substeps} por \textit{frame});
     \item Ganho proporcional do CLIK: $K_{p,\text{IK}} = 15$ rad/(m·s);
     \item Fator de amortecimento DLS: $\lambda_{\text{DLS}} = 0.05$;
     \item Limite de velocidade de junta: $\dot{q}_{\text{lim}} = 3.0$ rad/s;
@@ -43,7 +72,7 @@ Todos os experimentos foram executados na plataforma \textit{Hephaestus} com os 
     \item Integrador simplético de Euler com verificação de finitude a cada \textit{substep} \cite{leimkuhler2004simulating, hairer2006geometric}.
 \end{itemize}
 
-A condição de estabilidade do integrador simplético $\Delta t_{\text{phys}} < 2/\sqrt{k_p}$ (Seção~\ref{sec:estabilidade_num} do Capítulo~\ref{cap:simulacao}) é satisfeita com ampla margem para $k_p = 100$: $\Delta t_{\text{phys}} = 10^{-3}$ s $\ll$ $2/\sqrt{100} = 0.2$ s \cite{leimkuhler2004simulating}.
+A condição de estabilidade do integrador simplético, dada pela Equação~\eqref{eq:stability_condition} da Seção~\ref{sec:estabilidade_num} do Capítulo~\ref{cap:simulacao}, é satisfeita com ampla margem para o ganho proporcional $k_p = 100$ utilizado nos experimentos, uma vez que $\Delta t_{\text{phys}} = 10^{-3}$ s é cerca de duzentas vezes inferior ao limite $2/\sqrt{k_p} = 0,2$~s \cite{leimkuhler2004simulating}.
 
 % ==============================================================================
 \section{UVMS 12-GDL em Ambiente Subaquático}
@@ -55,10 +84,22 @@ A condição de estabilidade do integrador simplético $\Delta t_{\text{phys}} <
 
 O experimento modela um UVMS de doze graus de liberdade composto pelo veículo subaquático (6 GDL) e por um braço manipulador antropomórfico (6 GDL), totalizando uma cadeia serial de $N = 12$ juntas:
 \begin{equation}
-    \texttt{joint\_config} = [\underbrace{\texttt{'Dx'},\, \texttt{'Dy'},\, \texttt{'Dz'},\, \texttt{'Rx'},\, \texttt{'Ry'},\, \texttt{'Rz'}}_{\text{veículo base}},\; \underbrace{\texttt{'Rz'},\, \texttt{'Ry'},\, \texttt{'Ry'},\, \texttt{'Rz'},\, \texttt{'Rx'},\, \texttt{'Rz'}}_{\text{braço antropomórfico}}],
-    \label{eq:uvms_config}
+\begin{aligned}
+    \texttt{joint\_config} = \big[\,
+        & \underbrace{\texttt{'Dx'},\, \texttt{'Dy'},\, \texttt{'Dz'},\, \texttt{'Rx'},\, \texttt{'Ry'},\, \texttt{'Rz'}}_{\text{veículo base}},\, \\
+        & \underbrace{\texttt{'Rz'},\, \texttt{'Ry'},\, \texttt{'Ry'},\, \texttt{'Rz'},\, \texttt{'Rx'},\, \texttt{'Rz'}}_{\text{braço antropomórfico}}\,\big],
+\end{aligned}
+\label{eq:uvms_config}
 \end{equation}
-onde as três primeiras juntas (Dx, Dy, Dz) representam a posição do veículo (surge, sway, heave), as três seguintes (Rx, Ry, Rz) a orientação (roll, pitch, yaw), e as seis últimas formam um braço antropomórfico com ombro (Rz, Ry, Ry), cotovelo e punho esférico (Rz, Rx, Rz) \cite{antonelli2014modelling, fossen2011handbook}. As juntas do veículo não possuem vetor de elo geométrico; o braço possui vetores de elo conforme a Tabela~\ref{tab:uvms_mecanico}.
+onde:
+\begin{itemize}
+    \item \texttt{joint\_config} é a lista ordenada que descreve o tipo de cada uma das $N=12$ juntas do UVMS;
+    \item \texttt{'Dx', 'Dy', 'Dz'} representam juntas prismáticas ao longo dos eixos $x$, $y$ e $z$, modelando a posição do veículo (\textit{surge}, \textit{sway}, \textit{heave});
+    \item \texttt{'Rx', 'Ry', 'Rz'} representam juntas rotacionais em torno dos eixos $x$, $y$ e $z$, modelando a orientação do veículo (\textit{roll}, \textit{pitch}, \textit{yaw}) e as juntas do braço;
+    \item as seis primeiras entradas (índices 1--6) modelam o veículo subaquático como uma cadeia de seis juntas seriais que reproduzem o movimento 6-DOF do casco;
+    \item as seis últimas entradas (índices 7--12) modelam o braço antropomórfico com ombro (Rz, Ry, Ry), cotovelo (Rz) e punho esférico (Rx, Rz);
+    \item os colchetes denotam a estrutura de lista Python (entrada do método \texttt{RobotMathHydro}) \cite{antonelli2014modelling, fossen2011handbook}.
+\end{itemize} As juntas do veículo não possuem vetor de elo geométrico; o braço possui vetores de elo conforme a Tabela~\ref{tab:uvms_mecanico}.
 
 \begin{table}[h!]
 \centering
@@ -84,9 +125,19 @@ Os coeficientes de massa adicionada (parâmetros do modelo hidrodinâmico de Fos
     ma_{p,i} = ma_{q,i} = ma_{r,i} = \frac{1}{12}\,\rho\,L_i^2\,\text{vol}_i.
     \label{eq:ma_esferas}
 \end{equation}
+onde:
+\begin{itemize}
+    \item $ma_{u,i}, ma_{v,i}, ma_{w,i}$ são os coeficientes de massa adicionada translacionais (em kg) do elo $i$ nas direções $u$ (\textit{surge}), $v$ (\textit{sway}) e $w$ (\textit{heave}) do referencial local;
+    \item $ma_{p,i}, ma_{q,i}, ma_{r,i}$ são os coeficientes de massa adicionada rotacionais (em kg·m$^2$) do elo $i$ em torno dos eixos $p$ (\textit{roll}), $q$ (\textit{pitch}) e $r$ (\textit{yaw});
+    \item $\rho$ é a massa específica do fluido (água do mar: $\rho \approx 1025$ kg/m$^3$);
+    \item $\text{vol}_i$ é o volume submerso do elo $i$ (em m$^3$);
+    \item $L_i$ é o comprimento do elo $i$ (em m);
+    \item o fator $\frac{1}{2}\rho\,\text{vol}_i$ corresponde ao coeficiente de massa adicionada de uma esfera de mesmo volume (movimento translacional);
+    \item o fator $\frac{1}{12}\rho L_i^2\,\text{vol}_i$ corresponde ao momento de massa adicionada de um corpo cilíndrico esbelto equivalente \cite{newman1977marine, fossen2011handbook}.
+\end{itemize}
 Para os elos do veículo, os coeficientes de massa adicionada translacionais são $ma_{u,v} = ma_{v,v} = ma_{w,v} = 0{,}1\,m_v = 1{,}5$ kg, e os rotacionais são estimados a partir da geometria do casco \cite{antonelli2014modelling, aldhaheri2022underwater}.
 
-O modelo completo do UVMS é gerado pela classe \texttt{RobotMathHydro}, que herda de \texttt{RobotMathEngine} e sobrescreve os métodos de dinâmica para incorporar a massa adicionada e o potencial aparente peso--empuxo (Seção~\ref{sec:hydro_engine} do Capítulo~\ref{cap:modelagem}) \cite{fossen2011handbook, antonelli2014modelling}. A Figura~\ref{fig:animacao_3d} ilustra a configuração do UVMS durante a simulação.
+O modelo completo do UVMS é gerado pela classe \texttt{RobotMathHydro}, que herda de \texttt{RobotMathEngine} e sobrescreve os métodos de dinâmica para incorporar a massa adicionada e o potencial aparente peso--empuxo (Seção~\ref{sec:hydro_engine} do Capítulo~\ref{cap:modelagem}) \cite{fossen2011handbook, antonelli2014modelling}. Ilustra-se, na Figura~\ref{fig:animacao_3d}, a configuração do UVMS durante a simulação.
 
 \begin{figure}[htbp]
     \centering
@@ -105,7 +156,7 @@ Os coeficientes de massa adicionada para cada elo são aproximados por esferas e
 \subsection{Configuração dos Controladores}
 \label{sec:uvms_ctrl}
 
-Os parâmetros dos controladores foram ajustados na aba de Simulação da interface gráfica do \textit{Hephaestus}, levando em conta a inércia aumentada pelos efeitos de massa adicionada e a dinâmica hidrodinâmica \cite{fossen2011handbook, antonelli2014modelling}. A Tabela~\ref{tab:uvms_ctrl} lista os parâmetros adotados.
+Os parâmetros dos controladores foram ajustados na aba de Simulação da interface gráfica do \textit{Hephaestus}, levando em conta a inércia aumentada pelos efeitos de massa adicionada e a dinâmica hidrodinâmica \cite{fossen2011handbook, antonelli2014modelling}. Listam-se, na Tabela~\ref{tab:uvms_ctrl}, os parâmetros adotados.
 
 \begin{table}[h!]
 \centering
@@ -115,7 +166,7 @@ Os parâmetros dos controladores foram ajustados na aba de Simulação da interf
 \hline
 \textbf{Controlador} & \textbf{Parâmetros} \\
 \hline
-CTC-PID & $k_p = 25$ rad$^2$/s$^2$, $\zeta = 1{,}0$, $k_i = 0$ (ou 2 para CTC-PID), anti-windup = 10 \\
+CTC-PID & $k_p = 25$ rad$^2$/s$^2$, $\zeta = 1{,}0$, $k_i = 0$ (ou 2 para CTC-PID), \textit{anti-windup} = 10 \\
 CT-SMC  & $\lambda = 8{,}0$ rad/s, $K = 12{,}0$ N·m, $\phi = 0{,}08$ rad/s, $\alpha_{\ddot{q}} = 0{,}3$ \\
 STA     & $\lambda = 8{,}0$ rad/s, $k_1 = 10{,}0$, $k_2 = 15{,}0$, $\alpha_{\ddot{q}} = 0{,}3$ \\
 LADRC   & $\omega_c = 5{,}0$ rad/s, $\omega_o = 50$ rad/s, \texttt{auto\_b0 = True}, \texttt{gravity\_ff = True}, \texttt{coriolis\_ff = True} \\
@@ -128,13 +179,15 @@ Os ganhos foram escolhidos para acomodar a dinâmica de malha fechada do UVMS de
 \subsection{Resultados Comparativos}
 \label{sec:uvms_resultados}
 
-A Tabela~\ref{tab:uvms_resultados} apresenta as métricas de desempenho para os quatro controladores no UVMS de 12 GDL com modelo nominal, ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem com os da planta simulada. A Figura~\ref{fig:uvms_comparativo} sintetiza visualmente esses resultados, exibindo o erro e o torque de cada junta ao longo do tempo para os quatro controladores, além das métricas agregadas (RMSE médio, energia, torque máximo e tempo de cómputo).
+Apresentam-se, na Tabela~\ref{tab:uvms_resultados}, as métricas de desempenho para os quatro controladores no UVMS de 12 GDL com modelo nominal, ou seja, os parâmetros de massa adicionada utilizados pelo controlador coincidem com os da planta simulada. Esses resultados são sintetizados visualmente na Figura~\ref{fig:uvms_comparativo}, com o erro e o torque de cada junta ao longo do tempo para os quatro controladores, além das métricas agregadas (RMSE médio, energia, torque máximo e tempo de cómputo).
 
 \begin{table}[h!]
 \centering
 \caption{Desempenho dos controladores no UVMS 12-GDL , modelo nominal. Médias sobre as 12 juntas.}
 \label{tab:uvms_resultados}
-\begin{tabular}{p{2.8cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.5cm} p{2.2cm}}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{2.6cm} p{1.9cm} p{1.4cm} p{2.0cm} p{1.6cm} p{1.3cm}}
 \hline
 \textbf{Controlador} & $\bar{\varepsilon}_{\text{rms}}$ (rad/m) & Erro final & Energia $\int|\tau|^2 dt$ & $\tau_{\max}$ (N·m) & Tempo (s) \\
 \hline
@@ -152,12 +205,14 @@ Em termos de eficiência energética, o LADRC (Figura~\ref{fig:adrc_graf}) e o C
 
 O tempo de computação é similar para todos os controladores ($\approx 48$ s para a simulação de 6 s), indicando que a complexidade adicional do LADRC (ESO) e dos controladores por modo deslizante não inviabiliza a execução em tempo real para o UVMS de 12 GDL \cite{gao2003scaling, slotine1991applied}.
 
-\begin{figure}[htbp]
+\begin{landscape}
+\begin{figure}
     \centering
-    \includegraphics[width=\textwidth]{figuras/Experimentos/UVMS_COMPARATIVO.png}
+    \includegraphics[width=\linewidth,height=0.85\textheight,keepaspectratio]{figuras/Experimentos/UVMS_COMPARATIVO.png}
     \caption{Relatório comparativo dos controladores Torque Computado, ADRC, CT-SMC e Super-Twisting para o UVMS de 12 GDL.}
     \label{fig:uvms_comparativo}
 \end{figure}
+\end{landscape}
 
 Os detalhes de erro e torque para cada controlador podem ser analisados nas figuras~\ref{fig:ctc_graf} (Torque Computado), \ref{fig:adrc_graf} (ADRC), \ref{fig:smc_graf} (CT-SMC) e~\ref{fig:sta_graf} (Super-Twisting). Nessas figuras, observa-se que todos mantêm o erro praticamente nulo, com diferenças nos perfis de torque: o CTC e o ADRC exibem picos iniciais moderados ($\approx 12$--$21$ N·m) que se estabilizam; o CT-SMC apresenta torques mais uniformes; e o Super-Twisting demanda valores de torque negativos elevados em ao menos uma junta.
 
@@ -212,11 +267,11 @@ A análise dos resultados do UVMS de 12 GDL, sintetizada na Figura~\ref{fig:uvms
 
 Os três mecanismos de rejeição de perturbações observados nos experimentos podem ser interpretados geometricamente à luz da teoria de sistemas não-lineares \cite{khalil2002nonlinear, isidori1985nonlinear}:
 
-\textbf{CTC-PID (Torque Computado)}: a perturbação $d(t)$ entra na dinâmica de erro linear como forçamento externo. A rejeição depende inteiramente do ganho integral $K_I$, que elimina perturbações constantes mas produz \textit{overshoot} e ressonância para perturbações variáveis no tempo. Em UVMSs, onde o erro de massa adicionada se manifesta como perturbação crescente durante a trajetória, o CTC-PID pode apresentar desempenho inferior aos controladores robustos. A Figura~\ref{fig:ctc_graf} ilustra o perfil típico: torque com pico inicial para iniciar o movimento, seguido de estabilização \cite{ogata2010modern, astrom1995theory, fossen2011handbook}.
+\textbf{CTC-PID (Torque Computado)}: a perturbação $d(t)$ entra na dinâmica de erro linear como forçamento externo. A rejeição depende inteiramente do ganho integral $K_I$, que elimina perturbações constantes mas produz \textit{overshoot} e ressonância para perturbações variáveis no tempo. Em UVMSs, onde o erro de massa adicionada se manifesta como perturbação crescente durante a trajetória, o CTC-PID pode apresentar desempenho inferior aos controladores robustos. Ilustra-se, na Figura~\ref{fig:ctc_graf}, o perfil típico: torque com pico inicial para iniciar o movimento, seguido de estabilização \cite{ogata2010modern, astrom1995theory, fossen2011handbook}.
 
 \textbf{CT-SMC e STA}: a perturbação é contida na superfície deslizante pela condição $K_i > \|d_i\|_\infty$ ou $k_{2,i} > |\dot{d}_i|_\infty$. Ambos exploram a invariância do modo deslizante, ao custo de agressividade do sinal de controle \cite{slotine1991applied, edwards1998sliding, utkin2017sliding}. Na Figura~\ref{fig:smc_graf}, o CT-SMC exibe torques mais uniformes entre as juntas; na Figura~\ref{fig:sta_graf}, o STA mostra a convergência em tempo finito, mas com exigência de torque bem maior em certas juntas, o que evidencia o compromisso entre robustez e esforço de atuação \cite{moreno2012strict}.
 
-\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. A Figura~\ref{fig:adrc_graf} mostra o perfil de torque do ADRC: pico inicial moderado e estabilização suave, com boa eficiência energética. A qualidade do cancelamento é limitada pelo lag dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si, propriedade que explica a robustez superior e a capacidade do ESO de \textit{linearizar ativamente} a planta \cite{gao2003scaling, zheng2010practical, huang2014active, han2009pid, han1995class}.
+\textbf{LADRC}: a perturbação é estimada explicitamente pelo ESO como terceiro estado estendido $z_3 \approx f_i$, e cancelada na lei de controle pela subtração $-z_3/b_0$. Observa-se, na Figura~\ref{fig:adrc_graf}, o perfil de torque do ADRC: pico inicial moderado e estabilização suave, com boa eficiência energética. A qualidade do cancelamento é limitada pelo \textit{lag} dinâmico do observador (erro de estimação $\propto \delta_i/\omega_o$), mas não pela amplitude da perturbação em si, propriedade que explica a robustez superior e a capacidade do ESO de \textit{linearizar ativamente} a planta \cite{gao2003scaling, zheng2010practical, huang2014active, han2009pid, han1995class}.
 
 \subsection{Seleção do Controlador para UVMS}
 
@@ -245,7 +300,7 @@ A Eliminação de Subexpressões Comuns (CSE) reduz drasticamente o número de o
 
 \subsection{Executor Paralelo e Tempo de Simulação}
 
-O experimento com o UVMS de 12 GDL resultou em tempo de computação de aproximadamente 48 s para 6 s de trajetória simulada (cerca de 8 s de tempo real por segundo simulado), indicando que a simulação é viável em hardware convencional. O executor persistente (\texttt{warm\_up\_workers()}) e a compilação com CSE são essenciais para manter o custo de avaliação de $M$, $C$ e $G$ dentro de limites que permitam a integração numérica estável \cite{beazley2010understanding, leu1986automated}.
+O experimento com o UVMS de 12 GDL resultou em tempo de computação de aproximadamente 48 s para 6 s de trajetória simulada (cerca de 8 s de tempo real por segundo simulado), indicando que a simulação é viável em \textit{hardware} convencional. O executor persistente (\texttt{warm\_up\_workers()}) e a compilação com CSE são essenciais para manter o custo de avaliação de $M$, $C$ e $G$ dentro de limites que permitam a integração numérica estável \cite{beazley2010understanding, leu1986automated}.
 
 \subsection{Integrador Simplético}
 
@@ -262,9 +317,9 @@ Este capítulo apresentou uma avaliação experimental da plataforma \textit{Hep
 
     \item \textbf{Eficiência energética}: o LADRC e o CT-SMC consomem cerca de 35 vezes menos energia que o Torque Computado e o Super-Twisting, o que é relevante para operações subaquáticas com autonomia limitada \cite{antonelli2014modelling, fossen2011handbook}.
 
-    \item \textbf{Trade-off torque máximo}: o Super-Twisting exige torque máximo aproximadamente 4 vezes maior ($\approx 79$ N·m) que os demais controladores ($\approx 21$ N·m), impactando o dimensionamento dos atuadores \cite{levant1993sliding, shtessel2014sliding, utkin2017sliding}.
+    \item \textbf{\textit{Trade-off} torque máximo}: o Super-Twisting exige torque máximo aproximadamente 4 vezes maior ($\approx 79$ N·m) que os demais controladores ($\approx 21$ N·m), impactando o dimensionamento dos atuadores \cite{levant1993sliding, shtessel2014sliding, utkin2017sliding}.
 
-    \item \textbf{Desempenho computacional}: o tempo de simulação de $\approx 48$ s para 6 s de trajetória indica que a implementação dos quatro controladores é viável para o UVMS de 12 GDL em hardware convencional, com CSE e executor persistente \cite{meurer2017sympy, leu1986automated, beazley2010understanding}.
+    \item \textbf{Desempenho computacional}: o tempo de simulação de $\approx 48$ s para 6 s de trajetória indica que a implementação dos quatro controladores é viável para o UVMS de 12 GDL em \textit{hardware} convencional, com CSE e executor persistente \cite{meurer2017sympy, leu1986automated, beazley2010understanding}.
 
     \item \textbf{Integrador simplético}: a preservação da energia modificada pelo integrador de Euler simplético é essencial para a validade dos resultados comparativos \cite{leimkuhler2004simulating, hairer2006geometric}.
 \end{itemize}
