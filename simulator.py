@@ -657,64 +657,83 @@ class RobotSimulator:
         tol=1e-3,
         lambda_init=0.2,
         min_step=1e-4,
+        max_restarts=5,
     ):
         """
-        IK inicial mais robusta (Levenberg-Marquardt + line search).
+        IK inicial mais robusta (Levenberg-Marquardt + line search + reinícios aleatórios).
         Retorna (q_final, convergiu, erro_final, iteracoes).
         """
+        rng = np.random.default_rng(seed=42)
+        best_q = np.array(q_init, dtype=float).copy()
+        best_error = np.inf
+
+        candidates = [np.array(q_init, dtype=float).copy()]
+        for _ in range(max_restarts):
+            perturbation = rng.uniform(-np.pi / 2, np.pi / 2, self.num_dof)
+            candidates.append(self._wrap_to_pi(np.array(q_init, dtype=float) + perturbation * self.is_rotational))
+
         f_end = self.funcs_fk_all_links[-1]
-        q_curr = np.array(q_init, dtype=float).copy()
-        lambda_dls = lambda_init
-        last_error = np.inf
-        stall_count = 0
 
-        for i in range(max_iters):
-            args = self._build_args(q_curr, np.zeros(self.num_dof))
-            curr_pos = np.array(f_end(*args)).flatten()
-            error = target_pos - curr_pos
-            error_norm = np.linalg.norm(error)
+        for attempt, q_start in enumerate(candidates):
+            q_curr = q_start.copy()
+            lambda_dls = lambda_init
+            last_error = np.inf
+            stall_count = 0
 
-            if error_norm < tol:
-                return q_curr, True, error_norm, i + 1
+            for i in range(max_iters):
+                args = self._build_args(q_curr, np.zeros(self.num_dof))
+                curr_pos = np.array(f_end(*args)).flatten()
+                error = target_pos - curr_pos
+                error_norm = np.linalg.norm(error)
 
-            J_num = np.array(self.func_J(*args))
-            J_pos = J_num[:3, :]
-            J_dls_pinv = J_pos.T @ np.linalg.inv(
-                J_pos @ J_pos.T + (lambda_dls**2) * np.eye(3)
-            )
-            dq = J_dls_pinv @ error
+                if error_norm < tol:
+                    return q_curr, True, error_norm, (attempt * max_iters) + i + 1
 
-            # Line search: reduz passo até melhorar o erro
-            alpha = 1.0
-            improved = False
-            while alpha >= min_step:
-                q_next = self._wrap_to_pi(q_curr + alpha * dq)
-                args_next = self._build_args(q_next, np.zeros(self.num_dof))
-                next_pos = np.array(f_end(*args_next)).flatten()
-                next_error = target_pos - next_pos
-                next_error_norm = np.linalg.norm(next_error)
-                if next_error_norm < error_norm:
-                    q_curr = q_next
-                    error_norm = next_error_norm
-                    improved = True
+                J_num = np.array(self.func_J(*args))
+                J_pos = J_num[:3, :]
+                J_dls_pinv = J_pos.T @ np.linalg.inv(
+                    J_pos @ J_pos.T + (lambda_dls**2) * np.eye(3)
+                )
+                dq = J_dls_pinv @ error
+
+                # Line search: reduz passo até melhorar o erro
+                alpha = 1.0
+                improved = False
+                while alpha >= min_step:
+                    q_next = self._wrap_to_pi(q_curr + alpha * dq)
+                    args_next = self._build_args(q_next, np.zeros(self.num_dof))
+                    next_pos = np.array(f_end(*args_next)).flatten()
+                    next_error = target_pos - next_pos
+                    next_error_norm = np.linalg.norm(next_error)
+                    if next_error_norm < error_norm:
+                        q_curr = q_next
+                        error_norm = next_error_norm
+                        improved = True
+                        break
+                    alpha *= 0.5
+
+                if not improved:
+                    lambda_dls = min(10.0, lambda_dls * 1.5)
+                else:
+                    lambda_dls = max(1e-4, lambda_dls * 0.9)
+
+                if abs(last_error - error_norm) < tol * 0.1:
+                    stall_count += 1
+                else:
+                    stall_count = 0
+                last_error = error_norm
+
+                if stall_count >= 10:
                     break
-                alpha *= 0.5
 
-            if not improved:
-                lambda_dls = min(10.0, lambda_dls * 1.5)
-            else:
-                lambda_dls = max(1e-4, lambda_dls * 0.9)
+            if error_norm < best_error:
+                best_error = error_norm
+                best_q = q_curr.copy()
 
-            if abs(last_error - error_norm) < tol * 0.1:
-                stall_count += 1
-            else:
-                stall_count = 0
-            last_error = error_norm
-
-            if stall_count >= 10:
+            if best_error < tol:
                 break
 
-        return q_curr, False, last_error, max_iters
+        return best_q, best_error < tol, best_error, max_iters * len(candidates)
 
     def run(self, t_total, Pi_list, Pf_list, Kp_val, traj_mode="Line", traj_params=None,
             dt_physics=None, dt_visual=None, init_at_start=True, q_init=None, zeta=1.0,
@@ -989,8 +1008,8 @@ class RobotSimulator:
                         tau_passive += _Fc * np.tanh(dq / _eps_fric) + _Bv * dq
 
                     ddq = np.linalg.solve(M, tau_applied - C - G - tau_passive)
-                    q += dq * dt_physics
                     dq += ddq * dt_physics
+                    q += dq * dt_physics
                     q = self._wrap_to_pi(q) # Wrap essencial
                     if not (np.isfinite(q).all() and np.isfinite(dq).all()):
                         raise FloatingPointError("Estado não finito detectado durante a simulação.")

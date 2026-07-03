@@ -1,3 +1,7 @@
+import sys
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
 import customtkinter as ctk
 import tkinter as tk
 from tkinter import filedialog, messagebox
@@ -24,7 +28,7 @@ ctk.set_default_color_theme("blue")
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Hephaestus v4.0 - Integrated Environment")
+        self.title("SUMÉ v4.0 - Integrated Environment")
         self.geometry("1200x850")
         self.after(10, lambda: self.state("zoomed"))
         
@@ -154,7 +158,10 @@ class App(ctk.CTk):
     def log(self, msg):
         self.status_bar.insert("end", str(msg) + "\n")
         self.status_bar.see("end")
-        print(msg) 
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            print(str(msg).encode('ascii', errors='replace').decode('ascii'))
 
     def run_modeling(self):
         self.btn_calc.configure(state="disabled", text="Calculando...")
@@ -2141,7 +2148,7 @@ class App(ctk.CTk):
         n_bar_cols = 4
         n_cols = max(n_dof, n_bar_cols)
 
-        fig = plt.figure("Relatório Comparativo — Hephaestus", figsize=(4 * n_cols, 12))
+        fig = plt.figure("Relatório Comparativo — SUMÉ", figsize=(4 * n_cols, 12))
         fig.patch.set_facecolor("#1a1a2e")
 
         # Grade manual: 3 linhas × n_cols colunas
@@ -2223,7 +2230,7 @@ class App(ctk.CTk):
 
         # Título principal
         fig.text(0.5, 0.99,
-                 "Relatório Comparativo de Controladores — Hephaestus",
+                 "Relatório Comparativo de Controladores — SUMÉ",
                  ha="center", va="top", fontsize=13, color="white", fontweight="bold")
 
         # Rodapé com métricas extras (chattering, erro final)
@@ -2292,7 +2299,7 @@ class App(ctk.CTk):
             return
         filepath = filedialog.asksaveasfilename(
             defaultextension=".hmodel",
-            filetypes=[("Modelo Hephaestus", "*.hmodel"), ("Todos os arquivos", "*.*")],
+            filetypes=[("Modelo SUMÉ", "*.hmodel"), ("Todos os arquivos", "*.*")],
             title="Salvar Modelo"
         )
         if not filepath:
@@ -2312,7 +2319,7 @@ class App(ctk.CTk):
 
     def load_model(self):
         filepath = filedialog.askopenfilename(
-            filetypes=[("Modelo Hephaestus", "*.hmodel"), ("Todos os arquivos", "*.*")],
+            filetypes=[("Modelo SUMÉ", "*.hmodel"), ("Todos os arquivos", "*.*")],
             title="Carregar Modelo"
         )
         if not filepath:
@@ -2397,7 +2404,7 @@ class App(ctk.CTk):
             return
         filepath = filedialog.asksaveasfilename(
             defaultextension=".hsim",
-            filetypes=[("Simulação Hephaestus", "*.hsim"), ("Todos os arquivos", "*.*")],
+            filetypes=[("Simulação SUMÉ", "*.hsim"), ("Todos os arquivos", "*.*")],
             title="Salvar Simulação"
         )
         if not filepath:
@@ -2418,8 +2425,8 @@ class App(ctk.CTk):
 
     def load_simulation(self):
         filepath = filedialog.askopenfilename(
-            filetypes=[("Simulação Hephaestus", "*.hsim"),
-                       ("Modelo Hephaestus",    "*.hmodel"),
+            filetypes=[("Simulação SUMÉ", "*.hsim"),
+                       ("Modelo SUMÉ",    "*.hmodel"),
                        ("Todos os arquivos",    "*.*")],
             title="Carregar Simulação"
         )

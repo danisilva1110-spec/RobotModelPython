@@ -1,8 +1,0 @@
-This is makeindex, version 2.16 [MiKTeX 25.12].
-Scanning style file ./coppe.ist....
-** Input style error (file = ./coppe.ist, line = 51):
-   -- Unknown specifier lethead_flag.
-...done (7 attributes redefined, 1 ignored).
-Scanning input file thesis.lab...done (0 entries accepted, 0 rejected).
-Nothing written in thesis.abx.
-Transcript written in thesis.ilg.

@@ -1,14 +1,38 @@
-# Arquivos de cache do Python (não devem ir para o git)
+# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+.venv/
+venv/
+env/
 
-# Pastas geradas pelo PyInstaller (onde fica o executável e arquivos temporários)
+# PyInstaller
 build/
 dist/
 *.spec
-
-# Pasta específica que aparece na sua lista
 EXECUTAVEL/
-
-# Ícone
 *.ico
+
+# IDE / editor
+.cursor/
+.vscode/
+.idea/
+
+# TCC, apresentação e documentação (fora do repositório de código)
+TCC/
+Apresentacao/
+diagramas_*.md
+*.pdf
+
+# Benchmarks e artefatos gerados
+benchmark_results.csv
+benchmark_*.png
+diag_list.txt
+texput.log
+
+# SO
+.DS_Store
+Thumbs.db

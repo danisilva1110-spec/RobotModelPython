@@ -1,0 +1,13 @@
+# CODEOWNERS — define quem deve revisar mudanças em cada parte do projeto.
+# Formato: padrão de arquivo   @usuario-github
+#
+# Substitua os usuários abaixo pelos usernames reais do GitHub.
+# Exemplo: @lucassantos, @prof-raptopoulos, @prof-gouvea
+
+# Núcleo do projeto — requer aprovação do autor principal
+engine.py       @lucassantos
+simulator.py    @lucassantos
+main.py         @lucassantos
+
+# Qualquer arquivo pode ser revisado pelos orientadores
+*               @prof-raptopoulos @prof-gouvea

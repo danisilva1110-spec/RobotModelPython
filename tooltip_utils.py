@@ -1,6 +1,6 @@
 """
 tooltip_utils.py
-Rich tooltip system for the Hephaestus simulation tab.
+Rich tooltip system for the SUMÉ simulation tab.
 
 Renders LaTeX-like formulas via matplotlib mathtext (no external LaTeX install
 needed), embeds them as tkinter PhotoImages inside a dark Toplevel popup.
